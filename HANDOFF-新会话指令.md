@@ -1,21 +1,23 @@
 # Persist 新会话交接指令
 
-> 生成时间：2026-11-03（步骤 6 完成后更新）  
+> 生成时间：2026-11-03（步骤 6 完成后更新；同日补充服务器交接与现状整理）  
 > 用途：把本文件全部内容作为新一轮会话的启动指令。  
-> 权威现状：同目录 `HANDOFF.md`（本文件只讲"怎么接手"，不重复也不替代它的状态结论）。
+> 权威现状：同目录 `HANDOFF.md`（本文件只讲"怎么接手"，不重复也不替代它的状态结论）；一页速览见 `docs\项目现状总览.md`，服务器与部署见 `docs\部署与服务器现状.md`。
 
 ## 0. 一句话背景
 
-Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是一个**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端产品原型**：8 个页面、5 项主导航、业务数据全部写入本机浏览器 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划）、AI 是本地规则式 Mock、JSON 导出导入已是备份 0.2.0（含长期计划）。没有真实 DeepSeek 调用、没有服务端数据库、没有 Android 包；仓库已有两个 Git 提交并推送 GitHub（`main` / `bd779eb` + `da787c4`），具备回滚基线。
+Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是一个**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端产品原型**：8 个页面、5 项主导航、业务数据全部写入本机浏览器 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划）、AI 是本地规则式 Mock、JSON 导出导入已是备份 0.2.0（含长期计划）。没有真实 DeepSeek 调用、没有服务端数据库、没有 Android 包；Git 提交链（`bd779eb` 起，含清理与格式化提交）已全部推送 GitHub，具备回滚基线。**服务器环境已就绪但代码尚未部署**：阿里云 ECS 2C2G + Node 20.20.2 + Nginx 1.24.0，80 端口可达，域名 `wpersist.top` 未备案、443 未开。
 
 ## 1. 开工前必读（按顺序，不要跳）
 
-1. `D:\Persist\HANDOFF.md` —— 唯一现状权威。重点读 §0.1–0.4、§2、§3.1、§4.9、§6.6（持久化）、§8.5、§9.1、§10、§13、§15、§16、§19。
-2. `D:\Persist\README.md`、`D:\Persist\app\README.md` —— 阶段、命令、页面清单、条件类名约定。
-3. `D:\Persist\docs\工程初始化与前端约定.md` —— 技术选型与前端阶段顺序。
-4. `D:\Persist\docs\Persist-项目开发规划.md` —— **目标态规划，不是现状**。它的 §4.2（16 条路由）、§4.3（分模块页面）大多未实现；冲突时以 HANDOFF 与源码为准。
-5. 源码按序：`app\src\App.tsx` → `context\MockDataProvider.tsx` → `lib\persist-state.ts` → `lib\persist-storage.ts` → `types.ts` → `lib\chat-types.ts` → `lib\long-term-plan.ts` → `lib\plan-draft.ts` → `lib\profile-rules.ts` → `lib\mock-data-transfer.ts` → `pages\SettingsPage.tsx` → `pages\PlansPage.tsx`。
-6. 视觉对照再看 `design\home-v3-countdown.html` 与 `design\*.png`。
+1. `D:\Persist\docs\项目现状总览.md` —— 一页速览（阶段完成度、验证数字、服务器现状、下一步）。
+2. `D:\Persist\HANDOFF.md` —— 唯一现状权威。重点读 §0.1–0.4、§2、§3.1、§4.9、§6.6（持久化）、§8.5、§9.1、§10、§13、§15、§16、§19。
+3. `D:\Persist\docs\部署与服务器现状.md` —— 服务器规格、七条部署硬规则、Nginx 草案、命令速查（公网 IP 已脱敏）。
+4. `D:\Persist\README.md`、`D:\Persist\app\README.md` —— 阶段、命令、页面清单、条件类名约定。
+5. `D:\Persist\docs\工程初始化与前端约定.md` —— 技术选型与前端阶段顺序。
+6. `D:\Persist\docs\Persist-项目开发规划.md` —— **目标态规划，不是现状**。它的 §4.2（16 条路由）、§4.3（分模块页面）大多未实现；冲突时以 HANDOFF 与源码为准。
+7. 源码按序：`app\src\App.tsx` → `context\MockDataProvider.tsx` → `lib\persist-state.ts` → `lib\persist-storage.ts` → `types.ts` → `lib\chat-types.ts` → `lib\long-term-plan.ts` → `lib\plan-draft.ts` → `lib\profile-rules.ts` → `lib\mock-data-transfer.ts` → `pages\SettingsPage.tsx` → `pages\PlansPage.tsx`。
+8. 视觉对照再看 `design\home-v3-countdown.html` 与 `design\*.png`。
 
 **跳过**：`node_modules`、`dist`、`test-results`、`.chrome-headless-*`、`design\.edge-profile*`、`Water intake record\`（368 MB 旧 Electron 工具，仅作行为参考，已在 `.gitignore`）。
 
@@ -42,7 +44,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 
 **已完成**：8 页面可访问 + 跨模块联动；AI 报告 4 个入口（桌面侧栏、移动底栏、今日页头部、学习页"查看分析依据"）；健身自由动作/自由运动输入；完整演示数据；AI 引导建档 → 草案 → 确认启用 → 归档/重启闭环（`/plans`）；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0，文件名带日期，导入 toast 报记录数 + 计划数）；**本机 IndexedDB 持久化**（13 个状态切片 + 快照写单条记录，带 `schemaVersion` 迁移与未来版本只读保护，`MockDataProvider` Context 契约不变）；全站弹窗统一居中；窄屏保留档案页「AI 建档」入口；视觉基线 15 状态 × 6 视口（1440 / 500 / 430 / 421×926 / 390 / 360）已由用户桌面端与移动端验收通过。
 
-**验证数字（2026-11-03 步骤 6 后实测）**：`tsc` 0 错误；单元 **123 / 123 / 8 个文件**（`complete-mock-data` 5、`chat-extract` 24、`countdown` 4、`long-term-plan` 23、`mock-data-transfer` 26、`plan-draft` 19、`profile-rules` 11、**`persist-state` 11**）；E2E **49 条 × 2 project = 98 次执行，0 跳过 / 0 失败**（55.1s），新增 `e2e/persistence.spec.ts` 3 条；oxlint 0 错 / 3 警（`react(set-state-in-effect)`，在 `StudyPage.tsx`、`DietPage.tsx`、`FitnessPage.tsx`，行号会漂，按规则名找）；build 通过，`dist` 产物 JS 552.61 kB / CSS 139.92 kB；`visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
+**验证数字（2026-11-03 步骤 6 后实测）**：`tsc` 0 错误；单元 **123 / 123 / 8 个文件**（`complete-mock-data` 5、`chat-extract` 24、`countdown` 4、`long-term-plan` 23、`mock-data-transfer` 26、`plan-draft` 19、`profile-rules` 11、**`persist-state` 11**）；E2E **49 条 × 2 project = 98 次执行，0 跳过 / 0 失败**（55.1s），新增 `e2e/persistence.spec.ts` 3 条；oxlint 0 错 / 3 警（`react(set-state-in-effect)`，在 `StudyPage.tsx`、`DietPage.tsx`、`FitnessPage.tsx`，行号会漂，按规则名找）；build 通过，`dist` 产物 `index-D5Nq3TbM.js` 552.61 kB（gzip 163.52 kB）/ `index-C9ZcsQCi.css` 137.64 kB（gzip 23.81 kB）/ `index.html` 611 B（2026-11-03 现状整理时复跑，哈希一致）；`visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
 
 **未完成**：
 1. **步骤 6 已提交并推送** —— 提交 `128d6a2`（`feat: 步骤 6 本机 IndexedDB 持久化`），已在 `main` 分支上推送（前两个：`bd779eb` 初始提交、`da787c4` 步骤 5 文档同步）。
@@ -81,7 +83,7 @@ stage('collect') → delta* → questions? → profilePatch?（一轮最多一�
 
 **备份格式**（`lib\mock-data-transfer.ts`）：`PERSIST_BACKUP_VERSION='0.2.0'`（L300）、`LEGACY_BACKUP_VERSION='0.1.0'`（L302）、`serializeMockBackup`（L334）、`parseMockBackupJson`（L360）、`countMockRecords`（L623）、`requireLongTermPlans`（L284）。0.2.0 才含 `longTermPlans`，导入必须兼容 0.1.0；设置页已两边接通（导出 `SettingsPage.tsx` 约 L119，导入 toast 含计划数约 L170）。
 
-**本机持久化**（`lib\persist-state.ts` / `lib\persist-storage.ts`）：数据库 `persist-app`（版本 1）、对象仓 `mock-state`、唯一记录 `id='persist-mock-state'`，记录结构 `{ id, schemaVersion:1, savedAt, backup, snapshot }`，其中 `backup` 复用上面的 0.2.0 备份格式。`MockDataProvider` 首挂载水合（完成前 `return null`）、状态变化 200 ms 防抖写整条记录、`pagehide` / `visibilitychange` 补写、`hydrated` 之前不写盘。读盘状态有 `loaded / empty / unavailable / corrupt / unsupported-version`：不可用与损坏退回纯内存且不清数据；**未来版本记录只读不覆盖**。改 `MockDataProvider` 的状态切片时，必须同步维护 `persist-state.ts` 的 `schemaVersion` 与迁移；`clearPersistedState()` 已实现但未接 UI（留给 P4）。
+**本机持久化**（`lib\persist-state.ts` / `lib\persist-storage.ts`）：数据库 `persist-app`（版本 1）、对象仓 `mock-state`、唯一记录 `id='persist-mock-state'`，记录结构 `{ id, schemaVersion:1, savedAt, backup, snapshot }`，其中 `backup` 复用上面的 0.2.0 备份格式。`MockDataProvider` 首挂载水合（完成前 `return null`）、状态变化 200 ms 防抖写整条记录、`pagehide` / `visibilitychange` 补写、`hydrated` 之前不写盘。读盘状态有 `loaded / empty / unavailable / corrupt / unsupported-version`：不可用与损坏退回纯内存且不清数据；**未来版本记录只读不覆盖**。改 `MockDataProvider` 的状态切片时，必须同步维护 `persist-state.ts` 的 `schemaVersion` 与迁移；`clearPersistedState()` 已实现但未接 UI（已排进 `HANDOFF.md` §0.4 步骤 7，即 P3 之前先补）。
 
 **档案校验**（`lib\profile-rules.ts`）：`updateProfile` 本身**不做校验**，所有 UI 写入前必须 `sanitizeProfilePatch(...)`（年龄 14–100，越界丢弃并提示，绝不 throw）。
 

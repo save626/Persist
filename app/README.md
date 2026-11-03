@@ -39,12 +39,13 @@ npm run build        # 生产构建
 
 ## 待办（按顺序）
 
-1. P3：接入 `server/` 的 Fastify 代理与 DeepSeek，前端改为真实请求（保留失败降级与「本地生成」标注规则）。完整计划见 `HANDOFF.md` §0.4 / §13 P3。
+1. 步骤 7（P3-0）：设置页「清空本机数据」入口——清 IndexedDB → 重置内存态 → 清 `snapshot`，保持 `hydrated`，补 1 条 E2E。
+2. P3（步骤 8）：接入 `server/` 的 Fastify 代理与 DeepSeek，前端只请求相对 `/api/*`（保留失败降级与「本地生成」标注规则）。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
 
 已完成（2026-11-03）：
 
 - 步骤 6 本机持久化：新增 `src/lib/persist-state.ts`、`src/lib/persist-storage.ts`，`MockDataProvider` 水合 + 防抖落盘，`mock-data-transfer.ts` 抽出 `parseMockBackupValue()` 共用校验；`e2e/persistence.spec.ts` 与 `persist-state.test.ts` 覆盖刷新恢复、版本迁移与损坏降级。文案同步改为「已保存在本机浏览器（IndexedDB）」。
-- 首个 Git 提交已建立并推送到 `github.com/save626/Persist`（`main` / `bd779eb`，262 文件 37.39 MB）；提交前删除仓库根目录 `$null` 与 `app/$null` 两个误建文件；步骤 5 文档同步为 `da787c4`。
+- Git 提交链已全部推送（`github.com/save626/Persist`，公开仓库）：起于 `bd779eb`（262 文件 37.39 MB），后续为步骤 5/6 功能与文档提交、`d4c9696` 清理、`style:` 格式化及若干 `docs:` 同步；提交前删除了仓库根目录 `$null` 与 `app/$null` 两个误建文件。
 - `SettingsPage.exportMockData()` 已改调 `serializeMockBackup()`，导出 0.2.0 且含 `longTermPlans`，导入 toast 报记录数与计划数；round-trip 单测与导出/导入 E2E 已覆盖。
 - `scripts/visual-check.mjs` 已纳入 `/plans` 五个状态，视口扩到 6 个（新增 421×926 真机参考），并新增「档案页必须可见 AI 建档」断言。
 - 全站弹窗统一垂直居中；窄屏保留档案页「AI 建档」入口（`.profile-onboard-action`）。

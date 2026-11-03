@@ -24,9 +24,9 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 - 已提供一份完整演示数据，可覆盖主要 Mock 交互和跨模块分析流程。
 - AI 引导建档闭环已可用：中文自由描述 → 规则提取档案字段 → 最多两次追问 → 计划草案（周目标 / 里程碑 / 假设 / 冲突警告）→ 用户确认 → 写回档案并启用长期计划，旧计划自动归档。
 - 已接入本机持久化（步骤 6，2026-11-03）：饮水、学习记录、餐食、训练会话、档案、设置、授权、复盘、报告、快照与长期计划都会写入浏览器 IndexedDB，刷新、关闭标签页、重开浏览器后不再丢失。实现为原生 IndexedDB 封装（`lib/persist-storage.ts`）＋带 `schemaVersion` 迁移的纯函数记录层（`lib/persist-state.ts`），**没有引入 Dexie 运行时依赖**；`MockDataProvider` 的 Context 契约与 13 个状态切片完全不变。
-- 自动化验证已通过：类型检查、123 个单元测试、49 条 Playwright 用例 × 2 个项目 = 98 次执行全部通过（0 跳过）、生产构建（JS 552.61 kB / CSS 139.92 kB）、视觉检查 15 状态 × 6 视口全零指标。
+- 自动化验证已通过：类型检查、123 个单元测试、49 条 Playwright 用例 × 2 个项目 = 98 次执行全部通过（0 跳过）、生产构建（`index-D5Nq3TbM.js` 552.61 kB / gzip 163.52 kB、`index-C9ZcsQCi.css` 137.64 kB / gzip 23.81 kB）、视觉检查 15 状态 × 6 视口全零指标。完整基线见 `docs/项目现状总览.md` §3。
 - 已通过用户桌面端与移动端视觉验收（2026-11-03）：八个页面与全部弹窗在 1440 / 500 / 430 / 421 / 390 / 360 六个视口下无横向溢出、弹窗统一居中，基线截图见 `design/`（15 状态 × 6 视口 + 快速记录浮层 = 91 张）。
-- Git 已推送三次（2026-11-03）：分支 `main`，提交 `bd779eb`（`chore: initial commit`，262 文件 37.39 MB）、`da787c4`（步骤 5 文档同步）与 `128d6a2`（步骤 6 本机持久化，41 个文件）；远端 `git@github.com:save626/Persist.git`，每次推送后都核对了远端 `refs/heads/main` 与本地 HEAD 哈希一致。仓库根目录误建的 `$null` 与 `app/$null` 两个垃圾文件已在首次提交前删除。当前工作区干净（`## main...origin/main`）。
+- Git 提交链已**全部推送**（2026-11-03）：分支 `main`，远端 `git@github.com:save626/Persist.git`（**公开仓库**）。链上按主题为：`bd779eb`（`chore: initial commit`，262 文件 37.39 MB）→ 步骤 5/6 的文档与功能提交（`da787c4` / `128d6a2` / `e3e9730`）→ `d4c9696`（清理死代码与历史制品）→ `style:`（移除 `prettier-plugin-tailwindcss` 并格式化）→ 其后多次 `docs:` 同步（推送措辞、服务器与部署交接、本次现状整理）。每次推送后都核对远端 `refs/heads/main` 与本地 HEAD 一致，当前工作区干净（`## main...origin/main`）。仓库根目录误建的 `$null` 与 `app/$null` 两个垃圾文件已在首次提交前删除。
 - **服务器已就绪，但代码尚未部署**（2026-11-03）：阿里云 ECS 2 核 2 GiB（华东1 杭州，Alibaba Cloud Linux 3.2104，包管理器 `dnf`），已装 Node.js v20.20.2 + npm 10.8.2 + Nginx 1.24.0，安全组已开放 22/80，`http://<IP>` 可访问 Nginx 默认页；443 未开、域名 `wpersist.top` 未备案、机器上没有任何项目代码。部署架构、规格约束（2 GiB 不在服务器构建前端、3 Mbps 流量计费需 gzip+长缓存、SPA 深链回退、`/api` 反代 127.0.0.1:3000）、Nginx 草案与命令速查见 **`docs/部署与服务器现状.md`**（公开仓库，公网 IP 已脱敏，真实值在本机 `docs/部署与服务器现状.local.md`，由 `.gitignore` 的 `*.local.md` 排除）。
 
 ### 0.2 现在不是什么状态
@@ -34,7 +34,7 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 以下内容尚未实现，不能误认为已经具备生产能力：
 
 - 数据只保存在**当前浏览器**的 IndexedDB：清除站点数据、换浏览器 / 换设备、无痕模式都会丢；没有账号与跨设备同步。
-- 没有服务端数据库，也没有 SQLite（原生 IndexedDB 之外不做第二套存储；Capacitor 阶段再评估）。
+- 没有服务端数据库，也没有 SQLite。服务器上只装了 Node 20 + Nginx（见 `docs/部署与服务器现状.md`），后端代码尚未开始写；SQLite 计划在 P4 选型（服务器 Node 20 没有内置 `node:sqlite`，需 native 编译 `better-sqlite3` 或先升级 Node）。
 - 没有登录、账号、同步、多设备或冲突处理；同一浏览器的两个标签页同时编辑以最后写入为准，没有跨标签页广播。
 - 没有真实 DeepSeek 调用；AI 报告是前端 Mock 内容和本地拼装。
 - 没有真实服务端 API、鉴权、限流、缓存、日志和密钥管理。
@@ -44,16 +44,17 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 - 饮食照片只保存文件名 Mock，不上传、不识别（文件名列表随本机数据保存）。
 - 健身“最近训练历史”仍是力量训练专用结构，自由运动联动覆盖当前会话、今日页和报告，历史详情尚未全面通用化。
 - 长期计划已随本机数据持久化；JSON 备份仍只能手动导出 / 导入文件（含长期计划），不会自动备份，也没有“从备份恢复”按钮；导入会整体替换本机数据且没有撤销。
-- 持久化没有“清空本机数据”入口：设置页“清空设置”只重置设置项，要清掉全部记录只能手动清除站点数据（`clearPersistedState()` 已备好但尚未接 UI，留给 P4）。
+- 持久化没有“清空本机数据”入口：设置页“清空设置”只重置设置项，要清掉全部记录只能手动清除站点数据（`clearPersistedState()` 已备好但尚未接 UI，已排进 §0.4 步骤 7，即 P3 之前先补）。
 - AI 建档是本地规则引擎（Mock），不是 DeepSeek；真实服务端仍属于后续阶段。
 
 ### 0.3 优先事项摘要（详细执行计划见 §0.4）
 
-1. **步骤 6 已完成**（2026-11-03）：本机 IndexedDB 持久化、记录版本迁移、未来版本只读保护、「刷新 / 重开不丢数据」E2E 均已落地（详见 §6.6 与 §13 P2）。
-2. 实现 Fastify 服务端 AI 代理、DeepSeek 接入和安全边界（P3）。
-3. 实现真实备份、快照恢复和空安装恢复。
-4. 进入 Capacitor Android 打包和真机验证。
-5. 清理 lint 警告、路由分包、清理 Prettier 工具链隐患并补足纯业务单元测试。
+1. **步骤 7（下一项，需用户确认）**：设置页「清空本机数据」入口（P3-0），补齐 P2 遗留的清空能力，也是 P3 联调「真实 AI / Mock 降级」时快速回到干净状态的前提。
+2. **步骤 8**：实现 Fastify 服务端 AI 代理、DeepSeek 接入和安全边界（P3）。
+3. **步骤 9**：IP 直连首次部署（本地构建上传 + Nginx 深链回退/反代/gzip + systemd）。
+4. **步骤 10**：备案通过后域名 + HTTPS + 服务器安全加固。
+5. 之后：真实备份与快照恢复（P4）→ Capacitor Android 打包与真机验证（P5）。
+6. 贯穿性技术债：清理 3 条 lint 警告、按路由拆包（`/plans` 懒加载）、补足纯业务单元测试。
 
 ### 0.4 下一步执行计划（2026-11-03 起，按此顺序做）
 
@@ -147,7 +148,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | Phase 0 | 产品边界、视觉方向、工程脚手架 | 已完成 |
-| Phase 1 | 八页面（含 `/plans`）、响应式应用壳、视觉体系 | 基本完成，等待用户最终视觉验收 |
+| Phase 1 | 八页面（含 `/plans`）、响应式应用壳、视觉体系 | ✅ 已完成并通过用户验收（2026-11-03，15 状态 × 6 视口） |
 | Phase 2 | 今日页 Mock 交互 | 已完成 |
 | Phase 3 | 健身页 Mock 交互与自由运动 | 已完成 |
 | Phase 4 | 饮食、营养与饮水 Mock 交互 | 已完成 |
@@ -158,7 +159,11 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 下一阶段 A | P1 收尾：JSON 导出导入迁移到 0.2.0 + 全页面视觉复核 | ✅ 已完成（2026-11-03，用户桌面端 + 移动端验收通过） |
 | 下一阶段 A2 | 首个 Git 提交（建立可回滚基线） | ✅ 已完成（2026-11-03，`main` / `bd779eb`，已推送 GitHub） |
 | 下一阶段 B | 本机 IndexedDB 持久化（步骤 6） | ✅ 已完成（2026-11-03；原生 IDB 封装 + 记录版本迁移，未引入 Dexie，Context 契约不变） |
-| 下一阶段 C | Fastify + DeepSeek 服务端代理 | 未开始（下一项） |
+| 收尾 | 死代码/历史制品清理 + 全仓格式化（移除 Tailwind Prettier 插件） | ✅ 已完成（2026-11-03，两个独立提交，验证全绿） |
+| 服务器 | 阿里云 ECS 环境准备（Node 20 + Nginx + 安全组 80） | ✅ 环境就绪（2026-11-03，**项目代码未部署**，见 `docs/部署与服务器现状.md`） |
+| 步骤 7 | P3-0：设置页「清空本机数据」入口 | 下一项（待用户确认） |
+| 下一阶段 C | Fastify + DeepSeek 服务端代理（步骤 8） | 未开始（紧接步骤 7） |
+| 部署 | 步骤 9 IP 直连部署 → 步骤 10 备案后域名 + HTTPS | 未开始（域名未备案） |
 | 下一阶段 D | 服务端备份、校验与恢复 | 未开始 |
 | 下一阶段 E | Capacitor / Android 发布 | 未开始 |
 | 后续 | 高级统计、同步、照片识别、外部数据接入 | 未开始 |
@@ -176,6 +181,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 设置 | 已完成 | Mock 已完成 | 已完成 | 已完成（本机 IndexedDB） | 已覆盖（含刷新恢复） |
 | 长期计划 | 已完成（`/plans`） | 已完成（含 AI 建档对话） | 已完成 | 已完成（本机 IndexedDB） | 已覆盖（含刷新恢复） |
 | 服务端 | 只有 README | 无 | 无 | 无（持久化只在本机浏览器） | 无 |
+| 部署 / 服务器 | ECS 2C2G 已装 Node 20 + Nginx，仅默认页 | 无（代码未部署） | 无 | 无（无服务端存储） | 无（部署验收清单待步骤 9 执行） |
 | Android | 未开始 | 无 | 无 | 无 | 无 |
 
 说明：持久化是**整库单记录**方案——13 个状态切片合成一条 `persist-mock-state` 记录，不按模块拆分 store；任一模块改动都会重写整条记录（写入量约 100–300 KB/次，200 ms 防抖）。
@@ -1044,12 +1050,22 @@ Playwright 配置为两个项目：
 ### 10.3 最新构建产物
 
 ```text
-dist/index.html                  0.61 kB
-dist/assets/index-DBVxLcSp.css  139.92 kB（gzip 24.11 kB）
-dist/assets/index-DqZtxRhx.js   552.61 kB（gzip 163.52 kB）
+dist/index.html                  611 B
+dist/favicon.svg                9,522 B
+dist/icons.svg                  5,031 B
+dist/assets/index-C9ZcsQCi.css  137,643 B（137.64 kB，gzip 23.81 kB）
+dist/assets/index-D5Nq3TbM.js   552,612 B（552.61 kB，gzip 163.52 kB）
 ```
 
-步骤 6 的持久化层让主 JS 从 549.09 kB 增至 552.61 kB（+3.52 kB；CSS 未变），新增的是 `persist-state.ts` + `persist-storage.ts`。2026-11-03 构建仍提示主 JS 超过 Vite 默认 500 kB 提示线。当前不影响验收，后续建议按路由懒加载拆包（`/plans` 是天然的懒加载候选）。
+产物演进（便于识别“哈希变了是否正常”）：
+
+1. 步骤 6 完成时：`index-DqZtxRhx.js` 552.61 kB（持久化层让主 JS 从 549.09 kB 涨 3.52 kB）、`index-DBVxLcSp.css` 139.92 kB。
+2. `chore:` 清理后：删除 `persist.css` 中 173 行 `.preview-*` 样式，CSS 降至 137.64 kB，JS 不变（`PreviewPages` 本来未被引用，早已 tree-shaken）。
+3. `style:` 格式化后：输出**逐字节相同**（格式化未改变语义），直至 2026-11-03 现状整理时复跑 `npm run build` 仍为 `index-C9ZcsQCi.css` / `index-D5Nq3TbM.js`——因此看到这两个哈希说明代码未漂移。
+
+> 更正：§18 第 42 条把清理后的 CSS 体积记成了「134.42 kB」，实测应为 137.64 kB（本次复核已确认，见 §18 第 44 条）。
+
+2026-11-03 构建仍提示主 JS 超过 Vite 默认 500 kB 提示线。当前不影响验收，后续建议按路由懒加载拆包（`/plans` 是天然的懒加载候选）。
 
 ### 10.4 Lint 警告
 
@@ -1340,7 +1356,7 @@ npm run visual:check
 9. ✅ E2E：描述目标 → 草案 → 确认 → 档案与计划更新、手工新建 → 归档 → 重新启用、360px 无溢出；档案页 AI 建档入口桌面与移动均验证。
 10. ✅ 视觉检查已重跑（15 状态 × 6 视口），并经用户桌面端 + 移动端验收通过。
 
-P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部完成并冻结**，不再有收尾项；Git 提交已于 2026-11-03 完成两次（`main` / `bd779eb` + `da787c4`，均已推送）。P2 本机持久化（§0.4 步骤 6）也已完成（2026-11-03），详情见 §13 P2 与 §6.6；下一阶段是 P3 服务端 AI 代理。
+P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部完成并冻结**，不再有收尾项；Git 提交链从 `bd779eb` 起已全部推送（含 P2 的 `128d6a2`、清理 `d4c9696` 与 `style:` 格式化）。P2 本机持久化（§0.4 步骤 6）也已完成（2026-11-03），详情见 §13 P2 与 §6.6；**P3 之前先做步骤 7（P3-0 清空数据入口），再进入 P3 服务端 AI 代理**（服务器环境已就绪，见 §0.4 步骤 8–10 与 `docs/部署与服务器现状.md`）。
 
 完成标准：
 
@@ -1373,9 +1389,19 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - ⚠️ 跨日期流程未做自动化：数据不按日期分区，`waterLog` 等按日期字段自然累积，跨日切换规则仍属未验证项。
 - ✅ 「加载完整演示数据」仍是显式操作（设置页按钮），不会自动写盘污染数据。
 
-未做（留给 P4 / 后续）：清空本机数据 UI、跨标签页同步、导入前自动备份、容量上限提示、按日分区与跨日 E2E。
+未做（`clearPersistedState()` 已实现但未接 UI，已排进 §0.4 步骤 7 先补；其余留给 P4 / 后续）：清空本机数据 UI 入口、跨标签页同步、导入前自动备份、容量上限提示、按日分区与跨日 E2E。
+
+### P3-0：清空本机数据入口（步骤 7，P3 的前置）
+
+目标：设置页提供「清空本机数据」，让用户和测试都能在不手动清站点数据的情况下回到初始 Mock 状态。
+
+关键实现顺序（顺序错会导致 200 ms 防抖把旧数据写回）：`clearPersistedState()` 清 IndexedDB → 重置内存态为初始 Mock → 保留 `hydrated` 门控 → 同时清 `snapshot`。
+
+完成标准：清空后界面回到初始 Mock、刷新不再复现旧数据；补 1 条 E2E（清空 → 刷新 → 断言初始态）。
 
 ### P3：服务端 AI 代理
+
+前置：步骤 7（P3-0）完成；服务器环境已就绪（见 `docs/部署与服务器现状.md`），P3 代码先在本地跑通，部署属步骤 9。
 
 目标：
 
@@ -1489,7 +1515,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - 饮食照片没有真实存储。
 - 提醒没有系统通知能力。
 - 当前报告周期和统计口径仍有 Mock 成分。
-- 持久化没有 UI 入口的清空 / 重置；导入会整体替换本机数据且无撤销；读盘失败只在控制台告警，没有面向用户的提示。
+- 持久化没有 UI 入口的清空 / 重置（已排进 §0.4 步骤 7，不再是 P4 遗留）；导入会整体替换本机数据且无撤销；读盘失败只在控制台告警，没有面向用户的提示。
 - 没有跨标签页同步与写入冲突处理；同一浏览器两个标签页同时编辑时以最后写入为准。
 - 未做跨日期流程的自动化（数据不按日分区，`waterLog` 等日期字段自然累积）。
 - 页面内弹层较多，未来若要 deep link 或恢复操作状态，需要补 URL 状态设计（目前只有 `/plans?onboard=1`）。
@@ -1655,6 +1681,9 @@ npm run visual:check
 
 - `D:\Persist\docs\Persist-项目开发规划.md`
 - `D:\Persist\docs\部署与服务器现状.md`（部署侧唯一事实来源：服务器规格、5.1 七条硬规则、Nginx 草案、命令速查）
+- `D:\Persist\docs\部署与服务器现状.local.md`（**不入库**，真实公网 IP；由 `.gitignore` 的 `*.local.md` 排除）
+- `D:\Persist\docs\项目现状总览.md`（一页速览，交接第一读物）
+- `D:\Persist\HANDOFF-新会话指令.md`（可整份复制给新会话的启动指令）
 - `D:\Persist\server\README.md`
 - `D:\Persist\shared\README.md`
 - `D:\Persist\README.md`
@@ -1763,10 +1792,18 @@ npm run visual:check
 40. 收尾：对三个新增文件跑 `prettier --write`（改动前的 `persist-state.ts` / `persist-storage.ts` / `persist-state.test.ts` 有格式漂移），随后复跑 `typecheck`（0 错）、`lint`（0 错 3 警）、`npm test`（123/123）与 `npm run build`——产物哈希仍为 `index-DqZtxRhx.js` / `index-DBVxLcSp.css`，与格式化前完全一致，说明格式化未改变语义、E2E 结论继续有效。`TodaySheets.tsx` / `ReportsPage.tsx` 的 `prettier --check` 报警属 §14.2 记录的既有债务（这两个文件本轮只改了一行文案），未做全文件格式化以避免无关大 diff。
 41. 步骤 6 已于 2026-11-03 14:1x 作为第三个提交 `128d6a2`（`feat: 步骤 6 本机 IndexedDB 持久化（刷新/重开不丢数据）`）提交并推送：41 个文件（4 新增 + 14 修改 + 23 张截图），推送后远端 `refs/heads/main` 与本地 HEAD 一致（`128d6a2`），`git status -sb` 为 `## main...origin/main`；`design/` 下 23 张截图因文案改口被 `visual:check` 重写（内容变化来自文案，指标仍全零），已一并进入该提交。
 42. 2026-11-03 清理（用户批准后执行，`chore:` 提交，无功能变化）：删 `design/_snapshot-before-fixes/`（59 张 / 16.5 MB）、v1/v2 遗留原型（`home-v1.html`、`home-v2-blue.html` 与 6 张 PNG，保留 `home-v3-countdown.html` + 2 张 v3 对照图）、`design/.edge-profile*/`（13.7 MB，未入库）；删 `app/src/pages/PreviewPages.tsx`（全 `app/src` 零引用）及 `persist.css` 中仅供其使用的 `.preview-*` 样式 173 行；`.gitignore` 补 `app/dist-ssr/`、`app/.vite/`、`desktop.ini`、`app/tmp-*`、`*.tmp`。决定**保留** `Water intake record/`（368 MB，未入库，作为饮水行为参照）。
-   验证（清理后实测）：`tsc` 0 错；`oxlint` 0 错 3 警（文件数 64 → 63，规则数不变）；`npm test` 123/123；`npx playwright test` 98 passed / 0 skipped（2.0m）；`npm run build` 通过，CSS 139.92 → 134.42 kB（删掉的 `.preview-*` 确实在产物里），JS 552.61 kB 不变（`PreviewPages` 本来没被引用，早已 tree-shaken）；`npm run visual:check` 15 状态 × 6 视口 `overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
+   验证（清理后实测）：`tsc` 0 错；`oxlint` 0 错 3 警（文件数 64 → 63，规则数不变）；`npm test` 123/123；`npx playwright test` 98 passed / 0 skipped（2.0m）；`npm run build` 通过，CSS 139.92 → 137.64 kB（删掉的 `.preview-*` 确实在产物里；本条原先记录的 134.42 kB 为笔误，见第 44 条复核），JS 552.61 kB 不变（`PreviewPages` 本来没被引用，早已 tree-shaken）；`npm run visual:check` 15 状态 × 6 视口 `overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
    截图字节的说明（不要误判为回归）：`git status` 一度显示 8 张基线 PNG 有变化，逐像素比对后确认差异 ≤0.07%、bbox 均落在首页倒计时那一行（`TodayPage` 有 1 s 实时时钟），`study-desktop-1440.png` 的最大色差仅 4/255（抗锯齿噪声）。连跑两次 `visual:check` 也复现了同样的抖动，故**还原为原基线图、不把抖动提交**。
 43. 2026-11-03 格式化（用户批准的第二个提交：`style: 移除 prettier-plugin-tailwindcss 并格式化既有漂移文件`，22 个文件、语义零变化）：移除 `prettier-plugin-tailwindcss`（`app/package.json` 的 devDependency 与 `.prettierrc.json` 的 `plugins` 同时去掉，`package-lock.json` 手工剔除对应条目，未让 npm 重排锁文件）；`npx prettier --write` 一次性消除 19 个文件的格式漂移（16 个既有漂移 + `ReportsPage.tsx` + `.prettierrc.json` / `package.json`）。**发现并修正了一个真实副作用**：Prettier 拆行后给 `ReportsPage.tsx` 两处 JSX 文本补了 `{' '}` 空白文本节点（生成面板 `<p>`、引用范围 `<strong>`），移动端 `/reports` 的换行位置随之变化，4 张截图出现 0.002%～0.039% 像素差（逐像素 bbox 均落在同一行文字尾部，最大色差 47/255）；同一份格式化代码连跑两次该差异稳定复现，回退 `ReportsPage.tsx` 后 4 张截图与基线逐像素相同——确认是格式化引入而非截图抖动。修法：这两处改为显式字符串子节点（`{'当前有 '}{localRecordTotal}{' 条本地记录，本次可引用 '}…`），子节点切分与格式化前一致。
     验证（格式化后实测）：`npx prettier --check .` → `All matched files use Prettier code style!`；`tsc -b` 0 错；`oxlint` 0 错 3 既有警告（63 文件）；`npm test` 123/123（8 文件）；`npx playwright test` 98 passed / 0 skipped（1.1m）；`npm run build` 产物 **`index-D5Nq3TbM.js` 552,612 B + `index-C9ZcsQCi.css` 137,643 B，与格式化前逐字节相同**（中途版本 `index-BqOHakwA.js` 只因那两个 `{' '}` 多 6 字节，正好成为「格式化确实改了 DOM」的证据）；`npm run visual:check` 15 状态 × 6 视口 91 张全零指标，reports 4 张与基线逐像素相同，首页 7 张仅为实时时钟抖动（≤0.07%，已还原不提交）。两个提交已于 2026-11-03 15:2x 推送到 `origin/main`，`git status -sb` 为 `## main...origin/main`、远端 `refs/heads/main` 与本地 HEAD 一致。
+
+**2026-11-03 文档整理与服务器交接（仍为纯文档，不改代码）**
+
+44. 现状复核时重新执行 `npm run build`（2026-11-03 15:5x），产物为 `dist/index.html` 611 B、`dist/assets/index-C9ZcsQCi.css` 137,643 B（gzip 23.81 kB）、`dist/assets/index-D5Nq3TbM.js` 552,612 B（gzip 163.52 kB），与格式化提交后记录完全一致 ⇒ 自 `style:` 提交以来代码零漂移。**同时修正了两处数据笔误**：§18 第 42 条的「清理后 CSS 134.42 kB」应为 137.64 kB；§10.3 的构建产物清单原先停留在步骤 6 的 `index-DqZtxRhx.js` / `index-DBVxLcSp.css`，已更新为当前哈希并补了产物演进说明。
+45. 修正三处过期陈述：§0.1「Git 已推送三次」→「提交链已全部推送」（不再写计数，计数会因每次提交自我失效）；§0.1/§10.1 的 CSS 体积 139.92 kB → 137.64 kB；§0.2、§13、§14.2、§16.6 里「清空本机数据入口留给 P4」→ 已提前为 §0.4 步骤 7（P3-0），并在 §13 新增 P3-0 小节写明实现顺序陷阱（清 IDB → 重置内存态 → 保留 `hydrated` → 清 `snapshot`，否则 200 ms 防抖把旧数据写回）。
+46. 服务器交接落库：新增 `docs/部署与服务器现状.md`（脱敏：公网 IP 写作 `121.196.*.*`，真实值只在本机 `docs/部署与服务器现状.local.md`，`.gitignore` 增 `*.local.md`），记录 ECS 规格、已装环境（Node 20.20.2 / npm 10.8.2 / Nginx 1.24.0 / Alibaba Cloud Linux 3 用 `dnf`）、安全组与域名备案状态、目标架构、七条硬规则、待执行清单、命令速查与 Nginx 站点草案（含 SSE 的 `proxy_buffering off`）；`HANDOFF.md` §0.4 拆出步骤 7–10，§5.1/§13 P3/§14.1/§16.6/§17/§19/§20 同步；`HANDOFF-新会话指令.md` §6、`README.md`、`server/README.md` 同步。
+47. 新增 `docs/项目现状总览.md`：一页速览（阶段完成度、验证基线数字、数据与 AI 现状、Git 现状、服务器现状、Top 10 限制、下一步顺序、文档地图），作为交接时的第一份读物，细节仍回指 `HANDOFF.md`。
+48. 本次仍**未改动** `app/` 与 `design/`，因此不重跑单测 / E2E / 视觉检查；只跑了 `npm run build` 用于核对产物，并逐项 grep 审计文档中的过期数字（`推送三次` / `139.92` / `134.42` / `DqZtxRhx` / `留给 P4` 等）与真实 IP 泄露。
 
 ---
 
@@ -1792,7 +1829,7 @@ npm run visual:check
 
 ## 20. 交接结论
 
-Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），全部业务记录已写入本机 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划），单元测试 123 条（8 文件）、E2E 98 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，Git 提交链已全部推送到 `github.com/save626/Persist`（`bd779eb` / `da787c4` / `128d6a2` / `e3e9730` / `d4c9696` / `style:`），仓库具备回滚基线。
+Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），全部业务记录已写入本机 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划），单元测试 123 条（8 文件）、E2E 98 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，Git 提交链已全部推送到 `github.com/save626/Persist`（`bd779eb` / `da787c4` / `128d6a2` / `e3e9730` / `d4c9696` / `style:` 及其后的 `docs:` 同步提交，最新一次为本次现状整理），仓库具备回滚基线。第一份读物是 `docs/项目现状总览.md`，细节与契约以本文档为准。
 
 但当前仍不是可长期使用的正式应用：数据只在本机浏览器（清站点数据即丢、无跨设备同步、无清空入口）、AI 不是真实调用、备份不可直接恢复、没有 Android 包。**服务器侧已就绪**（阿里云 ECS 2C2G + Node 20 + Nginx，80 端口已开放，见 `docs/部署与服务器现状.md`），但项目代码尚未部署、域名未备案、443 未开。下一步顺序：步骤 7（清空数据入口）→ 步骤 8（P3 服务端代理）→ 步骤 9（IP 直连部署）→ 步骤 10（备案后域名 + HTTPS），随后备份恢复（P4）与移动端发布（P5）。
 
@@ -1806,4 +1843,4 @@ Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、
 - 未确认前不得写档案或计划；档案写入必须过 `sanitizeProfilePatch`。
 - 格式化已无插件风险（`prettier-plugin-tailwindcss` 已移除，`prettier --check .` 全绿），但批量格式化仍要单独成提交并比对构建哈希；条件类名仍用 `cn()` 或完整字符串三元。
 - 持久化只写 IndexedDB 一条记录，改动 `MockDataProvider` 时必须同步维护 `persist-state.ts` 的迁移与版本，不能绕过 `schemaVersion`。
-- 未经用户视觉验收不扩大无关功能范围；下一步最高优先级是 P3 服务端 AI 代理。
+- 未经用户视觉验收不扩大无关功能范围；下一步最高优先级是步骤 7（P3-0 清空数据入口）→ 步骤 8（P3 服务端 AI 代理）→ 步骤 9（IP 直连部署）→ 步骤 10（备案后域名 + HTTPS）。
