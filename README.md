@@ -1,0 +1,56 @@
+# Persist
+
+Persist 是一款以“今日”为中心的个人长期记录工具，用于统一记录健身、饮食饮水与学习，并在后续通过 AI 生成每日分析和建议。
+
+## 当前阶段
+
+前端 Mock 开发已完成并通过视觉验收（2026-11-03）：八个页面可完整点击验收，AI 引导建档 → 长期计划闭环已打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），单元测试 112 条与 E2E 92 次执行（0 跳过）全绿；全页面视觉基线 15 状态 × 6 视口（1440 / 500 / 430 / 421×926 / 390 / 360）已由用户在桌面端与移动端逐页验收通过，前端视觉范围冻结。下一步是建立首个 Git 提交，然后进入本地持久化。后端、数据库、DeepSeek API 与 Android 打包均在此之后开始。
+
+详细现状、契约与已知问题以 `HANDOFF.md` 为准（其中 §0.4 是下一步执行计划）。
+
+## 下一步（按顺序）
+
+| 步骤 | 内容 | 状态 |
+|---|---|---|
+| 步骤 3 | 设置页导出导入切到备份 0.2.0（含 `longTermPlans`），补 round-trip 单测与 E2E | ✅ 已完成（2026-11-03） |
+| 步骤 4 | `/plans` 加入 `visual:check`，重跑 6 个视口全页面视觉复核 | ✅ 已完成并通过用户验收 |
+| 步骤 5 | 清理待删文件后建立**首个 Git 提交**（当前仓库 0 commit） | 下一步（高风险：无回滚能力） |
+| 步骤 6 | Dexie / IndexedDB 本地持久化 | 未开始 |
+| 后续 | Fastify + DeepSeek 代理 → 真实备份恢复 → Capacitor Android | 未开始 |
+
+## 目录
+
+```text
+app/      React + Vite Web 客户端
+server/   后续 API 代理与同步服务
+shared/   跨端共享类型和纯净业务工具
+design/   已确认的视觉原型与截图
+docs/     产品规划与工程约定
+```
+
+## 本地运行
+
+```powershell
+cd D:\Persist\app
+npm install
+npm run dev -- --port 4173
+```
+
+常用检查：
+
+```powershell
+npm run lint
+npm run typecheck
+npm test               # 112 条单元测试
+npx playwright test    # 46 用例 × 2 项目 = 92 次执行，0 跳过
+npm run visual:check   # 15 状态 × 6 视口 = 91 张截图到 design/
+npm run build
+```
+
+## 视觉基线
+
+`design/home-v3-countdown.html`
+
+主色为灰白与低饱和浅蓝，固定一级导航为“今日 / 健身 / 饮食 / 学习 / AI 报告”（五项，不随功能增加）。重要目标倒计时为两个独立目标，不与今日计划强绑定。
+
+长期计划页 `/plans` 不占主导航，从个人档案页「AI 建档」、今日页计划区底部「长期计划 →」或直接访问 `/plans` 进入；该页的 AI 对话为本地规则式 Mock（页面标注「本地生成 · Mock 对话」），未接入 DeepSeek。
