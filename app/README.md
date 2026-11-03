@@ -38,10 +38,11 @@ npm run build        # 生产构建
 
 ## 待办（按顺序）
 
-1. 建立首个 Git 提交（当前仓库 0 commit），随后进入 Dexie / IndexedDB 持久化。完整计划见 `HANDOFF.md` §0.4。
+1. Dexie / IndexedDB 持久化：把 `MockDataProvider` 改为持久化实现，保持 Context 契约不变，补“刷新后数据不丢（含长期计划）”的 E2E。完整计划见 `HANDOFF.md` §0.4。
 
 已完成（2026-11-03）：
 
+- 首个 Git 提交已建立并推送到 `github.com/save626/Persist`（`main` / `bd779eb`，262 文件 37.39 MB）；提交前删除仓库根目录 `$null` 与 `app/$null` 两个误建文件。
 - `SettingsPage.exportMockData()` 已改调 `serializeMockBackup()`，导出 0.2.0 且含 `longTermPlans`，导入 toast 报记录数与计划数；round-trip 单测与导出/导入 E2E 已覆盖。
 - `scripts/visual-check.mjs` 已纳入 `/plans` 五个状态，视口扩到 6 个（新增 421×926 真机参考），并新增「档案页必须可见 AI 建档」断言。
 - 全站弹窗统一垂直居中；窄屏保留档案页「AI 建档」入口（`.profile-onboard-action`）。

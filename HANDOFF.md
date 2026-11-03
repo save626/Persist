@@ -1,9 +1,9 @@
 # Persist 项目完整交接文档
 
-> 文档日期：2026-11-03（11:50 更新：步骤 3、步骤 4 已完成并经用户桌面端 + 移动端验收；下一步为步骤 5 首个 Git 提交）  
+> 文档日期：2026-11-03（13:40 更新：步骤 3、步骤 4 已完成并经用户桌面端 + 移动端验收；步骤 5 首次 Git 提交已完成并推送到 `github.com/save626/Persist`，下一步为步骤 6 本地持久化）  
 > 工作区：`D:\Persist`  
 > 应用目录：`D:\Persist\app`  
-> 当前阶段：**八个页面（含 `/plans` 长期计划页）与既有 Mock 交互已完成；AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的页面闭环已打通；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0 旧备份）；全页面视觉复核已完成 15 个状态 × 6 个视口（含 20:9 真机视口 421×926），全站弹窗统一居中且档案页「AI 建档」在窄屏可见；单元 112 条、E2E 92 次执行全部通过。下一步顺序见 §0.4：步骤 5 首个 Git 提交 → 步骤 6 P2 持久化。真实持久化、服务端 AI、备份恢复和 Android 发布尚未开始。**  
+> 当前阶段：**八个页面（含 `/plans` 长期计划页）与既有 Mock 交互已完成；AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的页面闭环已打通；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0 旧备份）；全页面视觉复核已完成 15 个状态 × 6 个视口（含 20:9 真机视口 421×926），全站弹窗统一居中且档案页「AI 建档」在窄屏可见；单元 112 条、E2E 92 次执行全部通过；首个 Git 提交已完成并推送到 GitHub（`main` / `bd779eb`，262 文件 37.39 MB），仓库自此具备回滚基线。下一步顺序见 §0.4：只剩步骤 6 P2 持久化。真实持久化、服务端 AI、备份恢复和 Android 发布尚未开始。**  
 > 本地验收地址：`http://127.0.0.1:4173/`（`cd app` 后 `npm run dev -- --port 4173`；需要手机访问时加 `--host 0.0.0.0`，见第 11 节）  
 > 当前技术形态：React SPA + 内存 Mock 数据 + 本地 Mock 报告 + 本地规则式（Mock）对话引擎 + 长期计划领域模型  
 > 本文档地位：当前代码实现优先于旧版规划文档；如文档与代码冲突，以 `D:\Persist\app` 中的实现为准。
@@ -25,6 +25,7 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 - AI 引导建档闭环已可用：中文自由描述 → 规则提取档案字段 → 最多两次追问 → 计划草案（周目标 / 里程碑 / 假设 / 冲突警告）→ 用户确认 → 写回档案并启用长期计划，旧计划自动归档。
 - 自动化验证已通过：类型检查、112 个单元测试、46 条 Playwright 用例 × 2 个项目 = 92 次执行全部通过（0 跳过）、生产构建（JS 549.09 kB / CSS 139.92 kB）。
 - 已通过用户桌面端与移动端视觉验收（2026-11-03）：八个页面与全部弹窗在 1440 / 500 / 430 / 421 / 390 / 360 六个视口下无横向溢出、弹窗统一居中，基线截图见 `design/`（15 状态 × 6 视口 + 快速记录浮层 = 91 张）。
+- 首个 Git 提交已完成并推送（2026-11-03）：分支 `main`，提交 `bd779eb`（`chore: initial commit`），262 个文件 37.39 MB；远端 `git@github.com:save626/Persist.git`，推送后核对远端 `refs/heads/main` 与本地 HEAD 哈希一致，工作区干净。仓库根目录误建的 `$null` 与 `app/$null` 两个垃圾文件已在提交前删除。
 
 ### 0.2 现在不是什么状态
 
@@ -45,12 +46,11 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 
 ### 0.3 优先事项摘要（详细执行计划见 §0.4）
 
-1. **步骤 5：建立首个 Git 提交**（当前仓库仍 0 commit、全部文件未跟踪；先在 GitHub 建空仓，不要勾 README / .gitignore 模板，否则首推冲突）。
-2. 接入 Dexie / IndexedDB，完成刷新后持久化、数据迁移和异常回滚。
-3. 实现 Fastify 服务端 AI 代理、DeepSeek 接入和安全边界。
-4. 实现真实备份、快照恢复和空安装恢复。
-5. 进入 Capacitor Android 打包和真机验证。
-6. 清理 lint 警告、路由分包、清理 Prettier 工具链隐患并补足纯业务单元测试。
+1. **步骤 6：接入 Dexie / IndexedDB**，完成刷新后持久化、数据迁移和异常回滚（这是当前唯一未开始的前端阶段；步骤 5 首个 Git 提交已完成）。
+2. 实现 Fastify 服务端 AI 代理、DeepSeek 接入和安全边界。
+3. 实现真实备份、快照恢复和空安装恢复。
+4. 进入 Capacitor Android 打包和真机验证。
+5. 清理 lint 警告、路由分包、清理 Prettier 工具链隐患并补足纯业务单元测试。
 
 ### 0.4 下一步执行计划（2026-11-03 起，按此顺序做）
 
@@ -58,11 +58,13 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 |---|---|---|---|
 | **步骤 3** ✅ 已完成（2026-11-03） | JSON 导出导入升到备份 0.2.0 | `SettingsPage.exportMockData()` 已改调 `serializeMockBackup()`；文件名带日期；导入 toast 显示计划数；`mock-data-transfer.test.ts` 加 round-trip；`mock-data-flows.spec.ts` 覆盖导出/导入 | 导出 JSON `version: '0.2.0'` 且含 `longTermPlans`；0.1.0 与 0.2.0 备份都能导入；单测 112 条 + E2E 92 次执行全绿 |
 | **步骤 4** ✅ 已完成（2026-11-03） | 全页面视觉复核 | `scripts/visual-check.mjs` 已纳入 `/plans` 空态 / 进行中 / 草案 / AI 对话 / 确认弹窗；视口 1440/500/430/421/390/360；全站弹窗统一居中；窄屏保留档案页「AI 建档」入口 | 已产出 91 张截图并由用户桌面端 + 移动端明确通过 |
-| **步骤 5** | 建立首个 Git 提交 | 先处理待删文件（`$null`、旧 design 制品）再 `git add`；确认 `Water intake record/`(368 MB) 与 `app/dist` 已被 `.gitignore` 排除 | 仓库有可回滚基线（当前 **0 commit**，已因无备份丢过一次源码） |
-| **步骤 6** | P2 Dexie / IndexedDB 持久化 | 建 schema 与迁移，`MockDataProvider` 改为持久化实现但保留 Context 契约 | 刷新/重开页面数据不丢，含长期计划 |
+| **步骤 5** ✅ 已完成（2026-11-03） | 建立首个 Git 提交 | 提交前删除了根目录 `$null` 与 `app/$null` 垃圾文件；`core.quotepath=false` 便于中文路径处理；`.gitignore` 已排除 `node_modules/`、`app/dist/`、`Water intake record/`、日志与 tsbuildinfo | `main` 分支提交 `bd779eb`（262 文件 / 37.39 MB），已推送到 `github.com/save626/Persist`，远端 HEAD 与本地一致，仓库具备回滚基线 |
+| **步骤 6**（下一步） | P2 Dexie / IndexedDB 持久化 | 建 schema 与迁移，`MockDataProvider` 改为持久化实现但保留 Context 契约 | 刷新/重开页面数据不丢，含长期计划 |
 | **后续** | P3 Fastify + DeepSeek → P4 备份恢复 → P5 Android | 见 §13 | 见 §13 对应完成标准 |
 
-步骤 3、步骤 4 已于 2026-11-03 完成并经用户桌面端与移动端验收通过。步骤 5 的前置条件是：在 GitHub 建**空仓**（不勾 README / .gitignore / license 模板），并按 §14.2 与本文档「待批准删除清单」清理（至少删掉根目录误建的 `$null` 与 `app/$null` 垃圾文件），否则容易把大文件或垃圾文件提交进仓库。步骤 6 需要一次 Playwright / vitest 提权执行（沙箱下 `spawn EPERM`，方法见 §15.4）。
+步骤 3、步骤 4 已于 2026-11-03 完成并经用户桌面端与移动端验收通过；步骤 5 已于同日完成（提交 `bd779eb`，已推送 GitHub）。**下一步只剩步骤 6**：把内存 Mock 升级为 Dexie / IndexedDB 持久化，保持 `MockDataProvider` 对外的 Context 契约不变，并补“刷新后数据不丢”的 E2E。
+
+Git 提交流程备忘（本环境已验证）：`git push` / `git ls-remote` 在沙箱下会因 git 启动的 `ssh.exe` 无法创建管道而失败（`couldn't create signal pipe, Win32 error 5`），需要一次性提权到完整访问权限；提交前用 `git diff --cached --name-only` 审计一遍，确认没有 `node_modules/`、`app/dist/`、`test-results/`、`Water intake record/` 等路径。
 
 给全新会话的启动指令见 `D:\Persist\HANDOFF-新会话指令.md`（可整份复制粘贴）。
 
@@ -147,8 +149,8 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | Phase 7 | JSON/CSV、演示数据、快照 UI | 已完成前端 Mock |
 | 当前增量 | AI 引导建档、长期计划页面、草案确认、归档/重启、周进度 | 页面闭环、单元测试与 E2E 已完成（P1 全部完成） |
 | 下一阶段 A | P1 收尾：JSON 导出导入迁移到 0.2.0 + 全页面视觉复核 | ✅ 已完成（2026-11-03，用户桌面端 + 移动端验收通过） |
-| 下一阶段 A2 | 首个 Git 提交（建立可回滚基线） | 下一步 |
-| 下一阶段 B | Dexie / IndexedDB 本地持久化 | 未开始 |
+| 下一阶段 A2 | 首个 Git 提交（建立可回滚基线） | ✅ 已完成（2026-11-03，`main` / `bd779eb`，已推送 GitHub） |
+| 下一阶段 B | Dexie / IndexedDB 本地持久化 | 下一步（步骤 6） |
 | 下一阶段 C | Fastify + DeepSeek 服务端代理 | 未开始 |
 | 下一阶段 D | 服务端备份、校验与恢复 | 未开始 |
 | 下一阶段 E | Capacitor / Android 发布 | 未开始 |
@@ -1278,7 +1280,7 @@ npm run visual:check
 9. ✅ E2E：描述目标 → 草案 → 确认 → 档案与计划更新、手工新建 → 归档 → 重新启用、360px 无溢出；档案页 AI 建档入口桌面与移动均验证。
 10. ✅ 视觉检查已重跑（15 状态 × 6 视口），并经用户桌面端 + 移动端验收通过。
 
-P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部完成并冻结**，不再有收尾项；下一阶段按 §0.4 步骤 5（首个 Git 提交）与步骤 6（P2 持久化）推进。
+P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部完成并冻结**，不再有收尾项；首个 Git 提交也已于 2026-11-03 完成（`main` / `bd779eb`，已推送）。下一阶段只剩 §0.4 步骤 6（P2 Dexie / IndexedDB 持久化）。
 
 完成标准：
 
@@ -1409,11 +1411,11 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 |---|---|---|
 | 全部数据只在内存 | 刷新丢失，不能称为真实产品 | AI 建档闭环后接 IndexedDB |
 | 旧规划与现状不一致 | 新接手者可能误删 AI 主入口、回退五项导航或按 16 条旧路由找页面 | 以本文档和当前代码为准；规划文档已加现状标注 |
-| `PlansPage.tsx` 是等价重写而非原始源码 | 该页曾因写入事故丢失，当前由 dist 产物反解后重写，虽已通过全量验证，但不排除丢注释/丢少量细节 | 后续该页改动请先读现状再改；首个 git 提交务必包含它 |
+| `PlansPage.tsx` 是等价重写而非原始源码 | 该页曾因写入事故丢失，当前由 dist 产物反解后重写，虽已通过全量验证，但不排除丢注释/丢少量细节 | 已包含在首个提交 `bd779eb` 中；后续该页改动请先读现状再改 |
 | Prettier 插件会压平条件类名 | 一旦全仓 `prettier --write`，`plan-itemdone` 类缺陷会批量复发，状态样式静默失效 | 条件类名统一用 `cn()` 或完整字符串三元；移除 `prettier-plugin-tailwindcss` 需用户同意 |
 | “快照”容易被误解 | 用户可能以为可以恢复数据 | UI 和文档明确其只是元信息 |
 | 饮水 1200 ml 基线语义不明 | 持久化后可能重复累计 | 在接数据库前确认产品规则 |
-| 无 Git 提交基线 | 难以回滚和审计（本轮已因无备份丢失过一次源码） | 视觉验收后尽快建立首个提交 |
+| 只有单次提交基线 | 后续改动若未及时提交，回滚粒度只能到首个基线 | 每个阶段（步骤 6～P5）结束提交一次，保持可回滚 |
 | 无真实 AI/服务端 | 报告与建档分析不具备真实 AI 能力 | 不要对外宣称已经接入 DeepSeek |
 | 无 Android 工程 | 尚未达到可安装目标 | 持久化和服务端接口稳定后再打包 |
 
@@ -1428,7 +1430,8 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - 没有端到端覆盖浏览器刷新后的真实持久化，因为持久化尚不存在。
 - 页面内弹层较多，未来若要 deep link 或恢复操作状态，需要补 URL 状态设计（目前只有 `/plans?onboard=1`）。
 - `PreviewPages.tsx` 是未接入当前路由的预览页面，不应在交接期间改动（其 L160 仍有一处被压平的类名，属已知遗留）。
-- 仓库当前没有任何提交，几乎全部文件为未跟踪状态。
+- 首个提交含 `design/` 全部 161 个文件（158 张 PNG + 3 个 HTML，共 36.36 MB），其中 `design/_snapshot-before-fixes/` 59 张旧对照快照（约 15.7 MB）属“待批准删除”清单，目前保留在历史里；如要剔除，需在后续提交中 `git rm --cached` 并接 `.gitignore`（历史仍保留）。
+- 尚未添加 `.gitattributes`：Windows 下 `core.autocrlf=true` 时提交时提示 “LF will be replaced by CRLF”，仓库内存 LF、检出转 CRLF，不影响构建与测试。
 - 15 个既有文件未通过 `prettier --check`（EvidenceSheet、QuickRecordSheet、TodaySheets、ReportsPage、`src/data` 部分文件、`src/lib/fitness.ts`、6 个 CSS），mtime 均为 10-27～10-30，非本轮引入；批量格式化需先解决插件压平问题。
 
 ### 14.3 不应误判为缺陷的既定行为
@@ -1472,14 +1475,17 @@ Get-Content -Encoding utf8
 
 ### 15.3 Git 状态
 
-交接时：
+截至 2026-11-03 13:40：
 
-- 当前分支：`master`。
-- 仓库没有任何提交。
-- `git status` 显示大量未跟踪文件。
-- 因此没有可靠的历史基线可用于 reset 回滚。
+- 当前分支：`main`（由 `master` 改名而来，已建跟踪关系）。
+- 远端：`origin` = `git@github.com:save626/Persist.git`（SSH，密钥已注册在 `save626` 账号下；HTTPS 侧也配置了 Git Credential Manager）。
+- 唯一提交：`bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB），已推送，远端 `refs/heads/main` 与本地 HEAD 哈希一致，`git status -sb` 为 `## main...origin/main` 干净状态。
+- 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
+- 提交前审计命令（每次提交都用）：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
+- 中文文件名：`git -c core.quotepath=false status` 才能正确显示中文文件名（本机已设 `core.quotepath=false`）。
+- **提权**：`git push` / `git ls-remote` 在受限沙箱下会失败（git 启动 `ssh.exe` 时报 `couldn't create signal pipe, Win32 error 5`），需要一次性提升到完整访问权限；本地 `git add/commit/status/log` 不需要提权。
 
-建议视觉验收通过后，先提交一个清晰的前端 Mock 基线，再开始持久化改造。提交前需确认是否包含截图、构建产物和本地环境文件。
+建议每个阶段（步骤 6、P3、P4、P5）结束时提交一次，保持回滚粒度；禁止 `git reset`、`git clean`、`git push --force`（除非用户明确要求且远端仍为单基线）。
 
 ### 15.4 修改后的最小验证顺序
 
@@ -1499,7 +1505,7 @@ npm run visual:check
 
 环境注意（2026-11-03 实测）：
 
-- `npm test`、`npm run build`、`npx playwright test`、`npm run visual:check` 在受限文件沙箱下都会失败：Tailwind 原生模块加载报 `UNLOADABLE_DEPENDENCY`，Vite 的 `windowsSafeRealPathSync` 与浏览器启动报 `spawn EPERM`。这几类命令需要一次性提升到完整访问权限执行；`prettier` / `tsc` / `oxlint` 等纯静态命令在受限模式下可正常跑。
+- `npm test`、`npm run build`、`npx playwright test`、`npm run visual:check`、`git push` / `git ls-remote` 在受限文件沙箱下都会失败：Tailwind 原生模块加载报 `UNLOADABLE_DEPENDENCY`，Vite 的 `windowsSafeRealPathSync` 与浏览器启动报 `spawn EPERM`，git 启动 `ssh.exe` 报 `couldn't create signal pipe, Win32 error 5`。这几类命令需要一次性提升到完整访问权限执行；`prettier` / `tsc` / `oxlint` 以及本地 `git add/commit/status/log` 在受限模式下可正常跑。
 - Playwright 的 `webServer` 会自己拉起 4173 端口的 dev server，不需要手动先启动；`visual:check` 则要求 4173 已在运行（`PERSIST_URL` 可覆盖目标地址）。
 - 真机同 Wi-Fi 访问需要 `--host 0.0.0.0` 且 Windows 防火墙放行 4173（需管理员），否则手机端会超时；退路是 Chrome DevTools 设备模拟。
 - 写文件请用 3 参数 `[IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))`；2 参数重载会把文件写成 24 字节的 `System.Text.UTF8Encoding`（本仓库已因此丢失过一次 `PlansPage.tsx`）。
@@ -1661,6 +1667,7 @@ npm run visual:check
 29. 复跑：`npm run typecheck` 通过、`npm test` 112/112、`npx playwright test` 92 passed / 0 skipped（46.0s）、`npm run lint` 0 错 3 既有警告、`npm run build` 通过（JS 549.09 kB / CSS 139.92 kB），改动文件 `prettier --check` 通过。
 30. 沙箱坑补充：`npm test` 与 `npm run build` 也需要 `danger-full-access`（Tailwind 原生模块加载 + Vite 的 `windowsSafeRealPathSync` 会 spawn 子进程，受限模式报 `spawn EPERM`），不只是 Playwright。
 31. 视觉范围就此冻结：P1 全部收尾完成，下一步是步骤 5（首个 Git 提交）与步骤 6（Dexie 持久化）。
+32. 步骤 5 完成（2026-11-03 13:40）：删除根目录 `$null`（62 B，rg 报错）与 `app/$null`（70 B，cmd 报错）两个重定向误建文件；`git branch -M main` → `git add -A`（262 文件，审计无 node_modules/dist/test-results/Water intake record）→ 提交 `bd779eb`（`chore: initial commit`，37.39 MB）→ 添加远端 `git@github.com:save626/Persist.git` → `git ls-remote` 确认空仓 → `git push -u origin main` 成功 → 核对远端 `refs/heads/main` 与本地 HEAD 哈希一致、`git status -sb` 为 `## main...origin/main`。提权点：`git push` / `git ls-remote` 需完整访问权限（git 启动 ssh 报 `Win32 error 5`）。
 
 ---
 
@@ -1677,17 +1684,17 @@ npm run visual:check
 
 5. **步骤 3** ✅ 已于 2026-11-03 完成：设置页导出导入切到 0.2.0（详见 8.5），补 round-trip 单测 + E2E。
 6. **步骤 4** ✅ 已于 2026-11-03 完成：`/plans` 已加进 `visual:check`，15 状态 × 6 视口全量重跑，用户桌面端与移动端验收通过，前端视觉范围冻结。
-7. **步骤 5**（下一步）：视觉已通过，立刻建立首个 Git 提交（当前 0 commit，已因无备份丢过一次源码）。
-8. **步骤 6**：从 P2 本地持久化开始，不要直接跳到真实 AI 或 Android。
-9. 持久化稳定后再做服务端 AI（P3），最后备份恢复（P4）与 Android 发布（P5）。
+7. **步骤 5** ✅ 已于 2026-11-03 完成：提交 `bd779eb` 已推送到 `github.com/save626/Persist`（`main` 分支），仓库具备回滚基线。
+8. **步骤 6**（下一步）：从 P2 本地持久化开始，不要直接跳到真实 AI 或 Android。
+9. 持久化稳定后再做服务端 AI（P3），最后备份恢复（P4）与 Android 发布（P5）；每完成一个阶段提交一次，保持回滚粒度。
 
 ---
 
 ## 20. 交接结论
 
-Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端 Mock 产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），单元测试 112 条、E2E 92 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过。
+Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端 Mock 产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），单元测试 112 条、E2E 92 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，首个 Git 提交（`bd779eb`）已推送到 `github.com/save626/Persist`，仓库已有可回滚基线。
 
-但当前仍不是可长期使用的正式应用：刷新会丢数据、AI 不是真实调用、备份不可直接恢复、没有 Android 包，而且仓库仍无任何 Git 提交（全部文件未跟踪）。下一步应先做步骤 5（首个 Git 提交，建立可回滚基线），再把全部内存状态升级为可靠的本地持久化，随后接入服务端 AI、备份和移动端发布。
+但当前仍不是可长期使用的正式应用：刷新会丢数据、AI 不是真实调用、备份不可直接恢复、没有 Android 包。下一步只剩步骤 6——把全部内存状态升级为可靠的本地持久化（Dexie / IndexedDB），随后接入服务端 AI、备份和移动端发布。
 
 交接时应坚持以下判断：
 
