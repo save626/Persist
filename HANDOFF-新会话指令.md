@@ -126,7 +126,7 @@ git log --oneline                    # style: 格式化（本地最新）/ d4c96
 git remote -v                        # origin git@github.com:save626/Persist.git（SSH）
 ```
 
-- 分支 `main`（由 `master` 改名），已有六个提交：`bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）、`da787c4`（步骤 5 文档同步）、`128d6a2`（步骤 6 本机持久化 + 文档同步）、`e3e9730`（步骤 6 文档同步）、`d4c9696`（`chore:` 清理死代码与历史设计制品）、`style:` 提交（移除 Tailwind 插件并格式化 19 个文件，哈希见 `git log`）——**六个均已推送到 `origin/main`，`git status -sb` 为 `## main...origin/main`（无 ahead/behind），远端 `refs/heads/main` 与本地 HEAD 哈希一致**；身份 `save626 / 2137153161@qq.com`。
+- 分支 `main`（由 `master` 改名），已有六个代码提交（不含文档同步提交）：`bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）、`da787c4`（步骤 5 文档同步）、`128d6a2`（步骤 6 本机持久化 + 文档同步）、`e3e9730`（步骤 6 文档同步）、`d4c9696`（`chore:` 清理死代码与历史设计制品）、`style:` 提交（移除 Tailwind 插件并格式化 19 个文件，哈希见 `git log`）——**六个均已推送到 `origin/main`，`git status -sb` 为 `## main...origin/main`（无 ahead/behind），远端 `refs/heads/main` 与本地 HEAD 哈希一致**；身份 `save626 / 2137153161@qq.com`。
 - **步骤 6 已于 2026-11-03 提交并推送**（`128d6a2`，41 个文件：4 新增 + 14 修改 + 23 张截图）。
 - 认证已就绪：`ssh -T git@github.com` 返回 `Hi save626!`，HTTPS 侧另有 Git Credential Manager；**不需要**用户提供 Token/密码/私钥。
 - 推送前审计：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
