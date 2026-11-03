@@ -3,7 +3,7 @@
 > 文档日期：2026-11-03（14:20 更新：步骤 3、4 已完成并经用户桌面端 + 移动端验收；步骤 5 两个 Git 提交 `bd779eb` + `da787c4`、步骤 6 提交 `128d6a2` 均已推送到 `github.com/save626/Persist`；步骤 6 本机 IndexedDB 持久化已完成并全量验证）  
 > 工作区：`D:\Persist`  
 > 应用目录：`D:\Persist\app`  
-> 当前阶段：**八个页面（含 `/plans` 长期计划页）与既有 Mock 交互已完成；AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的页面闭环已打通；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0 旧备份）；全页面视觉复核已完成 15 个状态 × 6 个视口（含 20:9 真机视口 421×926），全站弹窗统一居中且档案页「AI 建档」在窄屏可见；业务数据已写入本机浏览器 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢，含长期计划，§6.6）；单元 123 条、E2E 98 次执行全部通过；Git 已有 `bd779eb`（初始提交）+ `da787c4`（文档同步）推送到 GitHub，仓库具备回滚基线。下一步顺序见 §0.4：步骤 1–6 全部完成，下一步是 P3 服务端 AI 代理。服务端 AI、真实备份恢复和 Android 发布尚未开始。**  
+> 当前阶段：**八个页面（含 `/plans` 长期计划页）与既有 Mock 交互已完成；AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的页面闭环已打通；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0 旧备份）；全页面视觉复核已完成 15 个状态 × 6 个视口（含 20:9 真机视口 421×926），全站弹窗统一居中且档案页「AI 建档」在窄屏可见；业务数据已写入本机浏览器 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢，含长期计划，§6.6）；单元 123 条、E2E 98 次执行全部通过；Git 已有六个提交推送到 GitHub（初始提交 `bd779eb`、步骤 5/6 文档同步 `da787c4`/`e3e9730`、步骤 6 持久化 `128d6a2`、清理 `d4c9696`、格式化 `style:`），仓库具备回滚基线。下一步顺序见 §0.4：步骤 1–6 全部完成，下一步是 P3 服务端 AI 代理。服务端 AI、真实备份恢复和 Android 发布尚未开始。**  
 > 本地验收地址：`http://127.0.0.1:4173/`（`cd app` 后 `npm run dev -- --port 4173`；需要手机访问时加 `--host 0.0.0.0`，见第 11 节）  
 > 当前技术形态：React SPA + 浏览器本机 IndexedDB 持久化（原生实现，未用 Dexie）+ 本地 Mock 报告 + 本地规则式（Mock）对话引擎 + 长期计划领域模型  
 > 本文档地位：当前代码实现优先于旧版规划文档；如文档与代码冲突，以 `D:\Persist\app` 中的实现为准。
@@ -1464,7 +1464,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 | `PlansPage.tsx` 是等价重写而非原始源码 | 该页曾因写入事故丢失，当前由 dist 产物反解后重写，虽已通过全量验证，但不排除丢注释/丢少量细节 | 已包含在首个提交 `bd779eb` 中；后续该页改动请先读现状再改 |
 | ~~Prettier 插件会压平条件类名~~ | 风险已消除：`prettier-plugin-tailwindcss` 已于 2026-11-03 从配置和 `package.json` 移除，全仓格式化不再破坏条件类名 | 保留规则：条件类名仍统一用 `cn()` 或完整字符串三元；格式化前后仍建议 `Select-String` 抽查条件类名 |
 | “快照”容易被误解 | 用户可能以为可以恢复数据 | UI 和文档明确其只是元信息（但它会持久化保存） |
-| 回滚粒度仍偏粗 | 目前是 `bd779eb` + `da787c4` + `128d6a2` 三个提交（步骤 6 已提交），但仍是按阶段而非按功能切片 | 每个阶段结束时提交一次，保持可回滚 |
+| 回滚粒度仍偏粗 | 现有六个提交（`bd779eb` / `da787c4` / `128d6a2` / `e3e9730` / `d4c9696` / `style:`），清理与格式化已单独成提交，但整体仍是按阶段而非按功能切片 | 每个阶段结束时提交一次，保持可回滚 |
 | 无真实 AI/服务端 | 报告与建档分析不具备真实 AI 能力 | 不要对外宣称已经接入 DeepSeek |
 | 无 Android 工程 | 尚未达到可安装目标 | 持久化和服务端接口稳定后再打包 |
 
@@ -1528,14 +1528,17 @@ Get-Content -Encoding utf8
 
 ### 15.3 Git 状态
 
-截至 2026-11-03 14:20：
+截至 2026-11-03 15:30：
 
 - 当前分支：`main`（由 `master` 改名而来，已建跟踪关系）。
 - 远端：`origin` = `git@github.com:save626/Persist.git`（SSH，密钥已注册在 `save626` 账号下；HTTPS 侧也配置了 Git Credential Manager）。
-- 已有三个提交，均已推送、远端 `refs/heads/main` 与本地 HEAD 哈希一致：
+- 已有六个提交，均已推送、远端 `refs/heads/main` 与本地 HEAD 哈希一致：
   - `bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）
   - `da787c4`（步骤 5 的文档同步）
   - `128d6a2`（步骤 6 本机 IndexedDB 持久化 + 文档同步，41 个文件：4 新增 / 14 修改 / 23 张截图）
+  - `e3e9730`（步骤 6 的文档同步）
+  - `d4c9696`（`chore:` 清理死代码与历史设计制品，73 个文件 +34/−724）
+  - 最新 `style:` 提交（移除 `prettier-plugin-tailwindcss` 并格式化既有漂移文件，22 个文件；哈希以 `git log` 为准，见 §18 第 43 条）
 - **工作区当前干净**（`## main...origin/main`，无未提交改动）。
 - 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
 - 提交前审计命令（每次提交都用）：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
@@ -1746,7 +1749,7 @@ npm run visual:check
    验证（清理后实测）：`tsc` 0 错；`oxlint` 0 错 3 警（文件数 64 → 63，规则数不变）；`npm test` 123/123；`npx playwright test` 98 passed / 0 skipped（2.0m）；`npm run build` 通过，CSS 139.92 → 134.42 kB（删掉的 `.preview-*` 确实在产物里），JS 552.61 kB 不变（`PreviewPages` 本来没被引用，早已 tree-shaken）；`npm run visual:check` 15 状态 × 6 视口 `overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
    截图字节的说明（不要误判为回归）：`git status` 一度显示 8 张基线 PNG 有变化，逐像素比对后确认差异 ≤0.07%、bbox 均落在首页倒计时那一行（`TodayPage` 有 1 s 实时时钟），`study-desktop-1440.png` 的最大色差仅 4/255（抗锯齿噪声）。连跑两次 `visual:check` 也复现了同样的抖动，故**还原为原基线图、不把抖动提交**。
 43. 2026-11-03 格式化（用户批准的第二个提交：`style: 移除 prettier-plugin-tailwindcss 并格式化既有漂移文件`，22 个文件、语义零变化）：移除 `prettier-plugin-tailwindcss`（`app/package.json` 的 devDependency 与 `.prettierrc.json` 的 `plugins` 同时去掉，`package-lock.json` 手工剔除对应条目，未让 npm 重排锁文件）；`npx prettier --write` 一次性消除 19 个文件的格式漂移（16 个既有漂移 + `ReportsPage.tsx` + `.prettierrc.json` / `package.json`）。**发现并修正了一个真实副作用**：Prettier 拆行后给 `ReportsPage.tsx` 两处 JSX 文本补了 `{' '}` 空白文本节点（生成面板 `<p>`、引用范围 `<strong>`），移动端 `/reports` 的换行位置随之变化，4 张截图出现 0.002%～0.039% 像素差（逐像素 bbox 均落在同一行文字尾部，最大色差 47/255）；同一份格式化代码连跑两次该差异稳定复现，回退 `ReportsPage.tsx` 后 4 张截图与基线逐像素相同——确认是格式化引入而非截图抖动。修法：这两处改为显式字符串子节点（`{'当前有 '}{localRecordTotal}{' 条本地记录，本次可引用 '}…`），子节点切分与格式化前一致。
-    验证（格式化后实测）：`npx prettier --check .` → `All matched files use Prettier code style!`；`tsc -b` 0 错；`oxlint` 0 错 3 既有警告（63 文件）；`npm test` 123/123（8 文件）；`npx playwright test` 98 passed / 0 skipped（1.1m）；`npm run build` 产物 **`index-D5Nq3TbM.js` 552,612 B + `index-C9ZcsQCi.css` 137,643 B，与格式化前逐字节相同**（中途版本 `index-BqOHakwA.js` 只因那两个 `{' '}` 多 6 字节，正好成为「格式化确实改了 DOM」的证据）；`npm run visual:check` 15 状态 × 6 视口 91 张全零指标，reports 4 张与基线逐像素相同，首页 7 张仅为实时时钟抖动（≤0.07%，已还原不提交）。
+    验证（格式化后实测）：`npx prettier --check .` → `All matched files use Prettier code style!`；`tsc -b` 0 错；`oxlint` 0 错 3 既有警告（63 文件）；`npm test` 123/123（8 文件）；`npx playwright test` 98 passed / 0 skipped（1.1m）；`npm run build` 产物 **`index-D5Nq3TbM.js` 552,612 B + `index-C9ZcsQCi.css` 137,643 B，与格式化前逐字节相同**（中途版本 `index-BqOHakwA.js` 只因那两个 `{' '}` 多 6 字节，正好成为「格式化确实改了 DOM」的证据）；`npm run visual:check` 15 状态 × 6 视口 91 张全零指标，reports 4 张与基线逐像素相同，首页 7 张仅为实时时钟抖动（≤0.07%，已还原不提交）。两个提交已于 2026-11-03 15:2x 推送到 `origin/main`，`git status -sb` 为 `## main...origin/main`、远端 `refs/heads/main` 与本地 HEAD 一致。
 
 ---
 
@@ -1765,14 +1768,14 @@ npm run visual:check
 6. **步骤 4** ✅ 已于 2026-11-03 完成：`/plans` 已加进 `visual:check`，15 状态 × 6 视口全量重跑，用户桌面端与移动端验收通过，前端视觉范围冻结。
 7. **步骤 5** ✅ 已于 2026-11-03 完成：提交 `bd779eb` 已推送到 `github.com/save626/Persist`（`main` 分支），文档同步为 `da787c4`，仓库具备回滚基线。
 8. **步骤 6** ✅ 已于 2026-11-03 完成并提交：本机 IndexedDB 持久化上线（详见 §6.6、§13 P2），`MockDataProvider` 契约不变，刷新/重开数据不丢，单测 123 条 + E2E 98 次执行全绿；提交 `128d6a2` 已推送。
-9. **收尾清理与格式化** ✅ 已于 2026-11-03 完成（仅本地提交，未推送）：`d4c9696` 清理死代码与历史设计制品，`style:` 提交移除 Tailwind 插件并格式化 19 个文件（详见 §18 第 42、43 条，均通过全量 `tsc` / `oxlint` / 单测 / E2E / 构建哈希比对 / 视觉检查）。
+9. **收尾清理与格式化** ✅ 已于 2026-11-03 完成并**推送**：`d4c9696` 清理死代码与历史设计制品，`style:` 提交移除 Tailwind 插件并格式化 19 个文件（详见 §18 第 42、43 条，均通过全量 `tsc` / `oxlint` / 单测 / E2E / 构建哈希比对 / 视觉检查）；推送后远端 `refs/heads/main` 与本地 HEAD 一致。
 10. **下一步 P3**：实现 Fastify 服务端 AI 代理与 DeepSeek 接入，再往后备份恢复（P4）与 Android 发布（P5）；每完成一个阶段提交一次，保持回滚粒度。「清空本机数据」入口已并入 P3 之前（见 §18 第 42 条之后的决策与 §14.1 风险表）。
 
 ---
 
 ## 20. 交接结论
 
-Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），全部业务记录已写入本机 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划），单元测试 123 条（8 文件）、E2E 98 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，Git 已有 `bd779eb` + `da787c4` + `128d6a2` 三个提交推送到 `github.com/save626/Persist`，仓库具备回滚基线。
+Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），全部业务记录已写入本机 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划），单元测试 123 条（8 文件）、E2E 98 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，Git 已有六个提交推送到 `github.com/save626/Persist`（`bd779eb` / `da787c4` / `128d6a2` / `e3e9730` / `d4c9696` / `style:`），仓库具备回滚基线。
 
 但当前仍不是可长期使用的正式应用：数据只在本机浏览器（清站点数据即丢、无跨设备同步、无清空入口）、AI 不是真实调用、备份不可直接恢复、没有 Android 包。步骤 6 已完成，下一步是 P3 服务端 AI 代理，随后备份恢复（P4）与移动端发布（P5）。
 
