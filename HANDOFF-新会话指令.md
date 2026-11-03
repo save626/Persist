@@ -45,7 +45,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 **验证数字（2026-11-03 步骤 6 后实测）**：`tsc` 0 错误；单元 **123 / 123 / 8 个文件**（`complete-mock-data` 5、`chat-extract` 24、`countdown` 4、`long-term-plan` 23、`mock-data-transfer` 26、`plan-draft` 19、`profile-rules` 11、**`persist-state` 11**）；E2E **49 条 × 2 project = 98 次执行，0 跳过 / 0 失败**（55.1s），新增 `e2e/persistence.spec.ts` 3 条；oxlint 0 错 / 3 警（`react(set-state-in-effect)`，在 `StudyPage.tsx`、`DietPage.tsx`、`FitnessPage.tsx`，行号会漂，按规则名找）；build 通过，`dist` 产物 JS 552.61 kB / CSS 139.92 kB；`visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
 
 **未完成**：
-1. **步骤 6 的改动尚未提交** —— 代码与文档都在工作区，等用户确认后作为第三个提交推送（前两个：`bd779eb` 初始提交、`da787c4` 步骤 5 文档同步）。
+1. **步骤 6 已提交并推送** —— 提交 `128d6a2`（`feat: 步骤 6 本机 IndexedDB 持久化`），已在 `main` 分支上推送（前两个：`bd779eb` 初始提交、`da787c4` 步骤 5 文档同步）。
 2. 无真实 AI 服务端、无 P4 级别的备份恢复（JSON 导入不算可回滚恢复）、无 Android 包。
 3. 持久化边界：只在本机当前浏览器有效（清站点数据 / 换浏览器 / 换设备即丢）、无跨标签页同步、无「清空本机数据」UI、读盘失败只在控制台告警、导入整体替换且不可撤销。
 4. 技术债：3 条 lint 警告、既有未格式化文件、`PreviewPages.tsx` 遗留类名与过时文案（该页未接路由）、主包超 500 kB。
@@ -121,13 +121,13 @@ npm run visual:check              # 91 张截图到 design/
 
 ```powershell
 cd D:\Persist
-git status -sb                       # 步骤 6 改动未提交时为 ## main...origin/main + 未暂存改动
-git log --oneline                    # da787c4 步骤 5 文档同步 / bd779eb chore: initial commit
+git status -sb                       # ## main...origin/main（干净）
+git log --oneline                    # 128d6a2 步骤 6 持久化 / da787c4 步骤 5 文档同步 / bd779eb chore: initial commit
 git remote -v                        # origin git@github.com:save626/Persist.git（SSH）
 ```
 
-- 分支 `main`（由 `master` 改名），已有两个提交 `bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）与 `da787c4`（步骤 5 文档同步），均已推送且远端哈希一致；身份 `save626 / 2137153161@qq.com`。
-- **步骤 6 的改动尚未提交**（持久化代码 + 文案 + 文档），需用户确认后再提交并推送。
+- 分支 `main`（由 `master` 改名），已有三个提交：`bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）、`da787c4`（步骤 5 文档同步）、`128d6a2`（步骤 6 本机持久化 + 文档同步），均已推送且远端哈希一致；身份 `save626 / 2137153161@qq.com`。
+- **步骤 6 已于 2026-11-03 提交并推送**（`128d6a2`，41 个文件：4 新增 + 14 修改 + 23 张截图）。
 - 认证已就绪：`ssh -T git@github.com` 返回 `Hi save626!`，HTTPS 侧另有 Git Credential Manager；**不需要**用户提供 Token/密码/私钥。
 - 推送前审计：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
 - 每个阶段结束提交一次（P3、P4、P5），禁止 `git push --force`。
@@ -152,7 +152,7 @@ git remote -v                        # origin git@github.com:save626/Persist.git
 3. 是否为今日页「编辑计划」、健身页「训练模板」恢复窄屏头部按钮（目前按设计隐藏，均有页内入口）。
 4. 是否补充 Windows 防火墙入站规则以放行 4173，让手机同 Wi-Fi 直接访问（需管理员）。
 5. 是否补 `.gitignore` 规则（`app/tmp-*`、`*.tmp`、`desktop.ini`、`app/dist-ssr/`、`app/.vite/`）。
-6. 是否现在提交并推送步骤 6 的改动（持久化代码 + 文案 + 文档同步，当前仍在工作区）。
+6. ~~是否现在提交并推送步骤 6 的改动~~ —— 已于 2026-11-03 提交 `128d6a2` 并推送，此项关闭。
 7. 是否在 P4 之前先接一个「清空本机数据」入口（`clearPersistedState()` 已实现但未接 UI）。
 
 ## 11. 需要主动披露的历史

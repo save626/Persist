@@ -1,6 +1,6 @@
 # Persist 项目完整交接文档
 
-> 文档日期：2026-11-03（14:10 更新：步骤 3、4 已完成并经用户桌面端 + 移动端验收；步骤 5 两个 Git 提交 `bd779eb` + `da787c4` 已推送到 `github.com/save626/Persist`；步骤 6 本机 IndexedDB 持久化已完成并全量验证，改动待用户确认后提交）  
+> 文档日期：2026-11-03（14:20 更新：步骤 3、4 已完成并经用户桌面端 + 移动端验收；步骤 5 两个 Git 提交 `bd779eb` + `da787c4`、步骤 6 提交 `128d6a2` 均已推送到 `github.com/save626/Persist`；步骤 6 本机 IndexedDB 持久化已完成并全量验证）  
 > 工作区：`D:\Persist`  
 > 应用目录：`D:\Persist\app`  
 > 当前阶段：**八个页面（含 `/plans` 长期计划页）与既有 Mock 交互已完成；AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的页面闭环已打通；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0 旧备份）；全页面视觉复核已完成 15 个状态 × 6 个视口（含 20:9 真机视口 421×926），全站弹窗统一居中且档案页「AI 建档」在窄屏可见；业务数据已写入本机浏览器 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢，含长期计划，§6.6）；单元 123 条、E2E 98 次执行全部通过；Git 已有 `bd779eb`（初始提交）+ `da787c4`（文档同步）推送到 GitHub，仓库具备回滚基线。下一步顺序见 §0.4：步骤 1–6 全部完成，下一步是 P3 服务端 AI 代理。服务端 AI、真实备份恢复和 Android 发布尚未开始。**  
@@ -26,7 +26,7 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 - 已接入本机持久化（步骤 6，2026-11-03）：饮水、学习记录、餐食、训练会话、档案、设置、授权、复盘、报告、快照与长期计划都会写入浏览器 IndexedDB，刷新、关闭标签页、重开浏览器后不再丢失。实现为原生 IndexedDB 封装（`lib/persist-storage.ts`）＋带 `schemaVersion` 迁移的纯函数记录层（`lib/persist-state.ts`），**没有引入 Dexie 运行时依赖**；`MockDataProvider` 的 Context 契约与 13 个状态切片完全不变。
 - 自动化验证已通过：类型检查、123 个单元测试、49 条 Playwright 用例 × 2 个项目 = 98 次执行全部通过（0 跳过）、生产构建（JS 552.61 kB / CSS 139.92 kB）、视觉检查 15 状态 × 6 视口全零指标。
 - 已通过用户桌面端与移动端视觉验收（2026-11-03）：八个页面与全部弹窗在 1440 / 500 / 430 / 421 / 390 / 360 六个视口下无横向溢出、弹窗统一居中，基线截图见 `design/`（15 状态 × 6 视口 + 快速记录浮层 = 91 张）。
-- Git 已推送两次（2026-11-03）：分支 `main`，提交 `bd779eb`（`chore: initial commit`，262 文件 37.39 MB）与 `da787c4`（步骤 5 文档同步）；远端 `git@github.com:save626/Persist.git`，每次推送后都核对了远端 `refs/heads/main` 与本地 HEAD 哈希一致。仓库根目录误建的 `$null` 与 `app/$null` 两个垃圾文件已在首次提交前删除。步骤 6 的改动当前**尚未提交**，等用户确认后再单独提交一次。
+- Git 已推送三次（2026-11-03）：分支 `main`，提交 `bd779eb`（`chore: initial commit`，262 文件 37.39 MB）、`da787c4`（步骤 5 文档同步）与 `128d6a2`（步骤 6 本机持久化，41 个文件）；远端 `git@github.com:save626/Persist.git`，每次推送后都核对了远端 `refs/heads/main` 与本地 HEAD 哈希一致。仓库根目录误建的 `$null` 与 `app/$null` 两个垃圾文件已在首次提交前删除。当前工作区干净（`## main...origin/main`）。
 
 ### 0.2 现在不是什么状态
 
@@ -1464,7 +1464,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 | `PlansPage.tsx` 是等价重写而非原始源码 | 该页曾因写入事故丢失，当前由 dist 产物反解后重写，虽已通过全量验证，但不排除丢注释/丢少量细节 | 已包含在首个提交 `bd779eb` 中；后续该页改动请先读现状再改 |
 | Prettier 插件会压平条件类名 | 一旦全仓 `prettier --write`，`plan-itemdone` 类缺陷会批量复发，状态样式静默失效 | 条件类名统一用 `cn()` 或完整字符串三元；移除 `prettier-plugin-tailwindcss` 需用户同意 |
 | “快照”容易被误解 | 用户可能以为可以恢复数据 | UI 和文档明确其只是元信息（但它会持久化保存） |
-| 回滚粒度仍偏粗 | 目前只有 `bd779eb` + `da787c4` 两个提交，步骤 6 的改动尚未提交 | 每个阶段结束时提交一次，保持可回滚 |
+| 回滚粒度仍偏粗 | 目前是 `bd779eb` + `da787c4` + `128d6a2` 三个提交（步骤 6 已提交），但仍是按阶段而非按功能切片 | 每个阶段结束时提交一次，保持可回滚 |
 | 无真实 AI/服务端 | 报告与建档分析不具备真实 AI 能力 | 不要对外宣称已经接入 DeepSeek |
 | 无 Android 工程 | 尚未达到可安装目标 | 持久化和服务端接口稳定后再打包 |
 
@@ -1528,14 +1528,15 @@ Get-Content -Encoding utf8
 
 ### 15.3 Git 状态
 
-截至 2026-11-03 14:00：
+截至 2026-11-03 14:20：
 
 - 当前分支：`main`（由 `master` 改名而来，已建跟踪关系）。
 - 远端：`origin` = `git@github.com:save626/Persist.git`（SSH，密钥已注册在 `save626` 账号下；HTTPS 侧也配置了 Git Credential Manager）。
-- 已有两个提交，均已推送、远端 `refs/heads/main` 与本地 HEAD 哈希一致：
+- 已有三个提交，均已推送、远端 `refs/heads/main` 与本地 HEAD 哈希一致：
   - `bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）
   - `da787c4`（步骤 5 的文档同步）
-- **工作区当前有未提交改动**：步骤 6 的持久化代码、文案与文档（等待用户确认后再提交第三个提交）。
+  - `128d6a2`（步骤 6 本机 IndexedDB 持久化 + 文档同步，41 个文件：4 新增 / 14 修改 / 23 张截图）
+- **工作区当前干净**（`## main...origin/main`，无未提交改动）。
 - 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
 - 提交前审计命令（每次提交都用）：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
 - 中文文件名：`git -c core.quotepath=false status` 才能正确显示中文文件名（本机已设 `core.quotepath=false`）。
@@ -1740,7 +1741,7 @@ npm run visual:check
 38. 文案改口：设置页、学习页、饮食/健身保存提示、今日复盘、删除确认等凡声称「仅当前会话 / 刷新重置」的副本，统一改为「已保存在本机浏览器（IndexedDB）」并说明清站点数据会丢失；`e2e/mock-data-flows.spec.ts` 两条过时注释同步修正。
 39. 步骤 6 验证：`npm run typecheck` 通过；`npm test` 123/123（8 文件，新增 11 条）；`npx playwright test` 98 passed / 0 skipped（55.1s，49 用例 × 2 项目）；`npm run lint` 0 错 3 既有警告；`npm run build` 通过（JS 552.61 kB / CSS 139.92 kB，涨 3.52 kB）；`npm run visual:check` 15 状态 × 6 视口全零指标。
 40. 收尾：对三个新增文件跑 `prettier --write`（改动前的 `persist-state.ts` / `persist-storage.ts` / `persist-state.test.ts` 有格式漂移），随后复跑 `typecheck`（0 错）、`lint`（0 错 3 警）、`npm test`（123/123）与 `npm run build`——产物哈希仍为 `index-DqZtxRhx.js` / `index-DBVxLcSp.css`，与格式化前完全一致，说明格式化未改变语义、E2E 结论继续有效。`TodaySheets.tsx` / `ReportsPage.tsx` 的 `prettier --check` 报警属 §14.2 记录的既有债务（这两个文件本轮只改了一行文案），未做全文件格式化以避免无关大 diff。
-41. 步骤 6 的改动尚未提交：等用户确认后再作为第三个提交推送，`HANDOFF.md` / `README` / `docs` 同步内容一并纳入；`design/` 下 23 张截图因文案改口被 `visual:check` 重写（内容变化来自文案，指标仍全零），会一起进入该提交。
+41. 步骤 6 已于 2026-11-03 14:1x 作为第三个提交 `128d6a2`（`feat: 步骤 6 本机 IndexedDB 持久化（刷新/重开不丢数据）`）提交并推送：41 个文件（4 新增 + 14 修改 + 23 张截图），推送后远端 `refs/heads/main` 与本地 HEAD 一致（`128d6a2`），`git status -sb` 为 `## main...origin/main`；`design/` 下 23 张截图因文案改口被 `visual:check` 重写（内容变化来自文案，指标仍全零），已一并进入该提交。
 
 ---
 
@@ -1758,14 +1759,14 @@ npm run visual:check
 5. **步骤 3** ✅ 已于 2026-11-03 完成：设置页导出导入切到 0.2.0（详见 8.5），补 round-trip 单测 + E2E。
 6. **步骤 4** ✅ 已于 2026-11-03 完成：`/plans` 已加进 `visual:check`，15 状态 × 6 视口全量重跑，用户桌面端与移动端验收通过，前端视觉范围冻结。
 7. **步骤 5** ✅ 已于 2026-11-03 完成：提交 `bd779eb` 已推送到 `github.com/save626/Persist`（`main` 分支），文档同步为 `da787c4`，仓库具备回滚基线。
-8. **步骤 6** ✅ 已于 2026-11-03 完成：本机 IndexedDB 持久化上线（详见 §6.6、§13 P2），`MockDataProvider` 契约不变，刷新/重开数据不丢，单测 123 条 + E2E 98 次执行全绿。改动尚未提交，等用户确认后提交。
+8. **步骤 6** ✅ 已于 2026-11-03 完成并提交：本机 IndexedDB 持久化上线（详见 §6.6、§13 P2），`MockDataProvider` 契约不变，刷新/重开数据不丢，单测 123 条 + E2E 98 次执行全绿；提交 `128d6a2` 已推送。
 9. **下一步 P3**：实现 Fastify 服务端 AI 代理与 DeepSeek 接入，再往后备份恢复（P4）与 Android 发布（P5）；每完成一个阶段提交一次，保持回滚粒度。
 
 ---
 
 ## 20. 交接结论
 
-Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），全部业务记录已写入本机 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划），单元测试 123 条（8 文件）、E2E 98 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，Git 已有 `bd779eb` + `da787c4` 两个提交推送到 `github.com/save626/Persist`，仓库具备回滚基线。
+Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），全部业务记录已写入本机 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划），单元测试 123 条（8 文件）、E2E 98 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，Git 已有 `bd779eb` + `da787c4` + `128d6a2` 三个提交推送到 `github.com/save626/Persist`，仓库具备回滚基线。
 
 但当前仍不是可长期使用的正式应用：数据只在本机浏览器（清站点数据即丢、无跨设备同步、无清空入口）、AI 不是真实调用、备份不可直接恢复、没有 Android 包。步骤 6 已完成，下一步是 P3 服务端 AI 代理，随后备份恢复（P4）与移动端发布（P5）。
 
