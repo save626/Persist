@@ -7,6 +7,8 @@ app/.vite/
 app/coverage/
 app/playwright-report/
 app/test-results/
+server/dist/
+server/.npm-cache/
 *.tsbuildinfo
 
 # Local environment
