@@ -39,17 +39,13 @@ function positive(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
 
-export function inferExerciseKind(
-  exercise: Pick<Exercise, 'kind' | 'sets'>,
-): ExerciseKind {
+export function inferExerciseKind(exercise: Pick<Exercise, 'kind' | 'sets'>): ExerciseKind {
   if (isExerciseKind(exercise.kind)) return exercise.kind
 
   const sets = exercise.sets
   if (sets.some((set) => positive(set.distanceKm) > 0)) return 'distance'
 
-  const hasStrengthValue = sets.some(
-    (set) => set.weight !== undefined || set.reps !== undefined,
-  )
+  const hasStrengthValue = sets.some((set) => set.weight !== undefined || set.reps !== undefined)
   const hasDuration = sets.some((set) => positive(set.durationMinutes) > 0)
   if (hasDuration && !hasStrengthValue) return 'duration'
 
@@ -139,10 +135,7 @@ export function describeWorkoutSet(
   }
 }
 
-export function formatRecordedWorkout(
-  kind: ExerciseKind,
-  set: Omit<WorkoutSet, 'id' | 'done'>,
-) {
+export function formatRecordedWorkout(kind: ExerciseKind, set: Omit<WorkoutSet, 'id' | 'done'>) {
   if (kind === 'duration') return `${formatNumber(positive(set.durationMinutes))} 分钟`
   if (kind === 'distance') {
     const distance = `${formatNumber(positive(set.distanceKm))} km`

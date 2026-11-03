@@ -284,10 +284,18 @@
   box-shadow: 0 0 0 1px var(--line);
 }
 
-.mock-timeline-dot.food { background: #c6a16b; }
-.mock-timeline-dot.study { background: #7c91b9; }
-.mock-timeline-dot.fitness { background: #7b9f9b; }
-.mock-timeline-dot.water { background: var(--green); }
+.mock-timeline-dot.food {
+  background: #c6a16b;
+}
+.mock-timeline-dot.study {
+  background: #7c91b9;
+}
+.mock-timeline-dot.fitness {
+  background: #7b9f9b;
+}
+.mock-timeline-dot.water {
+  background: var(--green);
+}
 
 .mock-timeline-row strong {
   color: var(--soft);

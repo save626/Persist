@@ -461,9 +461,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
         equipment: '跳绳',
         targetReps: '12 分钟',
         rest: '按需',
-        sets: [
-          { id: 'demo-jump-rope-1', durationMinutes: 12, rpe: 7, done: true },
-        ],
+        sets: [{ id: 'demo-jump-rope-1', durationMinutes: 12, rpe: 7, done: true }],
       },
       {
         id: 'demo-cycling',

@@ -8,8 +8,7 @@ export const INITIAL_REPORTS: ReportRecord[] = [
     date: '10 月 27 日',
     updatedAt: '10 月 27 日 08:10',
     period: '10 月 21 日 — 10 月 27 日',
-    summary:
-      '本周训练完成 3 次，学习记录覆盖 6 天。饮食记录在周末出现中断，但没有影响整体趋势。',
+    summary: '本周训练完成 3 次，学习记录覆盖 6 天。饮食记录在周末出现中断，但没有影响整体趋势。',
     status: '趋势平稳',
     metric: [
       { label: '训练', value: '3 次', detail: '较上周持平' },
@@ -41,8 +40,7 @@ export const INITIAL_REPORTS: ReportRecord[] = [
     date: '10 月 24 日',
     updatedAt: '10 月 24 日 19:20',
     period: '单次训练复盘',
-    summary:
-      '深蹲和罗马尼亚硬拉合计完成 12 组，主观强度偏高。接下来一次下肢训练不建议继续加量。',
+    summary: '深蹲和罗马尼亚硬拉合计完成 12 组，主观强度偏高。接下来一次下肢训练不建议继续加量。',
     status: '需要恢复',
     metric: [
       { label: '训练时长', value: '48 min', detail: '计划 50 min' },
@@ -105,8 +103,7 @@ export const INITIAL_REPORTS: ReportRecord[] = [
     date: '10 月 22 日',
     updatedAt: '10 月 22 日 20:40',
     period: '近 7 天饮食记录',
-    summary:
-      '全天总热量接近目标，但早餐蛋白质偏低。把一部分蛋白质挪到早餐，有助于让饱腹感更稳定。',
+    summary: '全天总热量接近目标，但早餐蛋白质偏低。把一部分蛋白质挪到早餐，有助于让饱腹感更稳定。',
     status: '结构可调整',
     metric: [
       { label: '平均热量', value: '1,940 kcal', detail: '目标 2,100' },

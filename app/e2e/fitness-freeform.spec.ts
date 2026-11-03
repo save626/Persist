@@ -108,5 +108,7 @@ test('legacy strength JSON imports while malformed workout JSON is rejected', as
     buffer: Buffer.from(backupText(invalidData)),
   })
   await expect(page.getByRole('alert')).toContainText('训练会话格式不正确')
-  await expect(page.getByText('导入失败：训练会话格式不正确，动作、套组或计时数据不完整')).toBeVisible()
+  await expect(
+    page.getByText('导入失败：训练会话格式不正确，动作、套组或计时数据不完整'),
+  ).toBeVisible()
 })

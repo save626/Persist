@@ -205,7 +205,9 @@ test('today plan can be added and removed through the editor', async ({ page }) 
   await addedRow.getByRole('button', { name: '删除晚间拉伸' }).click()
   await page.getByRole('button', { name: '保存计划' }).click()
 
-  await expect(page.locator('.plan-panel .plan-name').filter({ hasText: '晚间拉伸' })).toHaveCount(0)
+  await expect(page.locator('.plan-panel .plan-name').filter({ hasText: '晚间拉伸' })).toHaveCount(
+    0,
+  )
 })
 
 test('today timeline, morning brief and evening review open and save', async ({ page }) => {

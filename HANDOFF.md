@@ -542,7 +542,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 单元测试 | Vitest + Testing Library |
 | 端到端测试 | Playwright |
 | Lint | Oxlint |
-| 格式化 | Prettier + Tailwind 插件 |
+| 格式化 | Prettier（`prettier-plugin-tailwindcss` 已于 2026-11-03 移除） |
 | 当前数据层 | React Context 内存状态 |
 | 当前后端 | 未实现 |
 | 当前共享层 | 未实现 |
@@ -1001,8 +1001,8 @@ D:\Persist\app\src\lib\mock-data-transfer.ts
 | 单元测试 | `npm test` | **123/123 通过，8 个测试文件**（2026-11-03 步骤 6 后复跑） |
 | 端到端测试 | `npx playwright test` | **98 通过 / 0 跳过 / 0 失败**，49 个用例 × 2 个项目 = 98 次执行，55.1s（2026-11-03 步骤 6 后复跑） |
 | Lint | `npm run lint` | 0 错误，3 条既有 `react(set-state-in-effect)` 警告（`StudyPage.tsx` / `DietPage.tsx` / `FitnessPage.tsx`，2026-11-03 步骤 6 后复跑） |
-| 格式检查 | `npx prettier --check <本次改动文件>` | 通过；全仓仍有既有未格式化文件（见 14.2） |
-| 生产构建 | `npm run build` | 通过（`index-DqZtxRhx.js` 552.61 kB / gzip 163.52 kB，CSS 139.92 kB / gzip 24.11 kB，2026-11-03 步骤 6 后复跑） |
+| 格式检查 | `npx prettier --check .`（在 `app` 内执行） | 通过：`All matched files use Prettier code style!`，全仓已无格式漂移（2026-11-03 格式化提交后复跑） |
+| 生产构建 | `npm run build` | 通过（`index-D5Nq3TbM.js` 552.61 kB / gzip 163.52 kB，`index-C9ZcsQCi.css` 137.64 kB / gzip 23.81 kB，2026-11-03 格式化提交后复跑，哈希与格式化前完全一致） |
 | 视觉检查 | `npm run visual:check` | **通过**：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张；overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0（2026-11-03 步骤 6 后复跑） |
 
 Playwright 配置为两个项目：
@@ -1444,7 +1444,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 
 - 修复 3 条 `set-state-in-effect` lint 警告。
 - 按路由做 `React.lazy()` / 动态导入，拆分 548.38 kB 主包（`/plans` 优先）。
-- 评估移除 `prettier-plugin-tailwindcss` 并把条件类名统一为 `cn()`/完整字符串三元，随后一次性解决 15 个既有格式漂移文件。
+- ~~评估移除 `prettier-plugin-tailwindcss` 并把条件类名统一为 `cn()`/完整字符串三元，随后一次性解决 15 个既有格式漂移文件~~ ✅ 已于 2026-11-03 完成：插件从配置与 `package.json` 移除，19 个文件一次性格式化，`prettier --check` 全仓通过（见 §18 第 43 条）。
 - 将健身历史升级为通用 `WorkoutSet`。
 - 补充纯业务单元测试：健身汇总、饮水边界、学习统计、报告数据源、导入导出。
 - 将可复用类型和纯函数逐步迁移到 `shared/`。
@@ -1462,7 +1462,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 | 持久化无清空入口与跨标签页同步 | 用户想重置只能清站点数据；两个标签页同时编辑会互相覆盖 | P4 补「清空本机数据」与 `BroadcastChannel` 同步或写入前版本比对 |
 | 旧规划与现状不一致 | 新接手者可能误删 AI 主入口、回退五项导航或按 16 条旧路由找页面 | 以本文档和当前代码为准；规划文档已加现状标注 |
 | `PlansPage.tsx` 是等价重写而非原始源码 | 该页曾因写入事故丢失，当前由 dist 产物反解后重写，虽已通过全量验证，但不排除丢注释/丢少量细节 | 已包含在首个提交 `bd779eb` 中；后续该页改动请先读现状再改 |
-| Prettier 插件会压平条件类名 | 一旦全仓 `prettier --write`，`plan-itemdone` 类缺陷会批量复发，状态样式静默失效 | 条件类名统一用 `cn()` 或完整字符串三元；移除 `prettier-plugin-tailwindcss` 需用户同意 |
+| ~~Prettier 插件会压平条件类名~~ | 风险已消除：`prettier-plugin-tailwindcss` 已于 2026-11-03 从配置和 `package.json` 移除，全仓格式化不再破坏条件类名 | 保留规则：条件类名仍统一用 `cn()` 或完整字符串三元；格式化前后仍建议 `Select-String` 抽查条件类名 |
 | “快照”容易被误解 | 用户可能以为可以恢复数据 | UI 和文档明确其只是元信息（但它会持久化保存） |
 | 回滚粒度仍偏粗 | 目前是 `bd779eb` + `da787c4` + `128d6a2` 三个提交（步骤 6 已提交），但仍是按阶段而非按功能切片 | 每个阶段结束时提交一次，保持可回滚 |
 | 无真实 AI/服务端 | 报告与建档分析不具备真实 AI 能力 | 不要对外宣称已经接入 DeepSeek |
@@ -1483,7 +1483,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - ~~`PreviewPages.tsx` 是未接入当前路由的预览页面~~：已于 2026-11-03 清理（全 `app/src` 零引用，属死代码；同时删除 `persist.css` 中仅供它使用的 `.preview-*` 样式 173 行）。Git 历史可随时找回。
 - `design/` 现状（2026-11-03 清理后）：94 个文件（93 张 PNG + `home-v3-countdown.html`，约 18.7 MB），其中 91 张是 `visual:check` 现行基线（15 状态 × 6 视口，+1 张快速记录）、2 张是 v3 首页设计基线对照图。本次清理删除了 `design/_snapshot-before-fixes/` 59 张旧快照（16.5 MB）、v1/v2 遗留原型 2 HTML + 6 PNG，以及未入库的 `design/.edge-profile*/`（13.7 MB）；**注意 `.git` 体积不会因此变小**（历史里仍有），要真正瘦身需重写历史，已推送的仓库不建议做。
 - 尚未添加 `.gitattributes`：Windows 下 `core.autocrlf=true` 时提交时提示 “LF will be replaced by CRLF”，仓库内存 LF、检出转 CRLF，不影响构建与测试。
-- 15 个既有文件未通过 `prettier --check`（EvidenceSheet、QuickRecordSheet、TodaySheets、ReportsPage、`src/data` 部分文件、`src/lib/fitness.ts`、6 个 CSS），mtime 均为 10-27～10-30，非本轮引入；批量格式化需先解决插件压平问题。
+- ~~15 个既有文件未通过 `prettier --check`~~ ✅ 已于 2026-11-03 解决：16 个漂移文件 + `ReportsPage.tsx` + `.prettierrc.json`/`package.json` 一次格式化，`prettier --check .` 全仓通过。**注意**：Prettier 拆行时会给 JSX 文本补 `{' '}` 子节点，`ReportsPage.tsx` 因此出现移动端换行位置变化（4 张截图 0.02%～0.04% 像素差），已改为显式字符串子节点还原，产物哈希与格式化前完全一致（见 §18 第 43 条）。
 
 ### 14.3 不应误判为缺陷的既定行为
 
@@ -1510,7 +1510,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - **禁止**把 API Key 写进前端源码、环境变量文件或 Android 包。
 - **禁止**将未实现的 Mock 能力描述为真实 AI、真实备份或真实同步。
 - ~~**不要修改** `D:\Persist\app\src\pages\PreviewPages.tsx`~~：该文件已于 2026-11-03 删除（未接路由、全仓库零引用），不再需要这条约束。
-- **不要**全仓库执行格式化：`prettier-plugin-tailwindcss` 会把条件拼接的类名字符串压平成 `plan-itemdone` 这类错误值，导致状态样式静默失效。只格式化你本轮真正改过的文件，并在格式化后用 `Select-String` 复查条件类名。
+- **不要**无条件全仓库格式化：插件移除后 `prettier --write` 已安全，但批量格式化会让 diff 不可 review。默认只格式化本轮改动文件；若要全仓格式化，先单独开一个 `style:` 提交并复跑 `prettier --check`、构建哈希比对与 `visual:check`。格式化后**必须**核对产物哈希是否变化，并逐像素比对截图（Prettier 拆行会改变 JSX 文本节点，可能挪动换行位置）。
 
 ### 15.2 文件与编码
 
@@ -1666,7 +1666,7 @@ npm run visual:check
 | 计划起止日期 | `ChatPlanProposal.startDate/endDate` 可选；缺省时开始=今天、结束=最后里程碑；草案页可编辑 |
 | 档案字段校验 | 统一走 `profile-rules.ts`；越界字段丢弃并用一条 toast 汇总提示，从不抛错、不中断对话 |
 | 备份版本 | `0.2.0`（含 `longTermPlans`），并兼容 `0.1.0` 旧备份 |
-| 条件类名写法 | 用 `cn()` 或「完整字符串三元」；禁止依赖条件拼接里手写空格的写法（Prettier 插件会压平） |
+| 条件类名写法 | 用 `cn()` 或「完整字符串三元」；不要依赖条件拼接里手写空格的写法（历史教训：`prettier-plugin-tailwindcss` 曾把它压平成 `plan-itemdone`，插件已于 2026-11-03 移除，规则继续保留） |
 | 计划完成量 | 当前为估算，不能包装成精确统计 |
 | 当前“快照” | 仅状态元信息，不是备份（会随持久化保存，但不具备恢复能力） |
 | 本地持久化 | 原生 IndexedDB，单记录 `persist-mock-state`，`schemaVersion` 迁移，未来版本只读保护；未引入 Dexie |
@@ -1745,6 +1745,8 @@ npm run visual:check
 42. 2026-11-03 清理（用户批准后执行，`chore:` 提交，无功能变化）：删 `design/_snapshot-before-fixes/`（59 张 / 16.5 MB）、v1/v2 遗留原型（`home-v1.html`、`home-v2-blue.html` 与 6 张 PNG，保留 `home-v3-countdown.html` + 2 张 v3 对照图）、`design/.edge-profile*/`（13.7 MB，未入库）；删 `app/src/pages/PreviewPages.tsx`（全 `app/src` 零引用）及 `persist.css` 中仅供其使用的 `.preview-*` 样式 173 行；`.gitignore` 补 `app/dist-ssr/`、`app/.vite/`、`desktop.ini`、`app/tmp-*`、`*.tmp`。决定**保留** `Water intake record/`（368 MB，未入库，作为饮水行为参照）。
    验证（清理后实测）：`tsc` 0 错；`oxlint` 0 错 3 警（文件数 64 → 63，规则数不变）；`npm test` 123/123；`npx playwright test` 98 passed / 0 skipped（2.0m）；`npm run build` 通过，CSS 139.92 → 134.42 kB（删掉的 `.preview-*` 确实在产物里），JS 552.61 kB 不变（`PreviewPages` 本来没被引用，早已 tree-shaken）；`npm run visual:check` 15 状态 × 6 视口 `overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
    截图字节的说明（不要误判为回归）：`git status` 一度显示 8 张基线 PNG 有变化，逐像素比对后确认差异 ≤0.07%、bbox 均落在首页倒计时那一行（`TodayPage` 有 1 s 实时时钟），`study-desktop-1440.png` 的最大色差仅 4/255（抗锯齿噪声）。连跑两次 `visual:check` 也复现了同样的抖动，故**还原为原基线图、不把抖动提交**。
+43. 2026-11-03 格式化（用户批准的第二个提交：`style: 移除 prettier-plugin-tailwindcss 并格式化既有漂移文件`，22 个文件、语义零变化）：移除 `prettier-plugin-tailwindcss`（`app/package.json` 的 devDependency 与 `.prettierrc.json` 的 `plugins` 同时去掉，`package-lock.json` 手工剔除对应条目，未让 npm 重排锁文件）；`npx prettier --write` 一次性消除 19 个文件的格式漂移（16 个既有漂移 + `ReportsPage.tsx` + `.prettierrc.json` / `package.json`）。**发现并修正了一个真实副作用**：Prettier 拆行后给 `ReportsPage.tsx` 两处 JSX 文本补了 `{' '}` 空白文本节点（生成面板 `<p>`、引用范围 `<strong>`），移动端 `/reports` 的换行位置随之变化，4 张截图出现 0.002%～0.039% 像素差（逐像素 bbox 均落在同一行文字尾部，最大色差 47/255）；同一份格式化代码连跑两次该差异稳定复现，回退 `ReportsPage.tsx` 后 4 张截图与基线逐像素相同——确认是格式化引入而非截图抖动。修法：这两处改为显式字符串子节点（`{'当前有 '}{localRecordTotal}{' 条本地记录，本次可引用 '}…`），子节点切分与格式化前一致。
+    验证（格式化后实测）：`npx prettier --check .` → `All matched files use Prettier code style!`；`tsc -b` 0 错；`oxlint` 0 错 3 既有警告（63 文件）；`npm test` 123/123（8 文件）；`npx playwright test` 98 passed / 0 skipped（1.1m）；`npm run build` 产物 **`index-D5Nq3TbM.js` 552,612 B + `index-C9ZcsQCi.css` 137,643 B，与格式化前逐字节相同**（中途版本 `index-BqOHakwA.js` 只因那两个 `{' '}` 多 6 字节，正好成为「格式化确实改了 DOM」的证据）；`npm run visual:check` 15 状态 × 6 视口 91 张全零指标，reports 4 张与基线逐像素相同，首页 7 张仅为实时时钟抖动（≤0.07%，已还原不提交）。
 
 ---
 
@@ -1763,7 +1765,8 @@ npm run visual:check
 6. **步骤 4** ✅ 已于 2026-11-03 完成：`/plans` 已加进 `visual:check`，15 状态 × 6 视口全量重跑，用户桌面端与移动端验收通过，前端视觉范围冻结。
 7. **步骤 5** ✅ 已于 2026-11-03 完成：提交 `bd779eb` 已推送到 `github.com/save626/Persist`（`main` 分支），文档同步为 `da787c4`，仓库具备回滚基线。
 8. **步骤 6** ✅ 已于 2026-11-03 完成并提交：本机 IndexedDB 持久化上线（详见 §6.6、§13 P2），`MockDataProvider` 契约不变，刷新/重开数据不丢，单测 123 条 + E2E 98 次执行全绿；提交 `128d6a2` 已推送。
-9. **下一步 P3**：实现 Fastify 服务端 AI 代理与 DeepSeek 接入，再往后备份恢复（P4）与 Android 发布（P5）；每完成一个阶段提交一次，保持回滚粒度。
+9. **收尾清理与格式化** ✅ 已于 2026-11-03 完成（仅本地提交，未推送）：`d4c9696` 清理死代码与历史设计制品，`style:` 提交移除 Tailwind 插件并格式化 19 个文件（详见 §18 第 42、43 条，均通过全量 `tsc` / `oxlint` / 单测 / E2E / 构建哈希比对 / 视觉检查）。
+10. **下一步 P3**：实现 Fastify 服务端 AI 代理与 DeepSeek 接入，再往后备份恢复（P4）与 Android 发布（P5）；每完成一个阶段提交一次，保持回滚粒度。「清空本机数据」入口已并入 P3 之前（见 §18 第 42 条之后的决策与 §14.1 风险表）。
 
 ---
 
@@ -1781,6 +1784,6 @@ Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、
 - 健身动作必须保持自由输入。
 - 不得把 Mock 能力包装成真实能力（对话必须标注「本地生成 · Mock 对话」，不得宣称已接入 DeepSeek）。
 - 未确认前不得写档案或计划；档案写入必须过 `sanitizeProfilePatch`。
-- 不要全仓 Prettier；条件类名用 `cn()` 或完整字符串三元。
+- 格式化已无插件风险（`prettier-plugin-tailwindcss` 已移除，`prettier --check .` 全绿），但批量格式化仍要单独成提交并比对构建哈希；条件类名仍用 `cn()` 或完整字符串三元。
 - 持久化只写 IndexedDB 一条记录，改动 `MockDataProvider` 时必须同步维护 `persist-state.ts` 的迁移与版本，不能绕过 `schemaVersion`。
 - 未经用户视觉验收不扩大无关功能范围；下一步最高优先级是 P3 服务端 AI 代理。

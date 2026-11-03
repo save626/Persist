@@ -33,7 +33,9 @@
   border-radius: 17px;
   background: rgba(251, 252, 253, 0.9);
   box-shadow: 0 12px 32px rgba(42, 56, 70, 0.045);
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
 .reports-generation.loading {
@@ -754,18 +756,38 @@
 }
 
 @keyframes reports-pulse {
-  0%, 100% { opacity: 0.58; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1); }
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes reports-dot {
-  0%, 100% { opacity: 0.35; transform: translateY(0); }
-  50% { opacity: 1; transform: translateY(-3px); }
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
 }
 
 @keyframes reports-reveal {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 1100px) {
@@ -964,8 +986,8 @@
   .reports-data-bars > div {
     grid-template-columns: 56px 20px minmax(0, 1fr);
     grid-template-areas:
-      "label count bar"
-      "status status status";
+      'label count bar'
+      'status status status';
     gap: 6px 8px;
   }
 

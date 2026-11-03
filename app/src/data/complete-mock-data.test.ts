@@ -128,7 +128,9 @@ describe('complete mock data', () => {
     expect(parsed.reports).toHaveLength(data.reports.length)
     expect(exercises.some((exercise) => exercise.kind === 'duration')).toBe(true)
     expect(exercises.some((exercise) => exercise.kind === 'distance')).toBe(true)
-    expect(summarizeFitness(exercises)).toEqual(summarizeFitness(data.fitnessSession?.exercises ?? []))
+    expect(summarizeFitness(exercises)).toEqual(
+      summarizeFitness(data.fitnessSession?.exercises ?? []),
+    )
   })
 
   it('accepts legacy strength records that do not contain a kind field', () => {

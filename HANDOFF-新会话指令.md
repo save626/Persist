@@ -24,7 +24,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 - React 19.3.1 + TypeScript ~6.0.3 + Vite ^8.3.4（rolldown）+ React Router ^7.18.4。
 - Tailwind CSS ^4.3.3，但已验收样式是完整 CSS：`app\src\styles\home-v3.css` 为主，新增放 `persist.css` / 模块 css（如 `plans.css`）。
 - 测试：Vitest ^5.0.5（单元）、Playwright ^1.64.1（desktop-chrome + mobile-chrome 两个 project）。
-- 质量：Oxlint ^1.88.0、Prettier ^3.9.10 + `prettier-plugin-tailwindcss` ^0.8.1。
+- 质量：Oxlint ^1.88.0、Prettier ^3.9.10（`prettier-plugin-tailwindcss` 已于 2026-11-03 移除，`npx prettier --check .` 在 `app` 内全绿）。
 - Node v22.19.0。业务数据由 React Context（`MockDataProvider`）持有，并在状态变化后 200 ms 防抖写入浏览器 IndexedDB（`persist-app` / `mock-state` / 单记录 `persist-mock-state`）；刷新与重开浏览器从 IndexedDB 水合恢复，清站点数据才会回到初始 Mock。**没有引入 Dexie**，用的是原生 IndexedDB 封装。
 
 单棵 Provider 树：`main.tsx` → `App.tsx`（`BrowserRouter` > `UIProvider` > `MockDataProvider` > `AppShell`）。
@@ -60,7 +60,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 4. 前端不得出现 API Key；后续真实 AI 只能走 `server/` 代理。
 5. 用户确认前不得写档案或计划；档案写回必须经 `sanitizeProfilePatch()`，丢弃字段用一条 `' · '` 拼接的中文 toast 提示，不抛错。
 6. 条件类名用 `cn()`（`lib\cn.ts`）或**完整字符串三元**（`item.done ? 'plan-item done' : 'plan-item'`）。历史上的 `prettier-plugin-tailwindcss` 会把 `` `plan-item${x ? ' done' : ''}` `` 压平成 `plan-itemdone`，已导致 14 处状态样式静默失效——该插件已于 2026-11-03 从 Prettier 配置移除。
-7. 不要对整个仓库执行 `prettier --write`，只格式化本轮改动的文件（批量格式化会掩盖真实改动，也让 review 变难）。
+7. 不要把批量格式化混进功能提交：插件已移除，`prettier --write` 已安全，但整仓格式化会掩盖真实改动。要格式化就单独开 `style:` 提交，并在提交前比对构建产物哈希 + 逐像素比对截图（Prettier 拆行会给 JSX 文本补 `{' '}` 子节点，可能挪动换行位置，`ReportsPage.tsx` 已踩过一次）。
 8. 删除需批准：`Water intake record/`（368 MB，2026-11-03 决定保留，作为饮水行为参照）。`design/_snapshot-before-fixes/`、旧 `design/` v1/v2 制品、`PreviewPages.tsx` 已于 2026-11-03 经批准删除（同批删除 `design/.edge-profile*/` 13.7 MB 未入库残留）。
 9. **禁止** `git reset` / `git clean` / `git push --force` / 删除项目目录；任何破坏性命令先说明再执行。当前已有基线 `bd779eb`，正常回滚用 `git checkout -- <file>` / `git revert`。
 10. 每完成一步就停下汇报，等用户确认后再做下一步，不要连做多步。
@@ -103,7 +103,7 @@ cd D:\Persist\app
 npm run dev -- --port 4173        # http://127.0.0.1:4173/（与 E2E / 视觉脚本同端口）
 npm run typecheck                 # tsc -b（受限沙箱可跑）
 npm run lint                      # oxlint（受限沙箱可跑）
-npx prettier --check <files>      # 只检查改动文件
+npx prettier --check .            # 在 app 内全仓检查（2026-11-03 起全绿）
 npm test                          # vitest run，123 条 / 8 文件
 npx playwright test               # 98 次执行，webServer 自动起 4173
 npm run build                     # tsc -b && vite build
@@ -122,11 +122,11 @@ npm run visual:check              # 91 张截图到 design/
 ```powershell
 cd D:\Persist
 git status -sb                       # ## main...origin/main（干净）
-git log --oneline                    # 128d6a2 步骤 6 持久化 / da787c4 步骤 5 文档同步 / bd779eb chore: initial commit
+git log --oneline                    # style: 格式化（本地最新）/ d4c9696 清理 / e3e9730 文档同步 / 128d6a2 步骤 6 / da787c4 步骤 5 文档 / bd779eb initial
 git remote -v                        # origin git@github.com:save626/Persist.git（SSH）
 ```
 
-- 分支 `main`（由 `master` 改名），已有三个提交：`bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）、`da787c4`（步骤 5 文档同步）、`128d6a2`（步骤 6 本机持久化 + 文档同步），均已推送且远端哈希一致；身份 `save626 / 2137153161@qq.com`。
+- 分支 `main`（由 `master` 改名），已有六个提交：`bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）、`da787c4`（步骤 5 文档同步）、`128d6a2`（步骤 6 本机持久化 + 文档同步）、`e3e9730`（步骤 6 文档同步）——以上已推送到 `origin/main`、远端哈希一致；`d4c9696`（`chore:` 清理死代码与历史设计制品）、`style:` 提交（移除 Tailwind 插件并格式化 19 个文件，哈希见 `git log`）**仅本地、尚未推送**（等用户确认后再推）；身份 `save626 / 2137153161@qq.com`。
 - **步骤 6 已于 2026-11-03 提交并推送**（`128d6a2`，41 个文件：4 新增 + 14 修改 + 23 张截图）。
 - 认证已就绪：`ssh -T git@github.com` 返回 `Hi save626!`，HTTPS 侧另有 Git Credential Manager；**不需要**用户提供 Token/密码/私钥。
 - 推送前审计：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
@@ -141,14 +141,14 @@ git remote -v                        # origin git@github.com:save626/Persist.git
 - 不要为"看起来完成"而伪造验证结果；没跑就写没跑。
 - 不要绕过 `sanitizeProfilePatch`，不要在未确认时写档案/计划。
 - 不要新增第 6 个导航项、不要把 AI 报告降级为学习页附属。
-- 不要全仓 Prettier、不要用 2 参数 `WriteAllText`、不要 `git reset/clean`。
+- 不要把批量格式化混进功能提交（插件已移除、`prettier --write` 安全，但格式化要单独成 `style:` 提交并比对构建哈希）；不要用 2 参数 `WriteAllText`；不要 `git reset/clean`。
 - 不要把 Mock 能力包装成真实能力，不要在前端引入密钥。
 - 不要用文件修改时间或旧聊天记录推断进度 —— 以 HANDOFF §2/§10 的实测数据与当前代码为准。
 
 ## 10. 待用户决策（未批准前不要动）
 
 1. ~~删除 `design/_snapshot-before-fixes/`、旧 `design/` 制品、`PreviewPages.tsx`~~ —— 已于 2026-11-03 批准执行（`chore:` 清理提交，同时补 `.gitignore`、删未入库的 `design/.edge-profile*/`）。**`Water intake record/`（368 MB）经分析决定保留**：未入库、不影响仓库体积，是饮水缺口/杯量/跨天重置的唯一行为参照，等饮水被真实数据取代后再删。
-2. 是否移除 `prettier-plugin-tailwindcss` 并一次性格式化既有漂移文件 —— 已批准执行（插件从配置移除，见下方第 5 条与 `HANDOFF.md` §18）。
+2. ~~是否移除 `prettier-plugin-tailwindcss` 并一次性格式化既有漂移文件~~ —— 已于 2026-11-03 执行完成（插件从 `package.json` / `.prettierrc.json` / `package-lock.json` 移除，19 个文件格式化，`prettier --check .` 全绿，构建产物哈希与格式化前一致，见 `HANDOFF.md` §18 第 43 条）。
 3. 是否为今日页「编辑计划」、健身页「训练模板」恢复窄屏头部按钮（目前按设计隐藏，均有页内入口）—— 建议不做，等待真机使用反馈。
 4. 是否补充 Windows 防火墙入站规则以放行 4173，让手机同 Wi-Fi 直接访问（需管理员）—— 暂缓到真机验收或 P5 Capacitor 联调时。
 5. ~~是否补 `.gitignore` 规则~~ —— 已于 2026-11-03 补齐（`app/dist-ssr/`、`app/.vite/`、`desktop.ini`、`app/tmp-*`、`*.tmp`）。

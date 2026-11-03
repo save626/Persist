@@ -68,7 +68,9 @@ export function EvidenceSheet({
 
       <div className="surface-note">
         <Icon name="lock" className="icon-sm" />
-        <span>{note ?? '当前为前端 Mock 解释。正式接入 DeepSeek 后，只发送已授权的最小数据摘要。'}</span>
+        <span>
+          {note ?? '当前为前端 Mock 解释。正式接入 DeepSeek 后，只发送已授权的最小数据摘要。'}
+        </span>
       </div>
     </PageSheet>
   )

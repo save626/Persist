@@ -97,7 +97,9 @@ export function PlanEditorSheet({
                 <span className="mock-planner-order">{String(index + 1).padStart(2, '0')}</span>
                 <div>
                   <strong>{item.name || '未命名安排'}</strong>
-                  <small>{item.time || '未设置时间'} · {planKindLabel(item.kind)}</small>
+                  <small>
+                    {item.time || '未设置时间'} · {planKindLabel(item.kind)}
+                  </small>
                 </div>
                 <div className="mock-icon-actions">
                   <button
@@ -285,8 +287,11 @@ export function MorningBriefSheet({
   const waterGap = Math.max(0, 2 - waterLiters)
   const waterGapMilliliters = Math.round(waterGap * 1000)
   const waterRecordCount = waterLiters > 0 ? waterLog.length + 1 : waterLog.length
-  const recordCount = todayMeals.length + todayStudyRecords.length + waterRecordCount + (doneSets > 0 ? 1 : 0)
-  const pendingPlans = planItems.filter((item) => !item.done).sort((left, right) => left.time.localeCompare(right.time))
+  const recordCount =
+    todayMeals.length + todayStudyRecords.length + waterRecordCount + (doneSets > 0 ? 1 : 0)
+  const pendingPlans = planItems
+    .filter((item) => !item.done)
+    .sort((left, right) => left.time.localeCompare(right.time))
   const trainingPlan = pendingPlans.find((item) => item.actionable || item.name.includes('训练'))
   const studyPlan = pendingPlans.find((item) => item.kind === 'study')
   const nextPlan = pendingPlans[0]
@@ -313,7 +318,8 @@ export function MorningBriefSheet({
       ? '早餐已经记录，不需要为了完整性额外补造数据。'
       : '只记录真实吃下的内容，不为了热量数字额外加餐。'
 
-  const afternoonTitle = waterGapMilliliters > 0 ? `下午：补水 ${waterGapMilliliters} ml` : '下午：保持补水节奏'
+  const afternoonTitle =
+    waterGapMilliliters > 0 ? `下午：补水 ${waterGapMilliliters} ml` : '下午：保持补水节奏'
   const afternoonDetail =
     waterGapMilliliters > 0
       ? '分成两次记录更容易完成，也能避免晚间集中饮水。'
@@ -338,7 +344,9 @@ export function MorningBriefSheet({
       className="mock-detail-sheet"
     >
       <div className="mock-brief-lead">
-        <span className="mock-brief-mark"><Icon name="spark" /></span>
+        <span className="mock-brief-mark">
+          <Icon name="spark" />
+        </span>
         <div>
           <span>今日优先级</span>
           <h3>{priorityTitle}</h3>
@@ -346,26 +354,68 @@ export function MorningBriefSheet({
         </div>
       </div>
       <div className="mock-kpi-grid">
-        <div className="mock-kpi"><span>今日记录</span><strong>{recordCount} 条</strong><small>饮食、饮水、学习与训练</small></div>
-        <div className="mock-kpi"><span>睡眠</span><strong>{sleepHours.toFixed(1)} h</strong><small>来自个人档案</small></div>
-        <div className="mock-kpi"><span>饮水缺口</span><strong>{waterGapMilliliters} ml</strong><small>{waterGapMilliliters > 0 ? '建议午后补齐' : '今日已达标'}</small></div>
+        <div className="mock-kpi">
+          <span>今日记录</span>
+          <strong>{recordCount} 条</strong>
+          <small>饮食、饮水、学习与训练</small>
+        </div>
+        <div className="mock-kpi">
+          <span>睡眠</span>
+          <strong>{sleepHours.toFixed(1)} h</strong>
+          <small>来自个人档案</small>
+        </div>
+        <div className="mock-kpi">
+          <span>饮水缺口</span>
+          <strong>{waterGapMilliliters} ml</strong>
+          <small>{waterGapMilliliters > 0 ? '建议午后补齐' : '今日已达标'}</small>
+        </div>
       </div>
       <div className="mock-detail-section">
         <div className="mock-detail-section-head">
-          <span className="mock-section-mark"><Icon name="today" className="icon-sm" /></span>
-          <div><h3>今天的建议节奏</h3><p>不增加额外负担，只把关键动作排进现实时间。</p></div>
+          <span className="mock-section-mark">
+            <Icon name="today" className="icon-sm" />
+          </span>
+          <div>
+            <h3>今天的建议节奏</h3>
+            <p>不增加额外负担，只把关键动作排进现实时间。</p>
+          </div>
         </div>
         <div className="mock-detail-list">
-          <article className="mock-detail-row"><span className="mock-detail-index">01</span><div><strong>{morningTitle}</strong><p>{morningDetail}</p></div><span className="mock-detail-value">{todayMeals.length} 餐</span></article>
-          <article className="mock-detail-row"><span className="mock-detail-index">02</span><div><strong>{afternoonTitle}</strong><p>{afternoonDetail}</p></div><span className="mock-detail-value">{waterGapMilliliters > 0 ? '2 次' : '已达标'}</span></article>
-          <article className="mock-detail-row"><span className="mock-detail-index">03</span><div><strong>{eveningTitle}</strong><p>{eveningDetail}</p></div><span className="mock-detail-value">{studyMinutes > 0 ? `${studyMinutes + 20} min` : '20 min'}</span></article>
+          <article className="mock-detail-row">
+            <span className="mock-detail-index">01</span>
+            <div>
+              <strong>{morningTitle}</strong>
+              <p>{morningDetail}</p>
+            </div>
+            <span className="mock-detail-value">{todayMeals.length} 餐</span>
+          </article>
+          <article className="mock-detail-row">
+            <span className="mock-detail-index">02</span>
+            <div>
+              <strong>{afternoonTitle}</strong>
+              <p>{afternoonDetail}</p>
+            </div>
+            <span className="mock-detail-value">{waterGapMilliliters > 0 ? '2 次' : '已达标'}</span>
+          </article>
+          <article className="mock-detail-row">
+            <span className="mock-detail-index">03</span>
+            <div>
+              <strong>{eveningTitle}</strong>
+              <p>{eveningDetail}</p>
+            </div>
+            <span className="mock-detail-value">
+              {studyMinutes > 0 ? `${studyMinutes + 20} min` : '20 min'}
+            </span>
+          </article>
         </div>
       </div>
-      <div className="surface-note"><Icon name="lock" className="icon-sm" /><span>这是前端 Mock 简报。接入 DeepSeek 后，仍会先展示摘要范围并遵循你的授权设置。</span></div>
+      <div className="surface-note">
+        <Icon name="lock" className="icon-sm" />
+        <span>这是前端 Mock 简报。接入 DeepSeek 后，仍会先展示摘要范围并遵循你的授权设置。</span>
+      </div>
     </PageSheet>
   )
 }
-
 
 export function EveningReviewSheet({
   initialReview,
@@ -405,14 +455,20 @@ export function EveningReviewSheet({
                 onClick={() => setEnergy(value)}
               >
                 <strong>{value}</strong>
-                <small>{value === 1 ? '耗尽' : value === 3 ? '一般' : value === 5 ? '充沛' : ''}</small>
+                <small>
+                  {value === 1 ? '耗尽' : value === 3 ? '一般' : value === 5 ? '充沛' : ''}
+                </small>
               </button>
             ))}
           </div>
         </label>
         <label className="form-field">
           <span>整体状态</span>
-          <select className="form-input" value={state} onChange={(event) => setState(event.target.value)}>
+          <select
+            className="form-input"
+            value={state}
+            onChange={(event) => setState(event.target.value)}
+          >
             <option>节奏稳定</option>
             <option>训练偏累</option>
             <option>专注度不错</option>
@@ -430,10 +486,18 @@ export function EveningReviewSheet({
             onChange={(event) => setNote(event.target.value)}
           />
         </label>
-        <div className="surface-note"><Icon name="lock" className="icon-sm" /><span>复盘只保存在本机浏览器。正式版本会先让你确认 AI 可读取哪些内容。</span></div>
+        <div className="surface-note">
+          <Icon name="lock" className="icon-sm" />
+          <span>复盘只保存在本机浏览器。正式版本会先让你确认 AI 可读取哪些内容。</span>
+        </div>
         <div className="surface-form-actions">
-          <button className="btn quiet" type="button" onClick={onClose}>暂时不结束</button>
-          <button className="btn primary" type="submit"><Icon name="check" className="icon-sm" />保存复盘</button>
+          <button className="btn quiet" type="button" onClick={onClose}>
+            暂时不结束
+          </button>
+          <button className="btn primary" type="submit">
+            <Icon name="check" className="icon-sm" />
+            保存复盘
+          </button>
         </div>
       </form>
     </PageSheet>
