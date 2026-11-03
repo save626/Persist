@@ -1112,10 +1112,10 @@ Persist/
 
 ### 8.6 当前设计资产
 
-- 视觉基线原型：`design/home-v3-countdown.html`
-- 桌面截图：`design/home-v2-desktop.png`
-- 手机长截图：`design/home-v2-mobile-full.png`
-- 旧版对照：`design/home-v1.html`
+- 视觉基线原型：`design/home-v3-countdown.html`（唯一保留的 HTML 原型）
+- 现行视觉基线截图：`design/` 下 91 张（15 状态 × 6 视口，由 `npm run visual:check` 生成，用户已验收）
+- v3 首页对照图：`design/home-v3-countdown-desktop.png`、`design/home-v3-countdown-mobile-full.png`
+- 历史对照（v1/v2 原型与旧快照）已于 2026-11-03 从工作区删除，仍可在 Git 历史中找回
 
 这些 HTML 是设计参考，不是最终生产代码。React 实现时允许优化结构，但必须保持视觉语言和数据逻辑一致。
 
@@ -1720,11 +1720,11 @@ Persist/
 
 | 资产 | 路径 | 用途 |
 |---|---|---|
-| 视觉基线 | `design/home-v3-countdown.html` | 已确认首页参考 |
-| 桌面截图 | `design/home-v2-desktop.png` | 桌面视觉对照 |
-| 手机截图 | `design/home-v2-mobile-full.png` | 移动端视觉对照 |
-| 初版配色 | `design/home-v1.html` | 历史对照，不作为新界面基准 |
-| 旧饮水工具 | `Water intake record/` | 行为参考，Electron 打包产物（约 368 MB，建议核实后清理） |
+| 视觉基线 | `design/home-v3-countdown.html` | 已确认首页参考（唯一保留的 HTML 原型） |
+| 现行基线截图 | `design/`（91 张） | 15 状态 × 6 视口，`npm run visual:check` 生成并经用户验收 |
+| v3 首页对照图 | `design/home-v3-countdown-desktop.png`、`design/home-v3-countdown-mobile-full.png` | 首页设计对照 |
+| 历史设计资产 | Git 历史（v1/v2 原型与 59 张旧快照） | 2026-11-03 从工作区删除，需要时可从历史找回 |
+| 旧饮水工具 | `Water intake record/` | 行为参考，Electron 打包产物（约 368 MB，**2026-11-03 决定保留**：未入库、不影响仓库体积，等饮水被真实数据取代后再删） |
 | 本规划文档 | `docs/Persist-项目开发规划.md` | 项目目标态基线（非现状） |
 | 代码现状与交接 | `HANDOFF.md` | **当前唯一的现状依据**，含契约、验证结果与已知问题 |
 

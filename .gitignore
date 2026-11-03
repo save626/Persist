@@ -2,6 +2,8 @@
 node_modules/
 app/node_modules/
 app/dist/
+app/dist-ssr/
+app/.vite/
 app/coverage/
 app/playwright-report/
 app/test-results/
@@ -19,6 +21,11 @@ app/test-results/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Scratch files
+app/tmp-*
+*.tmp
 
 # Temporary browser profiles and generated captures
 .chrome-headless-*/

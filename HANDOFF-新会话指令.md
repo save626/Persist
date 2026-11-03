@@ -48,9 +48,9 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 1. **步骤 6 已提交并推送** —— 提交 `128d6a2`（`feat: 步骤 6 本机 IndexedDB 持久化`），已在 `main` 分支上推送（前两个：`bd779eb` 初始提交、`da787c4` 步骤 5 文档同步）。
 2. 无真实 AI 服务端、无 P4 级别的备份恢复（JSON 导入不算可回滚恢复）、无 Android 包。
 3. 持久化边界：只在本机当前浏览器有效（清站点数据 / 换浏览器 / 换设备即丢）、无跨标签页同步、无「清空本机数据」UI、读盘失败只在控制台告警、导入整体替换且不可撤销。
-4. 技术债：3 条 lint 警告、既有未格式化文件、`PreviewPages.tsx` 遗留类名与过时文案（该页未接路由）、主包超 500 kB。
+4. 技术债：3 条 lint 警告、既有未格式化文件（本批已处理，见铁律第 7 条）、主包超 500 kB；`PreviewPages.tsx` 及其过时文案已于 2026-11-03 删除。
 5. 窄屏仍隐藏今日页「编辑计划」与健身页「训练模板」顶部按钮（均有页内入口），如需显示只需改 `home-v3.css` 的 `:not()` 列表。
-6. 提交含 `design/` 全部 161 个文件（158 PNG + 3 HTML，36.36 MB），其中 `design/_snapshot-before-fixes/` 59 张旧快照（约 15.7 MB）在“待批准删除”清单内，暂留在历史中。
+6. `design/` 清理后为 94 个文件（93 PNG + `home-v3-countdown.html`，约 18.7 MB），其中 91 张是 `visual:check` 现行基线；`_snapshot-before-fixes/`（59 张）与 v1/v2 原型已删除，但仍留在 Git 历史里（`.git` 体积不变）。
 
 ## 4. 不可回退的铁律
 
@@ -59,9 +59,9 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 3. Mock 必须诚实标注：长期计划页有「本地生成 · Mock 对话」，任何地方不得暗示已调用 DeepSeek。
 4. 前端不得出现 API Key；后续真实 AI 只能走 `server/` 代理。
 5. 用户确认前不得写档案或计划；档案写回必须经 `sanitizeProfilePatch()`，丢弃字段用一条 `' · '` 拼接的中文 toast 提示，不抛错。
-6. 条件类名用 `cn()`（`lib\cn.ts`）或**完整字符串三元**（`item.done ? 'plan-item done' : 'plan-item'`）。`prettier-plugin-tailwindcss` 会把 `` `plan-item${x ? ' done' : ''}` `` 压平成 `plan-itemdone`，已导致 14 处状态样式静默失效。
-7. 不要对整个仓库执行 `prettier --write`，只格式化本轮改动的文件。
-8. 未获批准不得删除：`Water intake record/`、`design/_snapshot-before-fixes/`、旧 `design/` 制品、`PreviewPages.tsx`（根目录 `$null` 与 `app/$null` 两个误建垃圾文件已于 2026-11-03 经批准删除）。
+6. 条件类名用 `cn()`（`lib\cn.ts`）或**完整字符串三元**（`item.done ? 'plan-item done' : 'plan-item'`）。历史上的 `prettier-plugin-tailwindcss` 会把 `` `plan-item${x ? ' done' : ''}` `` 压平成 `plan-itemdone`，已导致 14 处状态样式静默失效——该插件已于 2026-11-03 从 Prettier 配置移除。
+7. 不要对整个仓库执行 `prettier --write`，只格式化本轮改动的文件（批量格式化会掩盖真实改动，也让 review 变难）。
+8. 删除需批准：`Water intake record/`（368 MB，2026-11-03 决定保留，作为饮水行为参照）。`design/_snapshot-before-fixes/`、旧 `design/` v1/v2 制品、`PreviewPages.tsx` 已于 2026-11-03 经批准删除（同批删除 `design/.edge-profile*/` 13.7 MB 未入库残留）。
 9. **禁止** `git reset` / `git clean` / `git push --force` / 删除项目目录；任何破坏性命令先说明再执行。当前已有基线 `bd779eb`，正常回滚用 `git checkout -- <file>` / `git revert`。
 10. 每完成一步就停下汇报，等用户确认后再做下一步，不要连做多步。
 
@@ -147,13 +147,13 @@ git remote -v                        # origin git@github.com:save626/Persist.git
 
 ## 10. 待用户决策（未批准前不要动）
 
-1. 删除 `Water intake record/`（368 MB）、`design/_snapshot-before-fixes/`（59 张旧快照，约 15.7 MB，已随首个提交进入历史）、旧 `design/` 制品、`PreviewPages.tsx`（根目录 `$null` 与 `app\$null` 已于 2026-11-03 批准删除）。
-2. 是否移除 `prettier-plugin-tailwindcss` 并一次性格式化既有漂移文件（会产生大 diff）。
-3. 是否为今日页「编辑计划」、健身页「训练模板」恢复窄屏头部按钮（目前按设计隐藏，均有页内入口）。
-4. 是否补充 Windows 防火墙入站规则以放行 4173，让手机同 Wi-Fi 直接访问（需管理员）。
-5. 是否补 `.gitignore` 规则（`app/tmp-*`、`*.tmp`、`desktop.ini`、`app/dist-ssr/`、`app/.vite/`）。
+1. ~~删除 `design/_snapshot-before-fixes/`、旧 `design/` 制品、`PreviewPages.tsx`~~ —— 已于 2026-11-03 批准执行（`chore:` 清理提交，同时补 `.gitignore`、删未入库的 `design/.edge-profile*/`）。**`Water intake record/`（368 MB）经分析决定保留**：未入库、不影响仓库体积，是饮水缺口/杯量/跨天重置的唯一行为参照，等饮水被真实数据取代后再删。
+2. 是否移除 `prettier-plugin-tailwindcss` 并一次性格式化既有漂移文件 —— 已批准执行（插件从配置移除，见下方第 5 条与 `HANDOFF.md` §18）。
+3. 是否为今日页「编辑计划」、健身页「训练模板」恢复窄屏头部按钮（目前按设计隐藏，均有页内入口）—— 建议不做，等待真机使用反馈。
+4. 是否补充 Windows 防火墙入站规则以放行 4173，让手机同 Wi-Fi 直接访问（需管理员）—— 暂缓到真机验收或 P5 Capacitor 联调时。
+5. ~~是否补 `.gitignore` 规则~~ —— 已于 2026-11-03 补齐（`app/dist-ssr/`、`app/.vite/`、`desktop.ini`、`app/tmp-*`、`*.tmp`）。
 6. ~~是否现在提交并推送步骤 6 的改动~~ —— 已于 2026-11-03 提交 `128d6a2` 并推送，此项关闭。
-7. 是否在 P4 之前先接一个「清空本机数据」入口（`clearPersistedState()` 已实现但未接 UI）。
+7. 是否在 P3 之前先接一个「清空本机数据」入口（`clearPersistedState()` 已实现但未接 UI）—— 结论：**提前到 P3 之前做**，因为它让 P3 能快速回到干净状态测试真实 AI 与 Mock 的切换；实现时注意顺序 `清空 IndexedDB → 重置内存态 → 保持 hydrated`，并同时清 `snapshot`，否则 200 ms 防抖会把旧数据写回。
 
 ## 11. 需要主动披露的历史
 

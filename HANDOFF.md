@@ -1480,8 +1480,8 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - 没有跨标签页同步与写入冲突处理；同一浏览器两个标签页同时编辑时以最后写入为准。
 - 未做跨日期流程的自动化（数据不按日分区，`waterLog` 等日期字段自然累积）。
 - 页面内弹层较多，未来若要 deep link 或恢复操作状态，需要补 URL 状态设计（目前只有 `/plans?onboard=1`）。
-- `PreviewPages.tsx` 是未接入当前路由的预览页面，不应在交接期间改动（其 L160 仍有一处被压平的类名，属已知遗留）。
-- 首个提交含 `design/` 全部 161 个文件（158 张 PNG + 3 个 HTML，共 36.36 MB），其中 `design/_snapshot-before-fixes/` 59 张旧对照快照（约 15.7 MB）属“待批准删除”清单，目前保留在历史里；如要剔除，需在后续提交中 `git rm --cached` 并接 `.gitignore`（历史仍保留）。
+- ~~`PreviewPages.tsx` 是未接入当前路由的预览页面~~：已于 2026-11-03 清理（全 `app/src` 零引用，属死代码；同时删除 `persist.css` 中仅供它使用的 `.preview-*` 样式 173 行）。Git 历史可随时找回。
+- `design/` 现状（2026-11-03 清理后）：94 个文件（93 张 PNG + `home-v3-countdown.html`，约 18.7 MB），其中 91 张是 `visual:check` 现行基线（15 状态 × 6 视口，+1 张快速记录）、2 张是 v3 首页设计基线对照图。本次清理删除了 `design/_snapshot-before-fixes/` 59 张旧快照（16.5 MB）、v1/v2 遗留原型 2 HTML + 6 PNG，以及未入库的 `design/.edge-profile*/`（13.7 MB）；**注意 `.git` 体积不会因此变小**（历史里仍有），要真正瘦身需重写历史，已推送的仓库不建议做。
 - 尚未添加 `.gitattributes`：Windows 下 `core.autocrlf=true` 时提交时提示 “LF will be replaced by CRLF”，仓库内存 LF、检出转 CRLF，不影响构建与测试。
 - 15 个既有文件未通过 `prettier --check`（EvidenceSheet、QuickRecordSheet、TodaySheets、ReportsPage、`src/data` 部分文件、`src/lib/fitness.ts`、6 个 CSS），mtime 均为 10-27～10-30，非本轮引入；批量格式化需先解决插件压平问题。
 
@@ -1509,7 +1509,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - **禁止**在视觉验收前大范围重构数据层或页面结构。
 - **禁止**把 API Key 写进前端源码、环境变量文件或 Android 包。
 - **禁止**将未实现的 Mock 能力描述为真实 AI、真实备份或真实同步。
-- **不要修改** `D:\Persist\app\src\pages\PreviewPages.tsx`，除非用户明确要求。
+- ~~**不要修改** `D:\Persist\app\src\pages\PreviewPages.tsx`~~：该文件已于 2026-11-03 删除（未接路由、全仓库零引用），不再需要这条约束。
 - **不要**全仓库执行格式化：`prettier-plugin-tailwindcss` 会把条件拼接的类名字符串压平成 `plan-itemdone` 这类错误值，导致状态样式静默失效。只格式化你本轮真正改过的文件，并在格式化后用 `Select-String` 复查条件类名。
 
 ### 15.2 文件与编码
@@ -1703,7 +1703,7 @@ npm run visual:check
 
 13. 设置页导出仍为 0.1.0、不含长期计划；导入 toast 未显示计划数（步骤 3）。（已于 2026-11-03 完成，见下方 23–27）
 14. `/plans` 未纳入 `visual:check`；1440/500/430/390/360 全量视觉复核未重跑（步骤 4）。（已于 2026-11-03 完成，见下方 26–31）
-15. 3 条既有 lint 警告、15 个既有未格式化文件、`PreviewPages.tsx:160` 遗留类名未处理。
+15. 3 条既有 lint 警告、15 个既有未格式化文件未处理；`PreviewPages.tsx:160` 遗留类名与其过时文案已随 2026-11-03 的清理（见下方 42）删除。
 
 **本轮之后的纯文档同步（2026-11-02 17:30 起，无代码改动）**
 
@@ -1742,6 +1742,9 @@ npm run visual:check
 39. 步骤 6 验证：`npm run typecheck` 通过；`npm test` 123/123（8 文件，新增 11 条）；`npx playwright test` 98 passed / 0 skipped（55.1s，49 用例 × 2 项目）；`npm run lint` 0 错 3 既有警告；`npm run build` 通过（JS 552.61 kB / CSS 139.92 kB，涨 3.52 kB）；`npm run visual:check` 15 状态 × 6 视口全零指标。
 40. 收尾：对三个新增文件跑 `prettier --write`（改动前的 `persist-state.ts` / `persist-storage.ts` / `persist-state.test.ts` 有格式漂移），随后复跑 `typecheck`（0 错）、`lint`（0 错 3 警）、`npm test`（123/123）与 `npm run build`——产物哈希仍为 `index-DqZtxRhx.js` / `index-DBVxLcSp.css`，与格式化前完全一致，说明格式化未改变语义、E2E 结论继续有效。`TodaySheets.tsx` / `ReportsPage.tsx` 的 `prettier --check` 报警属 §14.2 记录的既有债务（这两个文件本轮只改了一行文案），未做全文件格式化以避免无关大 diff。
 41. 步骤 6 已于 2026-11-03 14:1x 作为第三个提交 `128d6a2`（`feat: 步骤 6 本机 IndexedDB 持久化（刷新/重开不丢数据）`）提交并推送：41 个文件（4 新增 + 14 修改 + 23 张截图），推送后远端 `refs/heads/main` 与本地 HEAD 一致（`128d6a2`），`git status -sb` 为 `## main...origin/main`；`design/` 下 23 张截图因文案改口被 `visual:check` 重写（内容变化来自文案，指标仍全零），已一并进入该提交。
+42. 2026-11-03 清理（用户批准后执行，`chore:` 提交，无功能变化）：删 `design/_snapshot-before-fixes/`（59 张 / 16.5 MB）、v1/v2 遗留原型（`home-v1.html`、`home-v2-blue.html` 与 6 张 PNG，保留 `home-v3-countdown.html` + 2 张 v3 对照图）、`design/.edge-profile*/`（13.7 MB，未入库）；删 `app/src/pages/PreviewPages.tsx`（全 `app/src` 零引用）及 `persist.css` 中仅供其使用的 `.preview-*` 样式 173 行；`.gitignore` 补 `app/dist-ssr/`、`app/.vite/`、`desktop.ini`、`app/tmp-*`、`*.tmp`。决定**保留** `Water intake record/`（368 MB，未入库，作为饮水行为参照）。
+   验证（清理后实测）：`tsc` 0 错；`oxlint` 0 错 3 警（文件数 64 → 63，规则数不变）；`npm test` 123/123；`npx playwright test` 98 passed / 0 skipped（2.0m）；`npm run build` 通过，CSS 139.92 → 134.42 kB（删掉的 `.preview-*` 确实在产物里），JS 552.61 kB 不变（`PreviewPages` 本来没被引用，早已 tree-shaken）；`npm run visual:check` 15 状态 × 6 视口 `overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
+   截图字节的说明（不要误判为回归）：`git status` 一度显示 8 张基线 PNG 有变化，逐像素比对后确认差异 ≤0.07%、bbox 均落在首页倒计时那一行（`TodayPage` 有 1 s 实时时钟），`study-desktop-1440.png` 的最大色差仅 4/255（抗锯齿噪声）。连跑两次 `visual:check` 也复现了同样的抖动，故**还原为原基线图、不把抖动提交**。
 
 ---
 
