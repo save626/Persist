@@ -72,3 +72,40 @@ test('刷新后保留设置里的提醒开关与时间', async ({ page }) => {
   await expect(page.getByLabel('启用饮水提醒')).not.toBeChecked()
   await expect(page.getByLabel('饮水提醒时间')).toHaveValue('07:30')
 })
+
+test('清空本机数据后刷新回到初始示例数据', async ({ page }) => {
+  await page.goto('/')
+  const progress = page.getByRole('region', { name: '今日进度' })
+
+  // 先制造差异：记一笔 250 ml 饮水（基线 1.2 L → 1.5 L），再关掉饮水提醒。
+  await page.getByRole('button', { name: '快速记录', exact: true }).first().click()
+  await page.getByRole('button', { name: '饮水', exact: true }).click()
+  await expect(progress).toContainText('1.5')
+  await waitForPersistFlush(page)
+  await page.reload()
+  await expect(progress).toContainText('1.5')
+
+  await page.goto('/settings')
+  const waterSwitch = page.getByLabel('启用饮水提醒')
+  await expect(waterSwitch).toBeChecked()
+  await waterSwitch.uncheck()
+  await waitForPersistFlush(page)
+
+  await page.getByRole('button', { name: '清空本机数据' }).click()
+  const dialog = page.getByRole('alertdialog', { name: '清空本机数据？' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '确认清空' }).click()
+  await expect(page.locator('.toast')).toContainText('本机数据已清空')
+
+  // 内存态立即回到基线：提醒重新开启、快照清空。
+  await expect(waterSwitch).toBeChecked()
+  await expect(page.getByText('尚未生成快照')).toBeVisible()
+
+  await waitForPersistFlush(page)
+  await page.reload()
+  // 刷新后不能复现清空前的数据（若防抖把旧数据写回，这里会看到 1.5 / 提醒关闭）。
+  await expect(page.getByLabel('启用饮水提醒')).toBeChecked()
+  await page.goto('/')
+  await expect(progress).toContainText('1.2')
+  await expect(progress).not.toContainText('1.5')
+})

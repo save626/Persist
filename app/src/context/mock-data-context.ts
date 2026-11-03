@@ -47,6 +47,8 @@ export interface MockDataContextValue {
   createMockSnapshot: () => MockSnapshot
   appendStudyRecords: (records: StudyRecord[]) => void
   replaceMockData: (data: ImportableMockData) => void
+  /** 删除本机 IndexedDB 记录并把内存态还原到首次启动基线（设置页「清空本机数据」）。 */
+  clearLocalData: () => Promise<void>
   longTermPlans: LongTermPlan[]
   addLongTermPlan: (draft: LongTermPlanDraft) => LongTermPlan | null
   updateLongTermPlan: (id: string, patch: Partial<LongTermPlan>) => void

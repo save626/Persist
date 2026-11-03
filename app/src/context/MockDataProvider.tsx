@@ -11,7 +11,7 @@ import {
 } from '../lib/long-term-plan'
 import { countMockRecords } from '../lib/mock-data-transfer'
 import { PERSIST_SAVE_DEBOUNCE_MS } from '../lib/persist-state'
-import { loadPersistedState, savePersistedState } from '../lib/persist-storage'
+import { clearPersistedState, loadPersistedState, savePersistedState } from '../lib/persist-storage'
 import type {
   EveningReviewPayload,
   FitnessSessionState,
@@ -94,6 +94,27 @@ const INITIAL_PLAN: PlanItem[] = [
 
 const INITIAL_WATER_MILLILITERS = 1_200
 
+/**
+ * 首次启动的基线状态：12 个切片与上面 useState 的初值一一对应（快照与长期计划为空）。
+ * 「清空本机数据」复用它，保证清空后与第一次打开 App 看到的内容完全一致。
+ */
+function createInitialMockData(): ImportableMockData {
+  return {
+    goals: INITIAL_GOALS,
+    planItems: INITIAL_PLAN,
+    waterLog: [],
+    studyRecords: INITIAL_STUDY_RECORDS,
+    meals: INITIAL_MEALS,
+    fitnessSession: null,
+    profile: INITIAL_PROFILE,
+    settings: INITIAL_SETTINGS,
+    aiConsent: INITIAL_PROFILE.aiConsent,
+    eveningReview: null,
+    reports: INITIAL_REPORTS,
+    longTermPlans: [],
+  }
+}
+
 export function MockDataProvider({ children }: { children: ReactNode }) {
   const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS)
   const [planItems, setPlanItems] = useState<PlanItem[]>(INITIAL_PLAN)
@@ -117,6 +138,8 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   const latestStateRef = useRef<{ data: ImportableMockData; snapshot: MockSnapshot | null } | null>(
     null,
   )
+  /** 当前排队的防抖写入定时器；「清空本机数据」必须先掐掉它，否则旧数据会被写回。 */
+  const saveTimerRef = useRef<number | null>(null)
 
   const updateGoal = useCallback((id: string, patch: Partial<Goal>) => {
     setGoals((current) => current.map((goal) => (goal.id === id ? { ...goal, ...patch } : goal)))
@@ -207,6 +230,27 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     setLongTermPlans(data.longTermPlans ?? [])
     setSnapshot(null)
   }, [])
+
+  /**
+   * 删除本机数据（IndexedDB 记录）并还原到首次启动基线。
+   * 顺序不能换：先停写回、掐掉已排队的防抖写入，再删记录、重置内存态（含 snapshot），
+   * 最后恢复写回，让「初始基线」在 200 ms 后作为新记录落盘；否则旧数据会在防抖窗口末尾被写回。
+   * `hydrated` 保持不变，不重新水合，避免再次读到刚删掉的记录。
+   */
+  const clearLocalData = useCallback(async () => {
+    persistEnabledRef.current = false
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    await clearPersistedState()
+    const initialData = createInitialMockData()
+    replaceMockData(initialData)
+    // 同步刷新 pagehide 补写用的镜像，避免「清空后立刻关页面」把旧数据又写回去。
+    latestStateRef.current = { data: initialData, snapshot: null }
+    // 记录已删除，此后写入的是本版本基线；即使之前读到过未来版本数据，用户主动清空后也由本版本接管。
+    persistEnabledRef.current = true
+  }, [replaceMockData])
 
   const createMockSnapshot = useCallback(() => {
     const next: MockSnapshot = {
@@ -308,9 +352,14 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated || !persistEnabledRef.current) return
     const timer = window.setTimeout(() => {
+      saveTimerRef.current = null
       void savePersistedState(persistableData, snapshot)
     }, PERSIST_SAVE_DEBOUNCE_MS)
-    return () => window.clearTimeout(timer)
+    saveTimerRef.current = timer
+    return () => {
+      window.clearTimeout(timer)
+      if (saveTimerRef.current === timer) saveTimerRef.current = null
+    }
   }, [hydrated, persistableData, snapshot])
 
   /** 页面隐藏 / 关闭时补写一次，避免防抖窗口内直接关页面丢数据。 */
@@ -373,6 +422,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       createMockSnapshot,
       appendStudyRecords,
       replaceMockData,
+      clearLocalData,
       longTermPlans,
       addLongTermPlan,
       updateLongTermPlan,
@@ -386,6 +436,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       aiConsent,
       appendStudyRecords,
       archiveLongTermPlan,
+      clearLocalData,
       createMockSnapshot,
       eveningReview,
       fitnessSession,

@@ -71,6 +71,7 @@ export function SettingsPage() {
     createMockSnapshot,
     appendStudyRecords,
     replaceMockData,
+    clearLocalData: clearAllLocalData,
   } = useMockData()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { reminders, summaryOnly, sources } = settings
@@ -80,6 +81,7 @@ export function SettingsPage() {
   const [importName, setImportName] = useState('')
   const [importError, setImportError] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmClearAll, setConfirmClearAll] = useState(false)
   const [infoSheet, setInfoSheet] = useState<InfoSheet>(null)
 
   const enabledReminderCount = reminders.filter((reminder) => reminder.enabled).length
@@ -202,7 +204,7 @@ export function SettingsPage() {
     showToast(`完整演示数据已加载 · ${data.studyRecords.length} 条学习记录`)
   }
 
-  const clearLocalData = () => {
+  const clearMockSettings = () => {
     setConfirmClear(false)
     resetSettings()
     setImportName('')
@@ -210,6 +212,25 @@ export function SettingsPage() {
     setAiState('idle')
     setSavedAt('已清空 Mock 设置')
     showToast('本地 Mock 设置已清空，示例记录仍会保留')
+  }
+
+  /** 全量清空：删本机 IndexedDB 记录 + 内存态回到初始基线（含快照），成功后刷新也不会复现旧数据。 */
+  const clearEverything = () => {
+    setConfirmClearAll(false)
+    setImportName('')
+    setImportError('')
+    setAiState('idle')
+    setSavedAt('正在清空本机数据…')
+    void clearAllLocalData()
+      .then(() => {
+        setSavedAt('本机数据已清空')
+        showToast('本机数据已清空 · 已恢复初始示例数据')
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : '未知错误'
+        setSavedAt('清空失败')
+        showToast(`清空失败：${message}`)
+      })
   }
 
   return (
@@ -588,6 +609,22 @@ export function SettingsPage() {
             </button>
           </section>
 
+          <section className="settings-danger-card" aria-labelledby="clearDataTitle">
+            <span className="settings-kicker">RESET · LOCAL DATA</span>
+            <h2 id="clearDataTitle">清空本机数据</h2>
+            <p>
+              删除本机浏览器里的全部记录、设置、长期计划与快照，并恢复初始示例数据。此操作不可撤销，建议先导出
+              JSON 备份。
+            </p>
+            <button
+              className="settings-danger-button"
+              type="button"
+              onClick={() => setConfirmClearAll(true)}
+            >
+              清空本机数据
+            </button>
+          </section>
+
           <div className="settings-version">
             <span>Persist v0.1.0</span>
             <span>Frontend Mock · 2026</span>
@@ -602,7 +639,18 @@ export function SettingsPage() {
           confirmLabel="确认清空"
           danger
           onClose={() => setConfirmClear(false)}
-          onConfirm={clearLocalData}
+          onConfirm={clearMockSettings}
+        />
+      )}
+
+      {confirmClearAll && (
+        <ConfirmDialog
+          title="清空本机数据？"
+          description="本机浏览器里的全部记录、设置、长期计划与快照都会被删除，并恢复初始示例数据。此操作无法撤销，建议先导出 JSON 备份。"
+          confirmLabel="确认清空"
+          danger
+          onClose={() => setConfirmClearAll(false)}
+          onConfirm={clearEverything}
         />
       )}
 
