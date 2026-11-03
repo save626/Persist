@@ -53,6 +53,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 - AI 引导建档 → 草案 → 确认启用 → 归档/重启闭环（`/plans`，含手工新建计划）。
 - 设置页 JSON 导出导入：备份 `0.2.0`（含 `longTermPlans`，兼容 `0.1.0`），文件名带日期，导入 toast 报记录数 + 计划数。
 - 本机 IndexedDB 持久化：13 个切片 + 快照写单条记录，记录带 `schemaVersion: 1`，未来版本只读不覆盖，`MockDataProvider` Context 契约不变。
+- 「清空本机数据」（步骤 7，`a544a38`）：设置页第二张危险区卡片 + 中文二次确认 + toast，删除本机记录并恢复首次启动基线（含清空快照与长期计划），刷新不复现旧数据；原有「清空设置」只重置设置项，两张卡片文案已区分。
 - 全站弹窗统一垂直居中；窄屏保留档案页「AI 建档」入口；视觉基线 15 状态 × 6 视口（1440 / 500 / 430 / 421×926 / 390 / 360）经用户桌面端与移动端验收通过。
 - 收尾：`d4c9696` 清理死代码与历史制品（含删除 `PreviewPages.tsx` 与 173 行 `.preview-*` CSS），`style:` 提交移除 Tailwind Prettier 插件并格式化 19 个文件；构建产物哈希与格式化前逐字节一致。
 - 服务器：环境就绪（见 §6），代码未部署。
@@ -65,18 +66,18 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 | 类型 | `npm run typecheck`（`tsc -b`） | 0 错误 |
 | Lint | `npm run lint`（oxlint） | 0 错误 / 3 条既有 `react(set-state-in-effect)` 警告（`StudyPage.tsx`、`DietPage.tsx`、`FitnessPage.tsx`，行号会漂，按规则名找） |
 | 单测 | `npm test` | **123 / 123**（8 文件：`complete-mock-data` 5、`chat-extract` 24、`countdown` 4、`long-term-plan` 23、`mock-data-transfer` 26、`plan-draft` 19、`profile-rules` 11、`persist-state` 11） |
-| E2E | `npx playwright test` | **98 次执行**（49 用例 × 2 项目），0 跳过 0 失败 |
-| 构建 | `npm run build` | `dist/index.html` 611 B、`assets/index-C9ZcsQCi.css` 137,643 B（gzip 23.81 kB）、`assets/index-D5Nq3TbM.js` 552,612 B（gzip 163.52 kB） |
-| 视觉 | `npm run visual:check` | 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0` |
+| E2E | `npx playwright test` | **100 次执行**（50 用例 × 2 项目），0 跳过 0 失败 |
+| 构建 | `npm run build` | `dist/index.html` 611 B、`assets/index-C9ZcsQCi.css` 137,643 B（gzip 23.81 kB）、`assets/index-BBQQW4ug.js` 554,382 B（gzip 163.89 kB） |
+| 视觉 | `npm run visual:check` | 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（步骤 7 新增设置页卡片后**待重新验收**；该脚本会覆盖 `design/` 基线，需用户确认后再跑） |
 
-看到 `index-C9ZcsQCi.css` / `index-D5Nq3TbM.js` 这两个哈希，说明代码自格式化提交以来没漂移；换哈希就先查 `git log` 与 §10.3 的产物演进说明再下结论。
+看到 `index-C9ZcsQCi.css` / `index-BBQQW4ug.js` 这两个哈希，说明代码停在步骤 7（`a544a38`）之后没漂移；若 JS 仍是 `index-D5Nq3TbM.js`（552,612 B）则代码停在步骤 6。换哈希就先查 `git log` 与 `HANDOFF.md` §10.3 的产物演进说明再下结论。
 
 **未完成 / 已知边界**
 
 1. 无真实 AI 服务端、无服务端 API（鉴权、限流、日志、密钥管理都没有）、无服务端数据库。
 2. 无 P4 级备份恢复（JSON 导入不算可回滚恢复）、无 Android 包。
-3. 持久化边界：只在本机当前浏览器有效（清站点数据 / 换浏览器 / 换设备 / 无痕即丢）、无跨标签页同步、**无「清空本机数据」UI**（下一步补）、读盘失败只在控制台告警、导入整体替换且不可撤销。
-4. 技术债：3 条 lint 警告、主 JS 552.61 kB 超过 Vite 500 kB 提示线（`/plans` 可懒加载拆包）、大量页面目前只有 E2E 覆盖没有单测。
+3. 持久化边界：只在本机当前浏览器有效（清站点数据 / 换浏览器 / 换设备 / 无痕即丢）、无跨标签页同步、读盘失败只在控制台告警、导入整体替换且不可撤销。已有「清空本机数据」入口（步骤 7）：删除本机 IndexedDB 记录并恢复初始示例数据，中文二次确认，**不影响其它设备 / 浏览器**。
+4. 技术债：3 条 lint 警告、主 JS 554.38 kB 超过 Vite 500 kB 提示线（`/plans` 可懒加载拆包）、大量页面目前只有 E2E 覆盖没有单测。
 5. 窄屏仍隐藏今日页「编辑计划」与健身页「训练模板」顶部按钮（均有页内入口），如需显示改 `home-v3.css` 的 `:not()` 列表。
 6. `design/` 94 个文件（93 PNG + `home-v3-countdown.html`，约 18.7 MB），其中 91 张是现行基线；`_snapshot-before-fixes/` 与 v1/v2 原型已从工作区删除但仍在 Git 历史里（`.git` 体积不变）。
 7. 服务器：root 密码登录可用、3389 默认开着、443 未开、域名未备案、机器上无项目代码。
@@ -139,8 +140,8 @@ stage('collect') → delta* → questions? → profilePatch?（一轮最多一�
 | ~~4~~ ✅ | 全页面视觉复核 | `scripts\visual-check.mjs` | 已达成：91 张 + 用户双端验收 |
 | ~~5~~ ✅ | 首个 Git 提交并推送 | — | 已达成：`main` / `bd779eb`（262 文件 37.39 MB） |
 | ~~6~~ ✅ | 本机 IndexedDB 持久化 | `lib\persist-state.ts`、`lib\persist-storage.ts`、`MockDataProvider.tsx` | 已达成：刷新/重开不丢；单测 123 / E2E 98 全绿 |
-| **7**（下一项，待用户确认） | **P3-0：设置页「清空本机数据」入口** | `pages\SettingsPage.tsx` + `context\MockDataProvider.tsx`（`clearPersistedState()` 已实现于 `lib\persist-storage.ts`） | 清空后回到初始 Mock、刷新不复现旧数据；**顺序必须**：清 IndexedDB → 重置内存态 → 保持 `hydrated` 门控 → 同时清 `snapshot`（否则 200 ms 防抖把旧数据写回）；中文二次确认 + toast；补 1 条 E2E（清空 → 刷新 → 断言初始态） |
-| **8** | **P3：Fastify + DeepSeek 服务端代理** | `server/`（Fastify，`127.0.0.1:3000`）、`shared/`、`.env.example` | 见 `HANDOFF.md` §13 P3 完成标准；前端只请求相对 `/api/*`；无 Key / 服务不可用时降级 Mock 并如实标注；补超时 / 取消 / 重试 + E2E"服务不可用 → Mock" |
+| ~~7~~ ✅ | P3-0：设置页「清空本机数据」入口 | `pages\SettingsPage.tsx` + `context\MockDataProvider.tsx` + `e2e\persistence.spec.ts` | 已达成（`a544a38`）：`clearLocalData()` 按「停写回 → 掐防抖 → 删记录 → 重置内存态与 snapshot → 恢复写回」执行，`hydrated` 保持；设置页第二张危险区卡片 + 二次确认 + toast；E2E 100 次全绿 |
+| **8**（下一项，待用户确认） | **P3：Fastify + DeepSeek 服务端代理** | `server/`（Fastify，`127.0.0.1:3000`）、`shared/`、`.env.example` | 见 `HANDOFF.md` §13 P3 完成标准；前端只请求相对 `/api/*`；无 Key / 服务不可用时降级 Mock 并如实标注；补超时 / 取消 / 重试 + E2E"服务不可用 → Mock" |
 | **9** | IP 直连首次部署（无域名） | 本地 build → 上传 `app/dist` 到 `/var/www/persist`；Nginx 站点（深链 + `/api` 反代 + gzip + 长缓存）；Fastify systemd + `/etc/persist/server.env`(600) | `http://<IP>/` 可打开、`/reports` 等深链刷新 200、`/api/health` 200；命令与配置见 `docs\部署与服务器现状.md` |
 | **10**（备案通过后） | 域名 `wpersist.top` + HTTPS + 安全加固 | DNS 解析、开 443、certbot、HTTP→HTTPS；SSH 密钥登录、禁 root 密码、关 3389、fail2ban | `https://wpersist.top` 可访问、证书有效、HTTP 自动跳转 |
 | P4 | 真实备份与恢复（含快照语义）、SQLite 选型 | 见 `HANDOFF.md` §13 | 见 §13 完成标准 |
@@ -187,7 +188,7 @@ git ls-remote origin refs/heads/main
 - 每次推送后核对：`git rev-parse HEAD` == `git ls-remote origin refs/heads/main`，且 `git status -sb` 无 ahead/behind。
 - 认证已就绪（`ssh -T git@github.com` 返回 `Hi save626!`），**不需要**用户提供 Token / 密码 / 私钥。
 - 推送前审计：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$|\.local\.md$`。
-- 每个阶段结束提交一次（步骤 7、8、9、10、P4、P5），禁止 `git push --force`，禁止重写历史。
+- 每个阶段结束提交一次（步骤 8、9、10、P4、P5；步骤 7 已于 `a544a38` 提交），禁止 `git push --force`，禁止重写历史。
 
 ## 10. 每步汇报格式（固定 8 段，中文）
 
@@ -217,7 +218,7 @@ git ls-remote origin refs/heads/main
 - `PlansPage.tsx` 曾因 2 参数 `WriteAllText` 被截断丢失（当时无 Git 备份），现版本从 `dist` 产物反解后**等价重写**，已通过类型检查、构建与全量 E2E，但不是原始源码；该版本包含在首个提交 `bd779eb` 中，此后有历史可比对。
 - `AppShell`、`TodayPage`、饮食 / 健身 / 学习页曾因条件类名被 Prettier 压平导致状态样式失效（14 处），已用 `cn()` 与完整字符串三元修复；再动这些文件的类名要回归。
 - 视觉基线为 2026-11-03 版（91 张），经用户桌面端与移动端验收通过；更早已作废。首页截图因实时倒计时永不逐字节稳定，勿当回归证据。
-- 持久化交付的是**浏览器本机持久化**，不是"数据安全"：清站点数据、换浏览器、换设备、无痕模式都会丢；也还没有清空入口（步骤 7 补）。不要对外说成服务端存储或云同步。
+- 持久化交付的是**浏览器本机持久化**，不是"数据安全"：清站点数据、换浏览器、换设备、无痕模式都会丢；已有「清空本机数据」入口（步骤 7），但它只清当前浏览器的这一条记录、不是"恢复出厂设置"更不是跨设备操作。不要对外说成服务端存储或云同步。
 - 持久化没有引入 Dexie（原计划写的是 Dexie），原因是沙箱内 `npm install` 受缓存路径 EPERM 限制且当前只有单用户单记录场景；这是主动偏离，记录在 `HANDOFF.md` §13 P2 / §6.6。
 - 文档曾出现"提交个数"与"构建体积"写死后自相矛盾的问题（每次提交 / 清理都会让数字失效）；现行规则是：提交只按主题叙述、体积只指向 `HANDOFF.md` §10.3 的实测值。
 - 服务器交接信息由用户口头提供并脱敏入库：公网 IP 只在 `.local.md`，root 密码**从未写入任何文件**，需要 SSH 操作时向用户索取或让用户执行。
