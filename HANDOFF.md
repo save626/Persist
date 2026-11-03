@@ -27,6 +27,7 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 - 自动化验证已通过：类型检查、123 个单元测试、49 条 Playwright 用例 × 2 个项目 = 98 次执行全部通过（0 跳过）、生产构建（JS 552.61 kB / CSS 139.92 kB）、视觉检查 15 状态 × 6 视口全零指标。
 - 已通过用户桌面端与移动端视觉验收（2026-11-03）：八个页面与全部弹窗在 1440 / 500 / 430 / 421 / 390 / 360 六个视口下无横向溢出、弹窗统一居中，基线截图见 `design/`（15 状态 × 6 视口 + 快速记录浮层 = 91 张）。
 - Git 已推送三次（2026-11-03）：分支 `main`，提交 `bd779eb`（`chore: initial commit`，262 文件 37.39 MB）、`da787c4`（步骤 5 文档同步）与 `128d6a2`（步骤 6 本机持久化，41 个文件）；远端 `git@github.com:save626/Persist.git`，每次推送后都核对了远端 `refs/heads/main` 与本地 HEAD 哈希一致。仓库根目录误建的 `$null` 与 `app/$null` 两个垃圾文件已在首次提交前删除。当前工作区干净（`## main...origin/main`）。
+- **服务器已就绪，但代码尚未部署**（2026-11-03）：阿里云 ECS 2 核 2 GiB（华东1 杭州，Alibaba Cloud Linux 3.2104，包管理器 `dnf`），已装 Node.js v20.20.2 + npm 10.8.2 + Nginx 1.24.0，安全组已开放 22/80，`http://<IP>` 可访问 Nginx 默认页；443 未开、域名 `wpersist.top` 未备案、机器上没有任何项目代码。部署架构、规格约束（2 GiB 不在服务器构建前端、3 Mbps 流量计费需 gzip+长缓存、SPA 深链回退、`/api` 反代 127.0.0.1:3000）、Nginx 草案与命令速查见 **`docs/部署与服务器现状.md`**（公开仓库，公网 IP 已脱敏，真实值在本机 `docs/部署与服务器现状.local.md`，由 `.gitignore` 的 `*.local.md` 排除）。
 
 ### 0.2 现在不是什么状态
 
@@ -62,9 +63,13 @@ Persist 目前已经是一个可完整点击验收的前端高保真 Mock 应用
 | **步骤 4** ✅ 已完成（2026-11-03） | 全页面视觉复核 | `scripts/visual-check.mjs` 已纳入 `/plans` 空态 / 进行中 / 草案 / AI 对话 / 确认弹窗；视口 1440/500/430/421/390/360；全站弹窗统一居中；窄屏保留档案页「AI 建档」入口 | 已产出 91 张截图并由用户桌面端 + 移动端明确通过 |
 | **步骤 5** ✅ 已完成（2026-11-03） | 建立首个 Git 提交 | 提交前删除了根目录 `$null` 与 `app/$null` 垃圾文件；`core.quotepath=false` 便于中文路径处理；`.gitignore` 已排除 `node_modules/`、`app/dist/`、`Water intake record/`、日志与 tsbuildinfo | `main` 分支提交 `bd779eb`（262 文件 / 37.39 MB），已推送到 `github.com/save626/Persist`，远端 HEAD 与本地一致，仓库具备回滚基线 |
 | **步骤 6** ✅ 已完成（2026-11-03） | P2 本机持久化（原生 IndexedDB 封装，未引入 Dexie） | 新增 `lib/persist-state.ts`（记录结构 / `schemaVersion` / 迁移 / 校验）与 `lib/persist-storage.ts`（open / load / save / 降级）；`MockDataProvider` 首挂载水合、200 ms 防抖落盘、`pagehide` / `visibilitychange` 补写，Context 契约不变；`mock-data-transfer.ts` 抽出 `parseMockBackupValue()` 复用导入校验 | 刷新与重开页面后数据不丢（含长期计划、设置、复盘、快照）；单测 123/123、E2E 98 次执行全绿；未来版本数据不被覆盖；无 IndexedDB 时退回纯内存 |
-| **后续** | P3 Fastify + DeepSeek → P4 备份恢复 → P5 Android | 见 §13 | 见 §13 对应完成标准 |
+| **步骤 7**（待用户确认后做） | P3-0：设置页「清空本机数据」入口 | 补 P2 遗留缺口：清 IndexedDB → 重置内存态 → 清理 `snapshot`，顺序不能反过来（否则 200 ms 防抖会把旧数据写回）；保留 `hydrated` 门控 | 清空后界面回到初始 Mock、刷新不复现旧数据；补 1 条 E2E |
+| **步骤 8** | P3：Fastify + DeepSeek 服务端代理 | 在 `server/` 实现 Fastify（`127.0.0.1:3000`，Node 20 兼容），前端只请求相对 `/api/*`，Mock 作为无 Key 降级；`.env.example`；SSE 契约、超时/取消/重试、schema 校验 | 见 §13 P3 完成标准（构建产物无 Key、未授权数据不发送、超时可降级不阻塞记录） |
+| **步骤 9** | 首次部署（IP 直连，无域名） | 本地 `npm run build` → 上传 `app/dist` 到 `/var/www/persist`；Nginx 站点（`try_files` 深链回退 + `/api` 反代 + gzip + 长缓存）；Fastify 走 systemd `persist-server.service`，密钥放 `/etc/persist/server.env`(600) | `http://<IP>/` 可打开、`/reports` 直接刷新 200、`/api/health` 200、刷新回访命中缓存；详见 `docs/部署与服务器现状.md` §6 |
+| **步骤 10**（备案通过后） | 域名 + HTTPS | 域名解析到 ECS；安全组开放 443；certbot 签 Let's Encrypt 证书；Nginx 443 + HTTP→HTTPS 跳转；安全加固（SSH 密钥登录、禁 root 密码、删 3389、fail2ban） | `https://wpersist.top` 可访问且证书有效、HTTP 自动跳转 HTTPS |
+| **后续** | P4 备份恢复 → P5 Android | 见 §13 | 见 §13 对应完成标准 |
 
-步骤 3、4、5、6 均已于 2026-11-03 完成：步骤 3 让导出导入升级到备份 0.2.0，步骤 4 完成全页面视觉复核并由用户桌面端 + 移动端验收通过，步骤 5 建立了 Git 回滚基线（`bd779eb` + `da787c4`），步骤 6 把内存 Mock 升级为本机 IndexedDB 持久化且保持 `MockDataProvider` 对外契约不变。**下一步是 P3 服务端 AI 代理**（见 §13），不要再把持久化当作未完成项。
+步骤 3、4、5、6 均已于 2026-11-03 完成：步骤 3 让导出导入升级到备份 0.2.0，步骤 4 完成全页面视觉复核并由用户桌面端 + 移动端验收通过，步骤 5 建立了 Git 回滚基线（`bd779eb` + `da787c4`），步骤 6 把内存 Mock 升级为本机 IndexedDB 持久化且保持 `MockDataProvider` 对外契约不变。**下一步是步骤 7（P3-0「清空本机数据」入口，需用户确认后动手）→ 步骤 8（P3 服务端代理）→ 步骤 9（IP 直连首次部署）→ 步骤 10（备案后域名 + HTTPS）**；不要再把持久化当作未完成项。服务器规格与部署约束见 `docs/部署与服务器现状.md`。
 
 Git 提交流程备忘（本环境已验证）：`git push` / `git ls-remote` 在沙箱下会因 git 启动的 `ssh.exe` 无法创建管道而失败（`couldn't create signal pipe, Win32 error 5`），需要一次性提权到完整访问权限；提交前用 `git diff --cached --name-only` 审计一遍，确认没有 `node_modules/`、`app/dist/`、`test-results/`、`Water intake record/` 等路径。
 
@@ -543,9 +548,11 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 端到端测试 | Playwright |
 | Lint | Oxlint |
 | 格式化 | Prettier（`prettier-plugin-tailwindcss` 已于 2026-11-03 移除） |
-| 当前数据层 | React Context 内存状态 |
-| 当前后端 | 未实现 |
-| 当前共享层 | 未实现 |
+| 当前数据层 | React Context 内存状态（已由 IndexedDB 持久化，§6.6） |
+| 当前后端 | **未实现**；P3 计划 Fastify（服务器已就绪，见 §0.4 步骤 8–9） |
+| 部署/托管 | Nginx 1.24（阿里云 ECS / Alibaba Cloud Linux 3 / Node.js v20.20.2），前端纯静态托管 + `/api` 反代 `127.0.0.1:3000`，详见 `docs/部署与服务器现状.md` |
+| 计划中的数据库 | SQLite（P4 才引入；P3 阶段不落库，Node 20 无内置 `node:sqlite`） |
+| 当前共享层 | 未实现（P3 起放请求/响应类型与校验，见 `shared/README.md`） |
 
 开发环境实测：
 
@@ -1372,19 +1379,21 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 
 目标：
 
-- 在 `server/` 实现 Fastify 服务。
+- 在 `server/` 实现 Fastify 服务（`127.0.0.1:3000`，兼容服务器 Node 20.20.2）。
 - 接入 DeepSeek，前端不再生成 Mock 报告，并复用 `ChatClient` 流式契约实现真实 AI 建档与计划建议。
+- 前端只请求相对路径 `/api/*`；Mock 作为「无 Key / 服务不可用」时的降级路径。
 
 建议工作：
 
-1. 定义 AI 请求/响应 schema。
+1. 定义 AI 请求/响应 schema（放 `shared/`，前端与服务端复用）。
 2. 仅允许授权数据源进入请求。
-3. 服务端保存 API Key。
+3. 服务端保存 API Key（`/etc/persist/server.env`，600）。
 4. 增加鉴权、限流、超时、缓存和重试上限。
 5. 增加结构化响应校验与失败降级。
 6. 日志脱敏，不记录完整敏感档案。
 7. 前端接入加载、成功、失败、重试和取消状态。
 8. 报告生成后仍由用户确认是否写入计划。
+9. 部署侧：本地构建上传 `app/dist`，Nginx 配 `try_files` 深链回退 + `/api` 反代 + gzip/长缓存，Fastify 由 systemd 常驻（命令与配置草案见 `docs/部署与服务器现状.md`）。
 
 完成标准：
 
@@ -1393,6 +1402,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - 服务端超时/错误不阻塞记录功能。
 - 返回内容通过 schema 校验。
 - 报告可追溯数据范围但不泄露敏感原文。
+- IP 直连部署可验收：`http://<IP>/` 可打开、`/reports` 直接刷新不 404、`/api/health` 返回 200。
 
 ### P4：真实备份与恢复
 
@@ -1466,6 +1476,9 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 | “快照”容易被误解 | 用户可能以为可以恢复数据 | UI 和文档明确其只是元信息（但它会持久化保存） |
 | 回滚粒度仍偏粗 | 现有提交链（`bd779eb` / `da787c4` / `128d6a2` / `e3e9730` / `d4c9696` / `style:`），清理与格式化已单独成提交，但整体仍是按阶段而非按功能切片 | 每个阶段结束时提交一次，保持可回滚 |
 | 无真实 AI/服务端 | 报告与建档分析不具备真实 AI 能力 | 不要对外宣称已经接入 DeepSeek |
+| 服务器 root 密码登录 + 安全组开着 3389 | 公网 22 端口暴露且允许密码爆破；3389 对 Linux 无用 | 部署前改为 SSH 密钥登录、禁用 root 密码登录、删除 3389 规则、装 `fail2ban`（见部署文档 §6/§10） |
+| 2 GiB 内存 + 3 Mbps 峰值带宽 + 按流量计费（0.8 元/GB） | 在服务器上 `npm ci` + `vite build` 极易 OOM；未配压缩/缓存时每次回访都重复计流量 | 前端只在本地构建后上传 `app/dist`；Nginx 开 gzip，hashed 资源 `immutable` 一年、`index.html` `no-cache`（见部署文档 §5.1） |
+| 域名未备案 | 备案通过前不能用域名对外提供 HTTP 服务，阿里云会拦截 | 现阶段只用 IP 直连做内部验收；备案通过后再解析域名、开 443 与证书 |
 | 无 Android 工程 | 尚未达到可安装目标 | 持久化和服务端接口稳定后再打包 |
 
 ### 14.2 中低优先级技术债
@@ -1641,6 +1654,7 @@ npm run visual:check
 ### 16.6 规划与占位
 
 - `D:\Persist\docs\Persist-项目开发规划.md`
+- `D:\Persist\docs\部署与服务器现状.md`（部署侧唯一事实来源：服务器规格、5.1 七条硬规则、Nginx 草案、命令速查）
 - `D:\Persist\server\README.md`
 - `D:\Persist\shared\README.md`
 - `D:\Persist\README.md`
@@ -1659,6 +1673,9 @@ npm run visual:check
 | 数据策略 | 长期目标是本地优先，当前仍为内存 Mock |
 | AI 服务 | 计划使用 DeepSeek，通过服务端代理 |
 | API Key | 只能保存在服务端 |
+| 部署形态 | 阿里云 ECS（Alibaba Cloud Linux 3，`dnf`）+ Nginx 静态托管前端 + Fastify 反代 `/api`；**不在服务器构建前端**，本地 `build` 后上传 `app/dist` |
+| 前端 API 前缀 | 相对路径 `/api`，不写死 IP / 域名（备案后换域名零改动） |
+| 数据库 | P3 不落库；SQLite 留到 P4（Node 20 无内置 `node:sqlite`） |
 | 照片识别 | 第一版不做 |
 | 外部学习 App | 不抓取非公开数据 |
 | AI 写入计划 | 必须用户确认 |
@@ -1769,7 +1786,7 @@ npm run visual:check
 7. **步骤 5** ✅ 已于 2026-11-03 完成：提交 `bd779eb` 已推送到 `github.com/save626/Persist`（`main` 分支），文档同步为 `da787c4`，仓库具备回滚基线。
 8. **步骤 6** ✅ 已于 2026-11-03 完成并提交：本机 IndexedDB 持久化上线（详见 §6.6、§13 P2），`MockDataProvider` 契约不变，刷新/重开数据不丢，单测 123 条 + E2E 98 次执行全绿；提交 `128d6a2` 已推送。
 9. **收尾清理与格式化** ✅ 已于 2026-11-03 完成并**推送**：`d4c9696` 清理死代码与历史设计制品，`style:` 提交移除 Tailwind 插件并格式化 19 个文件（详见 §18 第 42、43 条，均通过全量 `tsc` / `oxlint` / 单测 / E2E / 构建哈希比对 / 视觉检查）；推送后远端 `refs/heads/main` 与本地 HEAD 一致。
-10. **下一步 P3**：实现 Fastify 服务端 AI 代理与 DeepSeek 接入，再往后备份恢复（P4）与 Android 发布（P5）；每完成一个阶段提交一次，保持回滚粒度。「清空本机数据」入口已并入 P3 之前（见 §18 第 42 条之后的决策与 §14.1 风险表）。
+10. **下一步顺序（2026-11-03 更新，服务器已就绪）**：步骤 7 = P3-0「清空本机数据」入口 → 步骤 8 = P3 Fastify + DeepSeek 服务端代理 → 步骤 9 = IP 直连首次部署（本地构建上传 + Nginx 深链/反代/gzip）→ 步骤 10 = 备案通过后域名 + HTTPS；再往后备份恢复（P4）与 Android 发布（P5）。每完成一个阶段提交一次，保持回滚粒度；部署侧规则见 `docs/部署与服务器现状.md`。
 
 ---
 
@@ -1777,7 +1794,7 @@ npm run visual:check
 
 Persist 的当前成果是一个覆盖完整日常闭环、可跨模块联动、经过自动化验证的前端产品原型：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启的闭环已经打通，JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），全部业务记录已写入本机 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划），单元测试 123 条（8 文件）、E2E 98 次执行（0 跳过）全部通过，视觉基线 15 状态 × 6 视口已由用户桌面端与移动端验收通过，Git 提交链已全部推送到 `github.com/save626/Persist`（`bd779eb` / `da787c4` / `128d6a2` / `e3e9730` / `d4c9696` / `style:`），仓库具备回滚基线。
 
-但当前仍不是可长期使用的正式应用：数据只在本机浏览器（清站点数据即丢、无跨设备同步、无清空入口）、AI 不是真实调用、备份不可直接恢复、没有 Android 包。步骤 6 已完成，下一步是 P3 服务端 AI 代理，随后备份恢复（P4）与移动端发布（P5）。
+但当前仍不是可长期使用的正式应用：数据只在本机浏览器（清站点数据即丢、无跨设备同步、无清空入口）、AI 不是真实调用、备份不可直接恢复、没有 Android 包。**服务器侧已就绪**（阿里云 ECS 2C2G + Node 20 + Nginx，80 端口已开放，见 `docs/部署与服务器现状.md`），但项目代码尚未部署、域名未备案、443 未开。下一步顺序：步骤 7（清空数据入口）→ 步骤 8（P3 服务端代理）→ 步骤 9（IP 直连部署）→ 步骤 10（备案后域名 + HTTPS），随后备份恢复（P4）与移动端发布（P5）。
 
 交接时应坚持以下判断：
 

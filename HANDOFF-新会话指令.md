@@ -92,9 +92,14 @@ stage('collect') → delta* → questions? → profilePatch?（一轮最多一�
 | ~~**3**~~ ✅ | 导出导入升 0.2.0（2026-11-03 已完成） | `pages\SettingsPage.tsx` 已改调 `serializeMockBackup()` / `parseMockBackupJson()`，导入 toast 报记录数 + 计划数；round-trip 单测与导出/导入 E2E 已加 | 已达成：导出 JSON `version:'0.2.0'` 且含 `longTermPlans`；0.1.0 与 0.2.0 都能导入；单测与 E2E 全绿（当时 112 / 92，步骤 6 后为 123 / 98） |
 | ~~**4**~~ ✅ | 全页面视觉复核（2026-11-03 已完成并通过用户验收） | `scripts\visual-check.mjs` 已含 `/plans` 五档状态 + 6 视口（新增 421×926）；全站弹窗居中；窄屏保留档案页「AI 建档」 | 已达成：91 张截图 + 用户桌面端与移动端明确通过 |
 | ~~**5**~~ ✅ | 首个 Git 提交（2026-11-03 已完成并推送） | 删除 `$null` 垃圾文件后 `git add -A`；`.gitignore` 已排除 `Water intake record/`、`app/dist`、`test-results/` | 已达成：`main` / `bd779eb`（262 文件 37.39 MB）推送到 `github.com/save626/Persist`，远端 HEAD 与本地一致 |
-| ~~**6**~~ ✅ | 本机 IndexedDB 持久化（2026-11-03 已完成，未提交） | 新增 `lib\persist-state.ts`（记录 / `schemaVersion` / 迁移）与 `lib\persist-storage.ts`（open / load / save / 降级）；`MockDataProvider` 水合 + 防抖落盘，Context 契约不变；`mock-data-transfer.ts` 抽出 `parseMockBackupValue()` 共用校验 | 已达成：刷新/重开不丢数据（含长期计划、设置、复盘、快照）；单测 123 / E2E 98 全绿；未来版本不被覆盖 |
-| **下一步** | P3 Fastify + DeepSeek 服务端代理（未开始） | 见 `HANDOFF.md` §13 P3、§9.2 | 见 §13 P3 完成标准 |
-| 后续 | P4 真实备份与恢复（含接 `clearPersistedState()` 的清空 UI）→ P5 Capacitor Android | 见 `HANDOFF.md` §13 | 见 §13 完成标准 |
+| ~~**6**~~ ✅ | 本机 IndexedDB 持久化（2026-11-03 已完成并推送 `128d6a2`） | 新增 `lib\persist-state.ts`（记录 / `schemaVersion` / 迁移）与 `lib\persist-storage.ts`（open / load / save / 降级）；`MockDataProvider` 水合 + 防抖落盘，Context 契约不变；`mock-data-transfer.ts` 抽出 `parseMockBackupValue()` 共用校验 | 已达成：刷新/重开不丢数据（含长期计划、设置、复盘、快照）；单测 123 / E2E 98 全绿；未来版本不被覆盖 |
+| **7**（下一步，待用户确认） | P3-0：设置页「清空本机数据」入口 | `pages\SettingsPage.tsx` + `lib\persist-storage.ts`（`clearPersistedState()` 已实现） | 清空后回到初始 Mock、刷新不复现旧数据；顺序必须是清 IndexedDB → 重置内存态 → 保持 `hydrated`，并同时清 `snapshot`（否则 200 ms 防抖写回旧数据）；补 1 条 E2E |
+| **8** | P3 Fastify + DeepSeek 服务端代理 | `server/`（Fastify，`127.0.0.1:3000`，Node 20 兼容）、`shared/`（请求/响应类型与校验）、`.env.example` | 见 `HANDOFF.md` §13 P3 完成标准；前端只请求相对 `/api/*`，Mock 为无 Key 降级 |
+| **9** | IP 直连首次部署（无域名） | 本地 `npm run build` → 上传 `app/dist` 到 `/var/www/persist`；Nginx（`try_files` 深链 + `/api` 反代 + gzip + 长缓存）；Fastify systemd + `/etc/persist/server.env`(600) | `http://<IP>/` 可打开、`/reports` 刷新 200、`/api/health` 200；命令与配置见 `docs\部署与服务器现状.md` |
+| **10**（备案通过后） | 域名 `wpersist.top` + HTTPS | 域名解析、开 443、certbot、HTTP→HTTPS；安全加固（SSH 密钥、禁 root 密码、删 3389、fail2ban） | `https://wpersist.top` 可访问且证书有效 |
+| 后续 | P4 真实备份与恢复（含快照语义）→ P5 Capacitor Android | 见 `HANDOFF.md` §13 | 见 §13 完成标准 |
+
+> **服务器已就绪**（2026-11-03）：阿里云 ECS 2 核 2 GiB（华东1 杭州，Alibaba Cloud Linux 3.2104，包管理器 `dnf`），已装 Node.js v20.20.2 + npm 10.8.2 + Nginx 1.24.0，安全组开放 22/80；443 未开、域名未备案、机器上无任何项目代码。完整交接见 `D:\Persist\docs\部署与服务器现状.md`（公开仓库，IP 已脱敏；真实 IP 在本机 `docs\部署与服务器现状.local.md`，被 `.gitignore` 的 `*.local.md` 排除）。部署三原则：**不在服务器构建前端**（2 GiB 易 OOM，本地 build 后上传 `app/dist`）、**Nginx 必须配 SPA 深链回退 + gzip + hashed 资源长缓存**（3 Mbps 按流量计费）、**前端只写相对 `/api`**（备案后换域名零改动）。
 
 ## 7. 命令与沙箱坑（2026-11-03 实测）
 
