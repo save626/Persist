@@ -224,7 +224,7 @@ export function TimelineSheet({
   return (
     <PageSheet
       title="今日完整时间线"
-      subtitle="按记录时间排列。这里展示的是当前前端 Mock 会话中的活动。"
+      subtitle="按记录时间排列。这里展示的是当前保存在本机的活动。"
       onClose={onClose}
       className="mock-detail-sheet"
     >
@@ -430,7 +430,7 @@ export function EveningReviewSheet({
             onChange={(event) => setNote(event.target.value)}
           />
         </label>
-        <div className="surface-note"><Icon name="lock" className="icon-sm" /><span>复盘只保存在当前 Mock 会话。正式版本会先让你确认 AI 可读取哪些内容。</span></div>
+        <div className="surface-note"><Icon name="lock" className="icon-sm" /><span>复盘只保存在本机浏览器。正式版本会先让你确认 AI 可读取哪些内容。</span></div>
         <div className="surface-form-actions">
           <button className="btn quiet" type="button" onClick={onClose}>暂时不结束</button>
           <button className="btn primary" type="submit"><Icon name="check" className="icon-sm" />保存复盘</button>

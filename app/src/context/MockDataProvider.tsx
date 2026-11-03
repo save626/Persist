@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { INITIAL_MEALS } from '../data/diet'
 import { INITIAL_PROFILE } from '../data/profile'
 import { INITIAL_REPORTS } from '../data/reports'
@@ -10,6 +10,8 @@ import {
   type LongTermPlanDraft,
 } from '../lib/long-term-plan'
 import { countMockRecords } from '../lib/mock-data-transfer'
+import { PERSIST_SAVE_DEBOUNCE_MS } from '../lib/persist-state'
+import { loadPersistedState, savePersistedState } from '../lib/persist-storage'
 import type {
   EveningReviewPayload,
   FitnessSessionState,
@@ -106,6 +108,15 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState<ReportRecord[]>(INITIAL_REPORTS)
   const [snapshot, setSnapshot] = useState<MockSnapshot | null>(null)
   const [longTermPlans, setLongTermPlans] = useState<LongTermPlan[]>([])
+
+  /** 数据是否已从 IndexedDB 读完（或确认没有本地存储能力）。 */
+  const [hydrated, setHydrated] = useState(false)
+  /** 是否允许写回本地：读到「未来版本」的数据时置 false，避免旧代码覆盖新数据。 */
+  const persistEnabledRef = useRef(false)
+  /** 最近一次状态，供 pagehide 补写使用（effect 闭包里拿不到最新值）。 */
+  const latestStateRef = useRef<{ data: ImportableMockData; snapshot: MockSnapshot | null } | null>(
+    null,
+  )
 
   const updateGoal = useCallback((id: string, patch: Partial<Goal>) => {
     setGoals((current) => current.map((goal) => (goal.id === id ? { ...goal, ...patch } : goal)))
@@ -233,6 +244,94 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     waterLog,
   ])
 
+  /**
+   * 首次挂载：把上次退出前的本地数据读回来。
+   * 没有 IndexedDB（jsdom / 隐私模式）时只降级为纯内存，不让页面卡住。
+   */
+  useEffect(() => {
+    let cancelled = false
+    void loadPersistedState().then((result) => {
+      if (cancelled) return
+      if (result.status === 'loaded' && result.state) {
+        replaceMockData(result.state.data)
+        setSnapshot(result.state.snapshot)
+      }
+      persistEnabledRef.current =
+        result.status !== 'unavailable' && result.status !== 'unsupported-version'
+      if (result.status === 'unsupported-version') {
+        console.warn('[persist] 本机数据来自更新版本的 Persist，本次不写入以免覆盖')
+      }
+      setHydrated(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [replaceMockData])
+
+  /** 待持久化的切片与备份 0.2.0 的 data 完全一致：本地存储、导出文件、导入校验同构。 */
+  const persistableData = useMemo<ImportableMockData>(
+    () => ({
+      goals,
+      planItems,
+      waterLog,
+      studyRecords,
+      meals,
+      fitnessSession,
+      profile,
+      settings,
+      aiConsent,
+      eveningReview,
+      reports,
+      longTermPlans,
+    }),
+    [
+      aiConsent,
+      eveningReview,
+      fitnessSession,
+      goals,
+      longTermPlans,
+      meals,
+      planItems,
+      profile,
+      reports,
+      settings,
+      studyRecords,
+      waterLog,
+    ],
+  )
+
+  useEffect(() => {
+    latestStateRef.current = { data: persistableData, snapshot }
+  }, [persistableData, snapshot])
+
+  /** 交互后防抖写入，把连续操作合并成一次事务；严格模式重复执行也只是多写一次同样的数据。 */
+  useEffect(() => {
+    if (!hydrated || !persistEnabledRef.current) return
+    const timer = window.setTimeout(() => {
+      void savePersistedState(persistableData, snapshot)
+    }, PERSIST_SAVE_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [hydrated, persistableData, snapshot])
+
+  /** 页面隐藏 / 关闭时补写一次，避免防抖窗口内直接关页面丢数据。 */
+  useEffect(() => {
+    if (!hydrated) return
+    const flush = () => {
+      const latest = latestStateRef.current
+      if (!latest || !persistEnabledRef.current) return
+      void savePersistedState(latest.data, latest.snapshot)
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [hydrated])
+
   const waterLiters = useMemo(
     () =>
       (INITIAL_WATER_MILLILITERS +
@@ -312,6 +411,9 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       waterLog,
     ],
   )
+
+  // 读本地数据通常只要几毫秒；这期间不渲染，避免先闪一帧演示数据再被替换。
+  if (!hydrated) return null
 
   return <MockDataContext.Provider value={value}>{children}</MockDataContext.Provider>
 }

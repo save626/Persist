@@ -367,6 +367,15 @@ export function parseMockBackupJson(text: string): ImportableMockData {
     throw new Error('JSON 无法解析，请选择有效的 UTF-8 JSON 文件')
   }
 
+  return parseMockBackupValue(payload)
+}
+
+/**
+ * 校验「已经是对象」的备份负载。
+ * 文件导入（parseMockBackupJson）与 IndexedDB 本地持久化（lib/persist-state.ts）共用同一套
+ * 字段级校验，避免本地数据用另一套更宽松的规则把脏数据写回存储。
+ */
+export function parseMockBackupValue(payload: unknown): ImportableMockData {
   if (!isRecord(payload) || payload.app !== 'Persist' || !isRecord(payload.data)) {
     throw new Error('不是 Persist Mock 备份，缺少 app 或 data 数据块')
   }

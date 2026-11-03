@@ -101,7 +101,7 @@ export function SettingsPage() {
     window.setTimeout(() => {
       setSaving(false)
       setSavedAt('刚刚保存')
-      showToast('设置已保存到当前 Mock 会话')
+      showToast('设置已保存到本机')
     }, 650)
   }
 
@@ -243,9 +243,8 @@ export function SettingsPage() {
             <span className="settings-kicker">LOCAL-FIRST RECORD</span>
             <h2>记录保存在设备端，敏感密钥不进入浏览器。</h2>
             <p>
-              当前为前端
-              Mock：设置只保存在本次页面会话。正式版本将使用本地数据库，并由你的小型服务器代理
-              DeepSeek 请求。
+              当前为前端 Mock：记录已保存在本机浏览器（IndexedDB），AI 请求仍由你的小型服务器代理
+              DeepSeek。
             </p>
           </div>
         </div>
@@ -599,7 +598,7 @@ export function SettingsPage() {
       {confirmClear && (
         <ConfirmDialog
           title="清空本地 Mock 设置？"
-          description="提醒、AI 授权与导入选择会恢复为关闭状态。示例业务数据不会被删除，刷新页面后仍可恢复初始设置。"
+          description="提醒、AI 授权与导入选择会恢复为关闭状态。业务记录不会被删除，清空后的设置会保存在本机。"
           confirmLabel="确认清空"
           danger
           onClose={() => setConfirmClear(false)}

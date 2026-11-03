@@ -1834,7 +1834,7 @@ export function FitnessPage() {
                 <Icon name="plus" className="icon-sm" />
                 添加动作
               </button>
-              <span>本次训练的所有修改仅在当前 Mock 会话中保留</span>
+              <span>本次训练的所有修改会随本地数据一起保存</span>
             </div>
           </section>
 

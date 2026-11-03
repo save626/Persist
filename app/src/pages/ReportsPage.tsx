@@ -568,7 +568,7 @@ export function ReportsPage() {
       {confirmApply && (
         <ConfirmDialog
           title="把这些建议应用到今日计划？"
-          description="会新增或调整今日安排，但不会修改已经完成的历史记录。应用后会回到“今日”，当前 Mock 计划会在刷新后恢复示例数据。"
+          description="会新增或调整今日安排，但不会修改已经完成的历史记录。应用后会回到“今日”，调整后的计划会随本地数据一起保存。"
           confirmLabel="应用并查看今日"
           onClose={() => {
             setConfirmApply(false)

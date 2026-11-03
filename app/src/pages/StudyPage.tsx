@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { ConfirmDialog, PageSheet } from '../components/PageSheet'
@@ -290,7 +290,7 @@ function StudyEditor({
         {error && <p className="surface-error">{error}</p>}
         <div className="surface-note">
           <Icon name="lock" className="icon-sm" />
-          <span>Mock 版本的数据只保存在当前页面内，刷新后会恢复示例记录。</span>
+          <span>数据保存在本机浏览器（IndexedDB），清除站点数据或更换浏览器会丢失。</span>
         </div>
         <div className="surface-form-actions">
           {onDelete ? (
@@ -718,7 +718,7 @@ export function StudyPage() {
       {deleting && (
         <ConfirmDialog
           title="删除这条学习记录？"
-          description={`${categoryName(deleting.category)} · ${deleting.source} · ${deleting.duration} min。删除后只影响当前 Mock 会话。`}
+          description={`${categoryName(deleting.category)} · ${deleting.source} · ${deleting.duration} min。删除后只影响本机保存的数据。`}
           confirmLabel="删除记录"
           danger
           onClose={() => setDeleting(null)}

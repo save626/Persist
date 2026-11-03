@@ -131,7 +131,7 @@ test('valid JSON backup replaces mock data and updates the study page', async ({
 })
 
 test('JSON backup keeps long-term plans across export and re-import', async ({ page }) => {
-  // Mock 数据只存在内存里，所以跨页全程用站内链接跳转；page.goto 会整页刷新并清空状态。
+  // 数据现在会写入本机 IndexedDB；这里仍用站内链接跳转，减少整页刷新带来的额外等待。
   await page.goto('/plans')
   await page.locator('.plans-empty').getByRole('button', { name: '手工新建' }).click()
   const draft = page.getByRole('dialog', { name: '手工新建长期计划' })
@@ -156,7 +156,7 @@ test('JSON backup keeps long-term plans across export and re-import', async ({ p
   expect(backup.data.longTermPlans).toHaveLength(1)
   expect(backup.data.longTermPlans[0].title).toBe('E2E 备份保留计划')
 
-  // 刷新会清空内存里的计划；导入刚导出的 0.2.0 备份应把它恢复。
+  // 刷新后本机数据仍在；这里仍走一次导入，确认「导出的备份能原样导回本机存储」这条链路。
   await page.reload()
   await page.locator('.settings-file-input').setInputFiles({
     name: 'persist-backup-020.json',

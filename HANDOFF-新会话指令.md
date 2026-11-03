@@ -1,20 +1,20 @@
 # Persist 新会话交接指令
 
-> 生成时间：2026-11-03  
+> 生成时间：2026-11-03（步骤 6 完成后更新）  
 > 用途：把本文件全部内容作为新一轮会话的启动指令。  
 > 权威现状：同目录 `HANDOFF.md`（本文件只讲"怎么接手"，不重复也不替代它的状态结论）。
 
 ## 0. 一句话背景
 
-Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是一个**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端 Mock 应用**：8 个页面、5 项主导航、数据全在内存（刷新即重置）、AI 是本地规则式 Mock、JSON 导出导入已是备份 0.2.0（含长期计划）。没有持久化、没有真实 DeepSeek 调用、没有 Android 包；仓库已有首个 Git 提交并推送 GitHub（`main` / `bd779eb`，262 文件 37.39 MB），具备回滚基线。
+Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是一个**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端产品原型**：8 个页面、5 项主导航、业务数据全部写入本机浏览器 IndexedDB（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划）、AI 是本地规则式 Mock、JSON 导出导入已是备份 0.2.0（含长期计划）。没有真实 DeepSeek 调用、没有服务端数据库、没有 Android 包；仓库已有两个 Git 提交并推送 GitHub（`main` / `bd779eb` + `da787c4`），具备回滚基线。
 
 ## 1. 开工前必读（按顺序，不要跳）
 
-1. `D:\Persist\HANDOFF.md` —— 唯一现状权威。重点读 §0.1–0.4、§2、§3.1、§4.9、§8.5、§9.1、§10、§13、§15、§16、§19。
+1. `D:\Persist\HANDOFF.md` —— 唯一现状权威。重点读 §0.1–0.4、§2、§3.1、§4.9、§6.6（持久化）、§8.5、§9.1、§10、§13、§15、§16、§19。
 2. `D:\Persist\README.md`、`D:\Persist\app\README.md` —— 阶段、命令、页面清单、条件类名约定。
 3. `D:\Persist\docs\工程初始化与前端约定.md` —— 技术选型与前端阶段顺序。
 4. `D:\Persist\docs\Persist-项目开发规划.md` —— **目标态规划，不是现状**。它的 §4.2（16 条路由）、§4.3（分模块页面）大多未实现；冲突时以 HANDOFF 与源码为准。
-5. 源码按序：`app\src\App.tsx` → `context\MockDataProvider.tsx` → `types.ts` → `lib\chat-types.ts` → `lib\long-term-plan.ts` → `lib\plan-draft.ts` → `lib\profile-rules.ts` → `lib\mock-data-transfer.ts` → `pages\SettingsPage.tsx` → `pages\PlansPage.tsx`。
+5. 源码按序：`app\src\App.tsx` → `context\MockDataProvider.tsx` → `lib\persist-state.ts` → `lib\persist-storage.ts` → `types.ts` → `lib\chat-types.ts` → `lib\long-term-plan.ts` → `lib\plan-draft.ts` → `lib\profile-rules.ts` → `lib\mock-data-transfer.ts` → `pages\SettingsPage.tsx` → `pages\PlansPage.tsx`。
 6. 视觉对照再看 `design\home-v3-countdown.html` 与 `design\*.png`。
 
 **跳过**：`node_modules`、`dist`、`test-results`、`.chrome-headless-*`、`design\.edge-profile*`、`Water intake record\`（368 MB 旧 Electron 工具，仅作行为参考，已在 `.gitignore`）。
@@ -25,7 +25,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 - Tailwind CSS ^4.3.3，但已验收样式是完整 CSS：`app\src\styles\home-v3.css` 为主，新增放 `persist.css` / 模块 css（如 `plans.css`）。
 - 测试：Vitest ^5.0.5（单元）、Playwright ^1.64.1（desktop-chrome + mobile-chrome 两个 project）。
 - 质量：Oxlint ^1.88.0、Prettier ^3.9.10 + `prettier-plugin-tailwindcss` ^0.8.1。
-- Node v22.19.0。数据只存在于 React Context（`MockDataProvider`），刷新即重置。
+- Node v22.19.0。业务数据由 React Context（`MockDataProvider`）持有，并在状态变化后 200 ms 防抖写入浏览器 IndexedDB（`persist-app` / `mock-state` / 单记录 `persist-mock-state`）；刷新与重开浏览器从 IndexedDB 水合恢复，清站点数据才会回到初始 Mock。**没有引入 Dexie**，用的是原生 IndexedDB 封装。
 
 单棵 Provider 树：`main.tsx` → `App.tsx`（`BrowserRouter` > `UIProvider` > `MockDataProvider` > `AppShell`）。
 
@@ -38,18 +38,19 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 
 主导航固定 **5 项**：今日 / 健身 / 饮食 / 学习 / AI 报告（`components\AppShell.tsx` 的 `NAV_ITEMS`，移动端 CSS 按 5 列硬编码在 `home-v3.css`）。
 
-## 3. 现状快照（2026-11-03 复核，之后只有 Git 操作、无代码变化）
+## 3. 现状快照（2026-11-03 步骤 6 完成后复核）
 
-**已完成**：8 页面可访问 + 跨模块联动；AI 报告 4 个入口（桌面侧栏、移动底栏、今日页头部、学习页"查看分析依据"）；健身自由动作/自由运动输入；完整演示数据；AI 引导建档 → 草案 → 确认启用 → 归档/重启闭环（`/plans`）；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0，文件名带日期，导入 toast 报记录数 + 计划数）；全站弹窗统一居中；窄屏保留档案页「AI 建档」入口；视觉基线 15 状态 × 6 视口（1440 / 500 / 430 / 421×926 / 390 / 360）已由用户桌面端与移动端验收通过。
+**已完成**：8 页面可访问 + 跨模块联动；AI 报告 4 个入口（桌面侧栏、移动底栏、今日页头部、学习页"查看分析依据"）；健身自由动作/自由运动输入；完整演示数据；AI 引导建档 → 草案 → 确认启用 → 归档/重启闭环（`/plans`）；设置页 JSON 导出导入已切到备份 0.2.0（含 `longTermPlans`，兼容 0.1.0，文件名带日期，导入 toast 报记录数 + 计划数）；**本机 IndexedDB 持久化**（13 个状态切片 + 快照写单条记录，带 `schemaVersion` 迁移与未来版本只读保护，`MockDataProvider` Context 契约不变）；全站弹窗统一居中；窄屏保留档案页「AI 建档」入口；视觉基线 15 状态 × 6 视口（1440 / 500 / 430 / 421×926 / 390 / 360）已由用户桌面端与移动端验收通过。
 
-**验证数字（2026-11-03 11:4x 实测）**：`tsc` 0 错误；单元 **112 / 112**（`complete-mock-data` 5、`chat-extract` 24、`countdown` 4、`long-term-plan` 23、`mock-data-transfer` 26、`plan-draft` 19、`profile-rules` 11）；E2E **46 条 × 2 project = 92 次执行，0 跳过 / 0 失败**（46.0s）；oxlint 0 错 / 3 警（`react(set-state-in-effect)`，在 `StudyPage.tsx`、`DietPage.tsx`、`FitnessPage.tsx`，行号会漂，按规则名找）；build 通过，`dist` 产物 JS 549.09 kB / CSS 139.92 kB；`visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
+**验证数字（2026-11-03 步骤 6 后实测）**：`tsc` 0 错误；单元 **123 / 123 / 8 个文件**（`complete-mock-data` 5、`chat-extract` 24、`countdown` 4、`long-term-plan` 23、`mock-data-transfer` 26、`plan-draft` 19、`profile-rules` 11、**`persist-state` 11**）；E2E **49 条 × 2 project = 98 次执行，0 跳过 / 0 失败**（55.1s），新增 `e2e/persistence.spec.ts` 3 条；oxlint 0 错 / 3 警（`react(set-state-in-effect)`，在 `StudyPage.tsx`、`DietPage.tsx`、`FitnessPage.tsx`，行号会漂，按规则名找）；build 通过，`dist` 产物 JS 552.61 kB / CSS 139.92 kB；`visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`。
 
 **未完成**：
-1. **持久化未开始（步骤 6）** —— 首个 Git 提交已于 2026-11-03 完成并推送（`main` / `bd779eb` → `github.com/save626/Persist`），仓库现有回滚基线。
-2. 无持久化、无真实 AI、无备份恢复、无 Android。
-3. 技术债：3 条 lint 警告、既有未格式化文件、`PreviewPages.tsx:160` 遗留类名、主包超 500 kB。
-4. 窄屏仍隐藏今日页「编辑计划」与健身页「训练模板」顶部按钮（均有页内入口），如需显示只需改 `home-v3.css` 的 `:not()` 列表。
-5. 首个提交含 `design/` 全部 161 个文件（158 PNG + 3 HTML，36.36 MB），其中 `design/_snapshot-before-fixes/` 59 张旧快照（约 15.7 MB）在“待批准删除”清单内，暂留在历史中。
+1. **步骤 6 的改动尚未提交** —— 代码与文档都在工作区，等用户确认后作为第三个提交推送（前两个：`bd779eb` 初始提交、`da787c4` 步骤 5 文档同步）。
+2. 无真实 AI 服务端、无 P4 级别的备份恢复（JSON 导入不算可回滚恢复）、无 Android 包。
+3. 持久化边界：只在本机当前浏览器有效（清站点数据 / 换浏览器 / 换设备即丢）、无跨标签页同步、无「清空本机数据」UI、读盘失败只在控制台告警、导入整体替换且不可撤销。
+4. 技术债：3 条 lint 警告、既有未格式化文件、`PreviewPages.tsx` 遗留类名与过时文案（该页未接路由）、主包超 500 kB。
+5. 窄屏仍隐藏今日页「编辑计划」与健身页「训练模板」顶部按钮（均有页内入口），如需显示只需改 `home-v3.css` 的 `:not()` 列表。
+6. 提交含 `design/` 全部 161 个文件（158 PNG + 3 HTML，36.36 MB），其中 `design/_snapshot-before-fixes/` 59 张旧快照（约 15.7 MB）在“待批准删除”清单内，暂留在历史中。
 
 ## 4. 不可回退的铁律
 
@@ -80,17 +81,20 @@ stage('collect') → delta* → questions? → profilePatch?（一轮最多一�
 
 **备份格式**（`lib\mock-data-transfer.ts`）：`PERSIST_BACKUP_VERSION='0.2.0'`（L300）、`LEGACY_BACKUP_VERSION='0.1.0'`（L302）、`serializeMockBackup`（L334）、`parseMockBackupJson`（L360）、`countMockRecords`（L623）、`requireLongTermPlans`（L284）。0.2.0 才含 `longTermPlans`，导入必须兼容 0.1.0；设置页已两边接通（导出 `SettingsPage.tsx` 约 L119，导入 toast 含计划数约 L170）。
 
+**本机持久化**（`lib\persist-state.ts` / `lib\persist-storage.ts`）：数据库 `persist-app`（版本 1）、对象仓 `mock-state`、唯一记录 `id='persist-mock-state'`，记录结构 `{ id, schemaVersion:1, savedAt, backup, snapshot }`，其中 `backup` 复用上面的 0.2.0 备份格式。`MockDataProvider` 首挂载水合（完成前 `return null`）、状态变化 200 ms 防抖写整条记录、`pagehide` / `visibilitychange` 补写、`hydrated` 之前不写盘。读盘状态有 `loaded / empty / unavailable / corrupt / unsupported-version`：不可用与损坏退回纯内存且不清数据；**未来版本记录只读不覆盖**。改 `MockDataProvider` 的状态切片时，必须同步维护 `persist-state.ts` 的 `schemaVersion` 与迁移；`clearPersistedState()` 已实现但未接 UI（留给 P4）。
+
 **档案校验**（`lib\profile-rules.ts`）：`updateProfile` 本身**不做校验**，所有 UI 写入前必须 `sanitizeProfilePatch(...)`（年龄 14–100，越界丢弃并提示，绝不 throw）。
 
 ## 6. 下一步（严格按顺序，一次只做一步）
 
 | 步骤 | 任务 | 主要文件 | 验收标准 |
 |---|---|---|---|
-| ~~**3**~~ ✅ | 导出导入升 0.2.0（2026-11-03 已完成） | `pages\SettingsPage.tsx` 已改调 `serializeMockBackup()` / `parseMockBackupJson()`，导入 toast 报记录数 + 计划数；round-trip 单测与导出/导入 E2E 已加 | 已达成：导出 JSON `version:'0.2.0'` 且含 `longTermPlans`；0.1.0 与 0.2.0 都能导入；单测 112 / E2E 92 全绿 |
+| ~~**3**~~ ✅ | 导出导入升 0.2.0（2026-11-03 已完成） | `pages\SettingsPage.tsx` 已改调 `serializeMockBackup()` / `parseMockBackupJson()`，导入 toast 报记录数 + 计划数；round-trip 单测与导出/导入 E2E 已加 | 已达成：导出 JSON `version:'0.2.0'` 且含 `longTermPlans`；0.1.0 与 0.2.0 都能导入；单测与 E2E 全绿（当时 112 / 92，步骤 6 后为 123 / 98） |
 | ~~**4**~~ ✅ | 全页面视觉复核（2026-11-03 已完成并通过用户验收） | `scripts\visual-check.mjs` 已含 `/plans` 五档状态 + 6 视口（新增 421×926）；全站弹窗居中；窄屏保留档案页「AI 建档」 | 已达成：91 张截图 + 用户桌面端与移动端明确通过 |
 | ~~**5**~~ ✅ | 首个 Git 提交（2026-11-03 已完成并推送） | 删除 `$null` 垃圾文件后 `git add -A`；`.gitignore` 已排除 `Water intake record/`、`app/dist`、`test-results/` | 已达成：`main` / `bd779eb`（262 文件 37.39 MB）推送到 `github.com/save626/Persist`，远端 HEAD 与本地一致 |
-| **6**（下一步） | Dexie / IndexedDB 持久化 | 建 schema/迁移，`MockDataProvider` 改持久化实现但保留 Context 契约 | 刷新/重开不丢数据（含长期计划） |
-| 后续 | P3 Fastify + DeepSeek → P4 备份恢复 → P5 Capacitor Android | 见 `HANDOFF.md` §13 | 见 §13 完成标准 |
+| ~~**6**~~ ✅ | 本机 IndexedDB 持久化（2026-11-03 已完成，未提交） | 新增 `lib\persist-state.ts`（记录 / `schemaVersion` / 迁移）与 `lib\persist-storage.ts`（open / load / save / 降级）；`MockDataProvider` 水合 + 防抖落盘，Context 契约不变；`mock-data-transfer.ts` 抽出 `parseMockBackupValue()` 共用校验 | 已达成：刷新/重开不丢数据（含长期计划、设置、复盘、快照）；单测 123 / E2E 98 全绿；未来版本不被覆盖 |
+| **下一步** | P3 Fastify + DeepSeek 服务端代理（未开始） | 见 `HANDOFF.md` §13 P3、§9.2 | 见 §13 P3 完成标准 |
+| 后续 | P4 真实备份与恢复（含接 `clearPersistedState()` 的清空 UI）→ P5 Capacitor Android | 见 `HANDOFF.md` §13 | 见 §13 完成标准 |
 
 ## 7. 命令与沙箱坑（2026-11-03 实测）
 
@@ -100,8 +104,8 @@ npm run dev -- --port 4173        # http://127.0.0.1:4173/（与 E2E / 视觉脚
 npm run typecheck                 # tsc -b（受限沙箱可跑）
 npm run lint                      # oxlint（受限沙箱可跑）
 npx prettier --check <files>      # 只检查改动文件
-npm test                          # vitest run，112 条
-npx playwright test               # 92 次执行，webServer 自动起 4173
+npm test                          # vitest run，123 条 / 8 文件
+npx playwright test               # 98 次执行，webServer 自动起 4173
 npm run build                     # tsc -b && vite build
 npm run visual:check              # 91 张截图到 design/
 ```
@@ -117,15 +121,16 @@ npm run visual:check              # 91 张截图到 design/
 
 ```powershell
 cd D:\Persist
-git status -sb                       # ## main...origin/main
-git log --oneline                    # bd779eb chore: initial commit
+git status -sb                       # 步骤 6 改动未提交时为 ## main...origin/main + 未暂存改动
+git log --oneline                    # da787c4 步骤 5 文档同步 / bd779eb chore: initial commit
 git remote -v                        # origin git@github.com:save626/Persist.git（SSH）
 ```
 
-- 分支 `main`（由 `master` 改名），唯一提交 `bd779eb`（262 文件 / 37.39 MB），已推送且远端哈希一致；身份 `save626 / 2137153161@qq.com`。
+- 分支 `main`（由 `master` 改名），已有两个提交 `bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）与 `da787c4`（步骤 5 文档同步），均已推送且远端哈希一致；身份 `save626 / 2137153161@qq.com`。
+- **步骤 6 的改动尚未提交**（持久化代码 + 文案 + 文档），需用户确认后再提交并推送。
 - 认证已就绪：`ssh -T git@github.com` 返回 `Hi save626!`，HTTPS 侧另有 Git Credential Manager；**不需要**用户提供 Token/密码/私钥。
 - 推送前审计：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
-- 每个阶段结束提交一次（步骤 6、P3、P4、P5），禁止 `git push --force`。
+- 每个阶段结束提交一次（P3、P4、P5），禁止 `git push --force`。
 
 ## 8. 每步汇报格式（固定 8 段，中文）
 
@@ -147,9 +152,13 @@ git remote -v                        # origin git@github.com:save626/Persist.git
 3. 是否为今日页「编辑计划」、健身页「训练模板」恢复窄屏头部按钮（目前按设计隐藏，均有页内入口）。
 4. 是否补充 Windows 防火墙入站规则以放行 4173，让手机同 Wi-Fi 直接访问（需管理员）。
 5. 是否补 `.gitignore` 规则（`app/tmp-*`、`*.tmp`、`desktop.ini`、`app/dist-ssr/`、`app/.vite/`）。
+6. 是否现在提交并推送步骤 6 的改动（持久化代码 + 文案 + 文档同步，当前仍在工作区）。
+7. 是否在 P4 之前先接一个「清空本机数据」入口（`clearPersistedState()` 已实现但未接 UI）。
 
 ## 11. 需要主动披露的历史
 
 - `PlansPage.tsx` 曾因 2 参数 `WriteAllText` 被截断丢失（当时无 Git 备份），现版本是从 `dist` 产物反解后**等价重写**，已通过类型检查、构建与全量 E2E，但不是原始源码；该重写版已包含在首个提交 `bd779eb` 中，此后有历史可比对。
 - `AppShell`、`TodayPage`、饮食/健身/学习页曾因条件类名被 Prettier 压平导致状态样式失效，已用 `cn()` 与完整字符串三元修复；再动这些文件的类名要注意回归。
 - 视觉基线截图已更新到 2026-11-03（`design/`，15 状态 × 6 视口 + 快速记录 = 91 张），并经用户桌面端与移动端验收通过；更早的 2026-10-30 基线已作废。
+- 步骤 6 交付的是**浏览器本机持久化**，不是"数据安全"：清除站点数据、换浏览器、换设备、无痕模式都会丢；也没有「清空本机数据」入口。不要在交接或对外说明中把它说成服务端存储或云同步。
+- 持久化没有引入 Dexie（原计划写的是 Dexie / IndexedDB），理由是沙箱内 `npm install` 受缓存路径 EPERM 限制、当前只有单用户单记录场景；这是对原计划的主动偏离，已在 `HANDOFF.md` §13 P2 与 §6.6 记录。
