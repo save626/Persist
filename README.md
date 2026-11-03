@@ -8,7 +8,7 @@ Persist 是一款以“今日”为中心的个人长期记录工具，用于统
 
 详细现状、契约与已知问题以 `HANDOFF.md` 为准（其中 §0.4 是下一步执行计划，§6.6 是持久化说明）；一页速览见 [`docs/项目现状总览.md`](docs/项目现状总览.md)。
 
-服务器环境已就绪（2026-11-03）：阿里云 ECS 2 核 2 GiB（Alibaba Cloud Linux 3），已装 Node.js 20 + Nginx，80 端口已开放，**项目代码尚未部署**；目标架构是 Nginx 托管前端静态产物 + `/api` 反向代理到 Fastify（`127.0.0.1:3000`），域名 `wpersist.top` 待备案。部署约束（不在服务器构建前端、SPA 深链回退、gzip 与长缓存、密钥只在服务端）见 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)。
+服务器环境已就绪（2026-11-03）：阿里云 ECS 2 核 2 GiB（Alibaba Cloud Linux 3），已装 Node.js 20 + Nginx，80 端口已开放；域名 `wpersist.top` 已购买、实名认证已通过、ICP 备案已提交（阿里云初审中），**项目代码尚未部署**。服务端 P3a 已在仓库内实现（`server/`，`9138175`）：Fastify 监听 `127.0.0.1:3000`，提供 `GET /api/health` 与 SSE `POST /api/chat`（DeepSeek 流式回复 + 结构化抽取、白名单净化、按 IP 限流、超时/取消/有限重试），单测 38 条全绿；但**前端尚未接入 `/api/chat`**（界面仍标注「本地生成 · Mock 对话」），也**没有真实 DeepSeek Key 联调**，部署见步骤 9。目标架构是 Nginx 托管前端静态产物 + `/api` 反向代理到 Fastify，约束见 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)。
 
 ## 下一步（按顺序）
 
@@ -19,7 +19,7 @@ Persist 是一款以“今日”为中心的个人长期记录工具，用于统
 | 步骤 5 | 清理待删文件后建立**首个 Git 提交**并推送到 GitHub | ✅ 已完成（2026-11-03，`main` / `bd779eb` + 文档 `da787c4`） |
 | 步骤 6 | 本机持久化（原生 IndexedDB，未引入 Dexie） | ✅ 已完成（2026-11-03，`main` / `128d6a2` 已推送） |
 | 步骤 7 | 设置页「清空本机数据」入口（P3-0） | ✅ 已完成（2026-11-03，`a544a38` 已推送） |
-| 步骤 8 | Fastify + DeepSeek 服务端代理（P3） | 下一步 |
+| 步骤 8 | Fastify + DeepSeek 服务端代理（P3） | 🔄 进行中：8a 服务端已完成（`9138175`，单测 38/38）；8b 前端接入与真实 Key 联调待做 |
 | 步骤 9 | IP 直连首次部署（本地构建上传 + Nginx 深链/反代/缓存） | 待开始 |
 | 步骤 10 | 备案通过后：域名 + HTTPS + 安全加固 | 待备案 |
 | 后续 | 真实备份恢复（P4）→ Capacitor Android（P5） | 未开始 |
@@ -28,8 +28,8 @@ Persist 是一款以“今日”为中心的个人长期记录工具，用于统
 
 ```text
 app/      React + Vite Web 客户端
-server/   后续 API 代理与同步服务
-shared/   跨端共享类型和纯净业务工具
+server/   Fastify + DeepSeek 代理（P3a）：/api/health 与 SSE /api/chat
+shared/   跨端共享类型和纯净业务工具（仍为占位，类型暂在 server/src/contract.ts）
 design/   已确认的视觉原型与截图
 docs/     产品规划与工程约定
 ```
@@ -51,6 +51,18 @@ npm test               # 123 条单元测试（8 个文件）
 npx playwright test    # 50 用例 × 2 项目 = 100 次执行，0 跳过
 npm run visual:check   # 15 状态 × 6 视口 = 91 张截图到 design/
 npm run build
+```
+
+服务端（P3a，详见 [`server/README.md`](server/README.md)）：
+
+```powershell
+cd D:\Persist\server
+npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
+npm run typecheck      # 0 错
+npm test               # 38 条单元测试（6 个文件）
+npm run build          # tsc → dist/
+Copy-Item .env.example .env   # 本机联调才需要填 DEEPSEEK_API_KEY；.env 不入库
+node dist/index.js            # 默认 127.0.0.1:3000，无 Key 时 /api/chat 返回 503
 ```
 
 ## 视觉基线
