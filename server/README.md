@@ -27,7 +27,7 @@ server/
 │     ├─ deepseek.ts    DeepSeek 客户端：SSE 解析、超时、取消、有限重试
 │     ├─ prompts.ts     中文 system prompt 与档案摘要（不含敏感原文以外内容）
 │     └─ extract.ts     结构化结果净化（问题/档案增量/计划草案/warnings）
-└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat
+└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts
 ```
 
 ## API
@@ -86,7 +86,7 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"   # 本机沙箱下必须带 workspace 内缓存
 npm run typecheck    # tsc -p tsconfig.test.json（含 test）
-npm test             # vitest run，38 条
+npm test             # vitest run，41 条
 npm run build        # tsc -p tsconfig.json → dist/
 npm run format:check # prettier
 ```
@@ -98,12 +98,20 @@ $env:PORT='3101'; node dist/index.js
 curl http://127.0.0.1:3101/api/health
 ```
 
+需要真实联调时，只在**临时进程**里注入 Key、用完即杀，禁止写入任何文件：
+
+```powershell
+$env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
+# 另开一个终端：POST /api/chat，确认 HTTP 200 + SSE 事件序列，随后停进程并清环境变量
+```
+
 > 本机受限沙箱下 `vitest` 会因 Vite 的 `windowsSafeRealPathSync` 启动子进程报 `spawn EPERM`，需要一次性完整访问权限执行。
 
 ## 当前状态与 TODO
 
-- ✅ 8a（本步）服务端骨架 + DeepSeek 客户端 + 净化 + 单测 38 条，**未用真实 Key 联调**（本机没有 Key，上游返回格式未在真机上验证）。
-- ⬜ 8b 前端适配器：`ChatClient` 换成 `/api/chat`，失败/无 Key 自动回退 Mock 并如实标注来源。
+- ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（现共 41 条）。
+- ✅ 8b（`b99d3ad`）前端接入：`app/src/lib/ai-chat-client.ts` 用 `createAppChatClient({ consent })` 在真实/Mock 间切换，`probe()` 走 `/api/health`，只在首个内容事件前回退；`PlanChatSheet` / `PlansPage` 如实标注来源。**已用真实 Key 端到端联调**（`/api/chat` 200、3.5 s、127 事件）；真实调用暴露模型给出过去日期，已用「提示词注入 Asia/Shanghai 今天 + 前端日期兜底」修复并复验。
+- ⚠️ 联调用过的真实 Key 必须在上线前轮换；并发、按 IP 限流命中、Nginx 反代下的 SSE 行为需部署后复验。
 - ⬜ 8c AI 报告走服务端（现在仍是前端 Mock）。
 - ⬜ 9 部署：systemd `persist-server.service` + `/etc/persist/server.env`(600) + Nginx。
 - 结构说明：请求/响应类型暂放 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`），`shared/` 迁移**推迟**——前端已冻结，现在挪动会同时改 app 的 tsconfig/构建，收益不抵风险；P3 收尾或 P4 再统一。

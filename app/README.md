@@ -18,13 +18,14 @@ npm run build        # 生产构建
 
 - 页面路由与全局壳层放在 `src/`。
 - 已验收的 v3 视觉样式位于 `src/styles/home-v3.css`，新增共享样式放在 `src/styles/persist.css`。
-- 业务数据写入本机浏览器 IndexedDB（原生实现，无 Dexie）：`src/lib/persist-state.ts` 管记录结构与 `schemaVersion` 迁移，`src/lib/persist-storage.ts` 管 open / load / save 与降级；`MockDataProvider` 首挂载水合、200 ms 防抖落盘、`pagehide` / `visibilitychange` 补写，对外 Context 契约不变。仍未接入 DeepSeek 或服务器。
+- 业务数据写入本机浏览器 IndexedDB（原生实现，无 Dexie）：`src/lib/persist-state.ts` 管记录结构与 `schemaVersion` 迁移，`src/lib/persist-storage.ts` 管 open / load / save 与降级；`MockDataProvider` 首挂载水合、200 ms 防抖落盘、`pagehide` / `visibilitychange` 补写，对外 Context 契约不变。
+- AI 引导建档已接服务端（步骤 8b）：`src/lib/ai-chat-client.ts` 的 `createAppChatClient({ consent })` 在「档案页开启 AI 数据授权 + `/api/health` 可用」时走同源 `/api/chat`，否则用本地 Mock；SSE 增量解析，**只在首个内容事件前回退**，回退后本次会话不再重试，界面如实标注来源。开发时 `npm run dev` 的 `/api` 代理指向 `PERSIST_API_TARGET`（默认 `http://127.0.0.1:3000`），Playwright 固定指向不可达端口以免 E2E 打到真实后端。AI 报告仍是前端 Mock。
 - 改 `MockDataProvider` 的状态切片时必须同步维护持久化记录（`schemaVersion` + 迁移），否则老数据会被判为损坏或丢失；未来版本记录只读不覆盖。
 - API Key 不得进入 Web 客户端或 Android 包，后续只能通过 `server/` 代理使用。
 - 条件类名请使用 `cn()`（`src/lib/cn.ts`）或「完整字符串三元」，不要依赖条件拼接里的手写空格。历史教训：`prettier-plugin-tailwindcss`（已于 2026-11-03 移除）会把它压平成 `plan-itemdone` 这类错误类名，导致状态样式静默失效。
 - 批量格式化要单独成提交：`prettier --write` 后必须比对构建产物哈希并逐像素比对 `design/` 截图 —— Prettier 拆行会给 JSX 文本补 `{' '}` 子节点，可能挪动换行位置（`ReportsPage.tsx` 已踩过一次）。
 
-## 当前页面（2026-11-03 复核）
+## 当前页面（2026-11-04 复核）
 
 ```text
 /          今日          /fitness  健身
@@ -33,16 +34,18 @@ npm run build        # 生产构建
 /reports   AI 报告       /settings 设置
 ```
 
-主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话是本地规则式 Mock，页面标注「本地生成 · Mock 对话」。
+主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话在授权且服务端可用时调用真实 DeepSeek（标注「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock（标注「本地生成 · Mock 对话」）。
 
-测试现状（2026-11-03 步骤 6 后复跑）：`npm test` 123 条单元测试（8 个文件，新增 `src/lib/persist-state.test.ts` 11 条），`npx playwright test` 49 用例 × 2 项目 = 98 次执行（0 跳过，新增 `e2e/persistence.spec.ts` 3 条），`npm run visual:check` 15 状态 × 6 视口 = 91 张截图且全部通过（用户已在桌面端与移动端完成视觉验收）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
+测试现状（2026-11-04 步骤 8b 后复跑）：`npm test` 139 条单元测试（9 个文件，新增 `src/lib/ai-chat-client.test.ts` 13 条，`plan-draft.test.ts` 22 条），`npx playwright test` 51 用例 × 2 项目 = 102 次执行（0 跳过，新增「真实模型不可用时回退本地 Mock」用例），`npm run visual:check` 15 状态 × 6 视口 = 91 张截图且全部通过（步骤 7 新增设置页卡片与 8b 文案变化后**待用户重新验收**）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
 
 ## 待办（按顺序）
 
-1. 步骤 7（P3-0）：设置页「清空本机数据」入口——清 IndexedDB → 重置内存态 → 清 `snapshot`，保持 `hydrated`，补 1 条 E2E。
-2. P3（步骤 8）：接入 `server/` 的 Fastify 代理与 DeepSeek，前端只请求相对 `/api/*`（保留失败降级与「本地生成」标注规则）。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
+1. 步骤 8c：AI 报告走服务端（`/reports` 目前仍是前端 Mock，报告页没有 `/api` 请求）；之后是步骤 9 IP 直连部署、步骤 10 域名 + HTTPS。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
 
-已完成（2026-11-03）：
+已完成（2026-11-04）：
+
+- 步骤 8b 前端接入 AI 对话：新增 `src/lib/ai-chat-client.ts`（SSE 增量解析、健康探测、真实/Mock 组合与回退语义）与 13 条单测；`PlanChatSheet` 按授权切换客户端并如实标注来源；`PlansPage` 文案同步；`vite.config.ts` 加 `/api` 开发代理；`playwright.config.ts` 用不可达端口隔离真实后端并新增回退 E2E。同日以真实 DeepSeek Key 完成端到端联调（200 / 3.5 s / 127 个 SSE 事件），并修复模型返回过去日期的问题（提示词注入当天日期 + 前端日期兜底）。
+- 步骤 7 清空本机数据：设置页危险区第二张卡片 + 中文二次确认 + toast，`clearLocalData()` 停写回 → 掐防抖 → 删记录 → 重置内存态与快照 → 恢复写回。
 
 - 步骤 6 本机持久化：新增 `src/lib/persist-state.ts`、`src/lib/persist-storage.ts`，`MockDataProvider` 水合 + 防抖落盘，`mock-data-transfer.ts` 抽出 `parseMockBackupValue()` 共用校验；`e2e/persistence.spec.ts` 与 `persist-state.test.ts` 覆盖刷新恢复、版本迁移与损坏降级。文案同步改为「已保存在本机浏览器（IndexedDB）」。
 - Git 提交链已全部推送（`github.com/save626/Persist`，公开仓库）：起于 `bd779eb`（262 文件 37.39 MB），后续为步骤 5/6 功能与文档提交、`d4c9696` 清理、`style:` 格式化及若干 `docs:` 同步；提交前删除了仓库根目录 `$null` 与 `app/$null` 两个误建文件。
