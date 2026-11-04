@@ -179,7 +179,7 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 - ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（现共 58 条）。
 - ✅ 8b（`b99d3ad`）前端接入：`app/src/lib/ai-chat-client.ts` 用 `createAppChatClient({ consent })` 在真实/Mock 间切换，`probe()` 走 `/api/health`，只在首个内容事件前回退；`PlanChatSheet` / `PlansPage` 如实标注来源。**已用真实 Key 端到端联调**（`/api/chat` 200、3.5 s、127 事件）；真实调用暴露模型给出过去日期，已用「提示词注入 Asia/Shanghai 今天 + 前端日期兜底」修复并复验。
 - ✅ 8c（`bdd4265`，2026-11-04）报告接服务端：新增 `POST /api/report`（非流式 JSON）+ `ai/report.ts` 净化 + 报告提示词；前端 `app/src/lib/ai-report-client.ts` 先 `probeAiReport()` 探活，可用才走真实生成，不可用/失败自动回退本地 Mock 并如实标注。**已用真实 Key 验证**：完整摘要 2.7 s 返回、只授权学习时报告不出现训练/饮食字样；提示词原版允许「推算」，真实调用确实算出了「再补水约 0.5 L」这类未授权数字，已改为**禁止任何推算**并复验通过。
-- ⚠️ 联调用过的真实 Key 必须在上线前轮换；并发、按 IP 限流命中、Nginx 反代下的 SSE 与 `/api/report` 长连接超时需部署后复验。
-- ⬜ 9 部署：systemd `persist-server.service` + `/etc/persist/server.env`(600) + Nginx（`/api` 反代 + SSE `proxy_buffering off` + `proxy_read_timeout ≥60s`）。
+- ✅ 步骤 9 部署（2026-11-04）：systemd `persist-server.service`（`User=persist`、`Restart=always`）+ `/etc/persist/server.env`（`600 root:root`，新轮换的 Key 只在这里）+ Nginx `/etc/nginx/conf.d/persist.conf`（`/api` 反代 + SSE `proxy_buffering off` + `proxy_read_timeout 300s`）。IP 直连实测：`/api/health` `ai:"deepseek"`；SSE 188 事件、首包 0.118 s、末包 4.215 s 增量到达；`/api/report` 200 / 2.78 s；限流第 2 次 `429` + `Retry-After: 298`。**仅内部调试，未对外宣称上线。**
+- ⬜ 下一阶段（步骤 10，等备案号）：域名解析 + 443 + 证书；SSH 改仅密钥登录、删 3389、装 `fail2ban`。
 - ⬜ P4（步骤 12–14，设计已定稿未实施）：`src/db/*`（driver/repo/migrate）、设备令牌（`token_hash` + 恢复码）、`/api/v1/sync/{bootstrap,push,pull}`、服务端 SQL 聚合 + `ANALYSIS_SYSTEM_PROMPT` + `/api/v1/analysis/*`、报告归档/缓存/可选定时、备份 `VACUUM INTO` 与导出/删除账号。**前置是步骤 11（8d 数据历史化）**——当前只有学习记录有真实历史，训练历史是前端演示常量，服务端即使有库也分析不出趋势。见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
 - 结构说明：请求/响应类型暂放 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），`shared/` 迁移**推迟**——前端已冻结，现在挪动会同时改 app 的 tsconfig/构建，收益不抵风险；P3 收尾或 P4 再统一（P4 方案 §17 已把这一步记为技术债，建议在步骤 12 前完成）。
