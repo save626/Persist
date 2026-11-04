@@ -70,7 +70,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 | 单测 | `npm test` | **139 / 139**（9 文件：`complete-mock-data` 5、`chat-extract` 24、`countdown` 4、`long-term-plan` 23、`mock-data-transfer` 26、`plan-draft` 22、`profile-rules` 11、`persist-state` 11、`ai-chat-client` 13） |
 | E2E | `npx playwright test` | **102 次执行**（51 用例 × 2 项目），0 跳过 0 失败（52.8 s） |
 | 构建 | `npm run build` | `dist/index.html` 611 B、`assets/index-C9ZcsQCi.css` 137,643 B（gzip 23.81 kB）、`assets/index-CsKy1ArK.js` 560,361 B（gzip 166.13 kB） |
-| 视觉 | `npm run visual:check` | 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（步骤 7 新增设置页卡片后**待重新验收**；该脚本会覆盖 `design/` 基线，需用户确认后再跑） |
+| 视觉 | `npm run visual:check`（**先起无 Key 后端**，否则 `/api` 502 判失败） | 15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（2026-11-04 步骤 8b 后重跑，exit 0，77 张 png 更新并经用户验收） |
 | 服务端类型 | `npm run typecheck`（`server/`） | 0 错误 |
 | 服务端单测 | `npm test`（`server/`） | **41 / 41**（7 文件：config 4 / contract 9 / rate-limit 3 / extract 8 / deepseek 7 / chat 7 / prompts 3） |
 | 服务端冒烟 | `PORT=3101 node dist/index.js` | `GET /api/health` 200（无 Key 时 `ai: "disabled"`）；非法 `/api/chat` 400；无 Key `/api/chat` 503；真实 Key（`PORT=3102`）时 `ai: "deepseek"` 且 `/api/chat` 200 流式返回 |
@@ -165,7 +165,7 @@ npx prettier --check .            # 在 app 内全仓检查
 npm test                          # vitest run
 npx playwright test               # webServer 自动拉起 4173
 npm run build                     # tsc -b && vite build
-npm run visual:check              # 截图到 design/（需 4173 已有服务）
+npm run visual:check              # 截图到 design/（需 4173 已有服务 + 同源 /api 可达，见下）
 ```
 
 服务端（`server/`，P3 8a + 8b）：
@@ -184,6 +184,7 @@ $env:PORT='3101'; node dist/index.js   # 冒烟：GET /api/health / POST /api/ch
 
 - `npm test`、`npm run build`、`npx playwright test`、`npm run visual:check`、`git push` / `git ls-remote` 在受限文件沙箱下会失败（原生模块加载、Vite `windowsSafeRealPathSync`、Chromium `spawn EPERM`；git 启动 `ssh.exe` 报 `couldn't create signal pipe, Win32 error 5`）→ 需要一次性提权到完整访问权限再执行；`tsc -b` / `oxlint` / `prettier` / 本地 `git add|commit|status|log` 不需要。
 - Playwright 的 `webServer` 会自己拉起 4173，**不要**手动先启动；`visual:check` 需要 4173 已有服务（可用 `PERSIST_URL` 覆盖）。
+- **`visual:check` 还必须让同源 `/api` 可达**（2026-11-04 实测踩坑）：8b 之后 `/plans` 打开对话框会探测 `/api/health`，后端不在时 Vite 代理返回 502，浏览器记控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判 **exit 1**（截图像素本身没问题）。跑之前先在另一个终端 `cd server; node dist/index.js`（无 Key 也返回 200 `ai:"disabled"`，UI 显示 Mock，与基线一致），跑完再杀进程。
 - 手机真机验收需 `--host 0.0.0.0` 且 Windows 防火墙放行 4173（需管理员）；放行不了就退回 Chrome DevTools 设备模拟（421×926 / DPR 3）。
 - 写文件必须 3 参数：`[IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))`；2 参数重载会写出 24 字节垃圾 —— 本仓库已因此丢失过一次 `PlansPage.tsx`。
 - `node -e` 内联 JS 会被 PowerShell 破坏，需要脚本就写临时 `.cjs`。
@@ -231,7 +232,7 @@ git ls-remote origin refs/heads/main
 4. P4 的 SQLite 选型（`better-sqlite3` native 编译 vs 升级服务器 Node 到 22+ 用 `node:sqlite`）—— 到 P4 再定，不要在 P3 引入数据库。**已定死的部分**：用 SQLite 单文件库、**不装 MySQL/MariaDB**。
 5. 视觉基线版本化策略（`gitignore design/_current/` + 里程碑提交 `design/baseline-<phase>/`）—— 建议 P3 之后再做。
 6. 是否补 `.gitignore` 的更多条目（当前已含 `app/dist/`、`test-results/`、`playwright-report/`、`*.local`、`*.local.md`、`*.tmp`、`desktop.ini` 等）。
-7. 视觉基线是否重新生成：步骤 7 新增设置页卡片、8b 改了 `/plans` 对话文案，`npm run visual:check` 会覆盖 `design/` 现有 91 张基线，**未获批准前不要跑**。
+7. 视觉基线：**已于 2026-11-04 重跑并获用户验收通过**（91 张全绿、77 张 png 更新，已作为 `chore:` 提交入库）。后续再改 UI 需重复「先起无 Key 后端 → 跑 `visual:check` → 用户验收 → 单独提交基线」流程。
 8. 仓库里仍跟踪着两个写入测试留下的垃圾文件 `app/src/pages/_write-test*.txt`（步骤 8b 之前发现），删除需用户批准。
 
 ## 13. 需要主动披露的历史

@@ -36,7 +36,9 @@ npm run build        # 生产构建
 
 主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话在授权且服务端可用时调用真实 DeepSeek（标注「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock（标注「本地生成 · Mock 对话」）。
 
-测试现状（2026-11-04 步骤 8b 后复跑）：`npm test` 139 条单元测试（9 个文件，新增 `src/lib/ai-chat-client.test.ts` 13 条，`plan-draft.test.ts` 22 条），`npx playwright test` 51 用例 × 2 项目 = 102 次执行（0 跳过，新增「真实模型不可用时回退本地 Mock」用例），`npm run visual:check` 15 状态 × 6 视口 = 91 张截图且全部通过（步骤 7 新增设置页卡片与 8b 文案变化后**待用户重新验收**）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
+测试现状（2026-11-04 步骤 8b 后复跑）：`npm test` 139 条单元测试（9 个文件，新增 `src/lib/ai-chat-client.test.ts` 13 条，`plan-draft.test.ts` 22 条），`npx playwright test` 51 用例 × 2 项目 = 102 次执行（0 跳过，新增「真实模型不可用时回退本地 Mock」用例），`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图，全零指标通过并已由用户重新验收。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
+
+> **`visual:check` 的前置条件**：脚本只连接已在运行的 4173，**自己不启动后端**。步骤 8b 之后 `/plans` 会先探测 `/api/health`，所以跑之前要另开终端起本机后端 `cd ../server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，页面显示 Mock，与基线一致）。后端不在时 Vite 代理返回 502，浏览器把每个 `/plans` 状态记 2 条控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判失败（exit 1，截图像素本身没问题）。
 
 ## 待办（按顺序）
 

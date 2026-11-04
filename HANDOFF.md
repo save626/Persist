@@ -24,7 +24,7 @@ Persist 目前已经是一个可完整点击验收的前端高保真应用（AI 
 - 已提供一份完整演示数据，可覆盖主要 Mock 交互和跨模块分析流程。
 - AI 引导建档闭环已可用：中文自由描述 → 规则提取档案字段 → 最多两次追问 → 计划草案（周目标 / 里程碑 / 假设 / 冲突警告）→ 用户确认 → 写回档案并启用长期计划，旧计划自动归档。
 - 已接入本机持久化（步骤 6，2026-11-03）：饮水、学习记录、餐食、训练会话、档案、设置、授权、复盘、报告、快照与长期计划都会写入浏览器 IndexedDB，刷新、关闭标签页、重开浏览器后不再丢失。实现为原生 IndexedDB 封装（`lib/persist-storage.ts`）＋带 `schemaVersion` 迁移的纯函数记录层（`lib/persist-state.ts`），**没有引入 Dexie 运行时依赖**；`MockDataProvider` 的 Context 契约与 13 个状态切片完全不变。
-- 自动化验证已通过（2026-11-04 步骤 8b 后复跑）：类型检查 0 错、**139 个单元测试**（9 文件）、51 条 Playwright 用例 × 2 个项目 = **102 次执行全部通过（0 跳过）**、生产构建（`index-CsKy1ArK.js` 560.36 kB / gzip 166.13 kB，`index-C9ZcsQCi.css` 137.64 kB / gzip 23.81 kB，CSS 哈希未变说明步骤 8b 只动逻辑与 TS 未动样式）。视觉检查的最近一次全量运行是步骤 7 之前（15 状态 × 6 视口全零指标），步骤 7 新增的设置页卡片与 8b 的对话文案变化**未重跑**：`visual:check` 会覆盖 `design/` 基线截图，**待用户确认后再跑并重新验收**。完整基线见 `docs/项目现状总览.md` §3。
+- 自动化验证已通过（2026-11-04 步骤 8b 后复跑）：类型检查 0 错、**139 个单元测试**（9 文件）、51 条 Playwright 用例 × 2 个项目 = **102 次执行全部通过（0 跳过）**、生产构建（`index-CsKy1ArK.js` 560.36 kB / gzip 166.13 kB，`index-C9ZcsQCi.css` 137.64 kB / gzip 23.81 kB，CSS 哈希未变说明步骤 8b 只动逻辑与 TS 未动样式）。视觉检查已于 2026-11-04 步骤 8b 后全量重跑并全绿（15 状态 × 6 视口 = 90 张 + 快速记录 1 张，各项 0，exit 0；77 张基线 png 更新），用户桌面端与移动端**已验收通过**。**注意运行前提**：8b 之后 `/plans` 会探测 `/api/health`，`visual:check` 不自己启动后端，必须先让同源 `/api` 可达（起一个无 Key 的本机后端即可），否则 Vite 代理的 502 会让脚本按控制台错误判失败，详见 §10.5。完整基线见 `docs/项目现状总览.md` §3。
 - 步骤 8b 已接入真实 AI 对话（2026-11-04，`b99d3ad`）：新增 `app/src/lib/ai-chat-client.ts`（浏览器 fetch 流式解析 SSE、`probe()` 健康探测、首个内容事件前允许回退、回退后不重试），`PlanChatSheet` 按 `profile.aiConsent` 选择「DeepSeek 经本站代理」或「本地 Mock」，副标题与回退提示如实标注来源；Vite 开发服务器代理 `/api` → `127.0.0.1:3000`，Playwright 把 `PERSIST_API_TARGET` 指向不可达端口以保证 E2E 不触真实后端。**已用真实 DeepSeek Key 完成端到端联调**（本机临时进程，Key 只经进程环境变量传入，未写入任何文件/构建产物）。
 - 已通过用户桌面端与移动端视觉验收（2026-11-03）：八个页面与全部弹窗在 1440 / 500 / 430 / 421 / 390 / 360 六个视口下无横向溢出、弹窗统一居中，基线截图见 `design/`（15 状态 × 6 视口 + 快速记录浮层 = 91 张）。
 - Git 提交链已**全部推送**（2026-11-04）：分支 `main`，远端 `git@github.com:save626/Persist.git`（**公开仓库**）。链上按主题为：`bd779eb`（`chore: initial commit`，262 文件 37.39 MB）→ 步骤 5/6 的文档与功能提交（`da787c4` / `128d6a2` / `e3e9730`）→ `d4c9696`（清理死代码与历史制品）→ `style:`（移除 `prettier-plugin-tailwindcss` 并格式化）→ `a544a38`（步骤 7 清空入口）→ `9138175`（步骤 8a 服务端骨架）→ `b99d3ad`（步骤 8b 前端接入与真实 Key 联调）→ 其后多次 `docs:` 同步。每次推送后都核对远端 `refs/heads/main` 与本地 HEAD 一致，当前工作区干净（`## main...origin/main`）。仓库根目录误建的 `$null` 与 `app/$null` 两个垃圾文件已在首次提交前删除。
@@ -1028,7 +1028,7 @@ D:\Persist\app\src\lib\mock-data-transfer.ts
 | Lint | `npm run lint` | 0 错误，3 条既有 `react(set-state-in-effect)` 警告（`StudyPage.tsx` / `DietPage.tsx` / `FitnessPage.tsx`，2026-11-04 步骤 8b 后复跑） |
 | 格式检查 | `npx prettier --check src e2e`（在 `app` 内执行） | 通过：`All matched files use Prettier code style!`（2026-11-04 步骤 8b 后复跑，含 vite/playwright 配置） |
 | 生产构建 | `npm run build` | 通过（`index-CsKy1ArK.js` 560.36 kB / gzip 166.13 kB，`index-C9ZcsQCi.css` 137.64 kB / gzip 23.81 kB，2026-11-04 步骤 8b 后复跑；**CSS 哈希未变**说明 8b 只动逻辑与 TS，未改样式） |
-| 视觉检查 | `npm run visual:check` | 最近全量通过为步骤 7 之前：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张，各项 0；步骤 7 新增卡片与 8b 对话文案变化后**未重跑**，脚本会覆盖 `design/` 基线，**待用户确认后再跑并重新验收** |
+| 视觉检查 | `npm run visual:check`（**前提：同源 `/api` 可达**，先起无 Key 后端，否则 502 会判 `consoleErrors > 0`） | 2026-11-04 步骤 8b 后复跑全绿：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（exit 0），77 张 png 更新并经用户双端验收通过后入库 |
 | 服务端类型/单测 | `npm run typecheck` + `npm test`（`server/`） | 0 错；**41/41**（7 个文件：config / contract / rate-limit / extract / deepseek / chat / prompts），Node 20 兼容 |
 | 服务端冒烟 | `node dist/index.js` + `curl` | 无 Key：`/api/health` 200（`ai: "disabled"`）、`/api/chat` 503；真实 Key（本机临时进程，PORT=3102）：`/api/health` 200（`ai: "deepseek"`）、`POST /api/chat` 200 流式返回 127～162 个事件 |
 
@@ -1105,6 +1105,12 @@ app\src\pages\FitnessPage.tsx:1373
 
 ### 10.5 视觉检查细节
 
+> **运行前提（2026-11-04 踩过的坑，必须遵守）**：步骤 8b 之后 `/plans` 打开 AI 对话框时会先探测 `/api/health`。`visual:check` 只连接已有 dev server、**自己不启动后端**，所以跑之前必须让同源 `/api` 可达，二选一：
+> 1. 先起本机服务端（无 Key 即可）：`cd server; node dist/index.js` → 探针返回 200 `ai:"disabled"`，对话如实显示「本地生成 · Mock 对话」，与基线一致；
+> 2. 或用 `PERSIST_API_TARGET` 把 dev server 的 `/api` 代理指到任意返回 200 的服务。
+>
+> 若 `/api` 无人应答，Vite 代理会回 `502 Bad Gateway`，浏览器把每个受影响的 `/plans` 状态记成 2 条控制台错误 ⇒ `consoleErrors > 0`，脚本以 **exit code 1** 判失败（截图像素其实是对的，但脚本按「控制台零错误」的标准判不通过）。这不是 UI 回归，看到 `502` 请先起后端再跑。
+
 脚本：
 
 ```text
@@ -1137,7 +1143,7 @@ D:\Persist\design\
 
 15 个状态 × 6 个视口 = 90 张主截图，另加一张 `desktop-1440-quick-record.png` 供快速记录浮层人工检查，共 91 张。弹窗类状态只截视口尺寸（不整页），否则居中弹窗在长图里会显得偏上。
 
-最后一次完整视觉检查时间为 **2026-11-03 11:4x**（`states 15 / screenshots 90 / overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`），随后由用户在桌面端与移动端（Chrome DevTools 421×926 设备模拟）明确验收通过，前端视觉范围就此冻结。步骤 6（持久化 + 文案改口）完成后于 **2026-11-03 14:00** 复跑同一脚本，指标仍为 `states 15 / screenshots 90 / overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（另加快速记录 1 张，共 91 张），视觉基线未因持久化改变。全站弹窗已统一居中（`surface.css` + `home-v3.css` 的 `.backdrop` / `.sheet` 改为 `align-items: center`，窄屏 sheet 用 `width: min(100%, 580px)` + `max-height: calc(100dvh - 36px)` + 内部滚动）。
+最后一次完整视觉检查时间为 **2026-11-04 10:0x**（步骤 7 卡片与 8b 对话文案之后，先按上文前提起了无 Key 后端）：`states 15 / screenshots 90 / overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true / failures 0`（另加快速记录 1 张，共 91 张，exit 0）。`design/` 中 **77 张 png 更新（14.4 MB）**，已在用户桌面端与移动端验收通过后作为 `chore:` 提交入库；未变的 16 张里 `/profile`、`/reports` 六视口像素级一致（8b 未碰这两页），其余是历史遗留图。变化构成：今日页倒计时与饮食/健身/学习页的「今天」类内容随日期自然漂移（每次重跑都会变，不是回归）+ 步骤 7 设置页危险区卡片 + 8b `/plans` 对话副标题与侧栏徽标。上一次完整检查为 **2026-11-03 14:00**（步骤 6 后，指标同为全零，视觉基线未因持久化改变）。全站弹窗已统一居中（`surface.css` + `home-v3.css` 的 `.backdrop` / `.sheet` 改为 `align-items: center`，窄屏 sheet 用 `width: min(100%, 580px)` + `max-height: calc(100dvh - 36px)` + 内部滚动）。
 
 ---
 
@@ -1193,6 +1199,8 @@ npx playwright test
 cd D:\Persist\app
 npm run visual:check
 ```
+
+> **前置条件（2026-11-04 起）**：8b 之后 `/plans` 会探测 `/api/health`，所以跑之前先让同源 `/api` 可达——最省事的做法是另开一个终端起本机后端：`cd D:\Persist\server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，UI 显示 Mock，与基线一致）。后端不在时 Vite 代理回 502，脚本会因控制台错误判失败（exit 1），详见 §10.5。
 
 如果只启动了 5173，可指定：
 
@@ -1426,7 +1434,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - ✅ 清空后界面立刻回到初始 Mock（E2E 断言提醒开关回勾、快照区「尚未生成快照」）。
 - ✅ 刷新不再复现旧数据（E2E 断言 1.2 L 且不含 1.5 L；若防抖把旧数据写回，此断言会失败）。
 - ✅ 未破坏持久化主路径：原 3 条刷新用例不变且全绿，E2E 总数 100 次执行 0 跳过 0 失败。
-- ⚠️ 视觉基线未重跑：新卡片是新 UI，`npm run visual:check` 会覆盖 `design/` 基线截图，需用户确认后再跑并重新验收设置页。
+- ✅ 视觉基线已于 2026-11-04 重跑（步骤 7 卡片 + 8b 文案之后）：91 张全绿、77 张 png 更新，用户双端验收通过（当时错过的这条在 8b 收尾时补齐，详见 §10.5）。
 
 ### P3：服务端 AI 代理
 
@@ -1605,7 +1613,7 @@ P1（AI 引导建档 + 导出导入 0.2.0 + 全页面视觉复核）**已全部�
 - 未做跨日期流程的自动化（数据不按日分区，`waterLog` 等日期字段自然累积）。
 - 页面内弹层较多，未来若要 deep link 或恢复操作状态，需要补 URL 状态设计（目前只有 `/plans?onboard=1`）。
 - ~~`PreviewPages.tsx` 是未接入当前路由的预览页面~~：已于 2026-11-03 清理（全 `app/src` 零引用，属死代码；同时删除 `persist.css` 中仅供它使用的 `.preview-*` 样式 173 行）。Git 历史可随时找回。
-- `design/` 现状（2026-11-03 清理后）：94 个文件（93 张 PNG + `home-v3-countdown.html`，约 18.7 MB），其中 91 张是 `visual:check` 现行基线（15 状态 × 6 视口，+1 张快速记录）、2 张是 v3 首页设计基线对照图。本次清理删除了 `design/_snapshot-before-fixes/` 59 张旧快照（16.5 MB）、v1/v2 遗留原型 2 HTML + 6 PNG，以及未入库的 `design/.edge-profile*/`（13.7 MB）；**注意 `.git` 体积不会因此变小**（历史里仍有），要真正瘦身需重写历史，已推送的仓库不建议做。
+- `design/` 现状（2026-11-04 重跑基线后）：94 个文件（93 张 PNG + `home-v3-countdown.html`，约 18.8 MB），其中 91 张是 `visual:check` 现行基线（15 状态 × 6 视口，+1 张快速记录）、2 张是 v3 首页设计基线对照图。基线每次重跑都会更新 77 张左右（日期类内容天然漂移），单次提交约 14 MB 二进制，属正常但会推高仓库体积（`.git` 里仍保留历史版本，**注意**：只更新文件不会让 `.git` 变小）。此前 2026-11-03 清理删除了 `design/_snapshot-before-fixes/` 59 张旧快照（16.5 MB）、v1/v2 遗留原型 2 HTML + 6 PNG，以及未入库的 `design/.edge-profile*/`（13.7 MB）；要真正瘦身需重写历史，已推送的仓库不建议做。
 - 尚未添加 `.gitattributes`：Windows 下 `core.autocrlf=true` 时提交时提示 “LF will be replaced by CRLF”，仓库内存 LF、检出转 CRLF，不影响构建与测试。
 - ~~15 个既有文件未通过 `prettier --check`~~ ✅ 已于 2026-11-03 解决：16 个漂移文件 + `ReportsPage.tsx` + `.prettierrc.json`/`package.json` 一次格式化，`prettier --check .` 全仓通过。**注意**：Prettier 拆行时会给 JSX 文本补 `{' '}` 子节点，`ReportsPage.tsx` 因此出现移动端换行位置变化（4 张截图 0.02%～0.04% 像素差），已改为显式字符串子节点还原，产物哈希与格式化前完全一致（见 §18 第 43 条）。
 
