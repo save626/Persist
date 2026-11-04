@@ -918,7 +918,7 @@ AI 偏好：
 - DeepSeek API 代理。（**现状：已实现 `/api/chat`（SSE）与 `/api/report`（JSON）**）
 - 请求校验、限流、日志脱敏。（**现状：已实现，按 IP 限流 20 次/300 s，日志 redaction**）
 - Docker Compose 部署。（**现状：不采用，直接 systemd + Nginx，见 `docs/部署与服务器现状.md`**）
-- Caddy 或 Nginx 提供 HTTPS。（**现状：Nginx，HTTPS 待备案后步骤 10**）
+- Caddy 或 Nginx 提供 HTTPS。（**现状：Nginx，HTTPS 等备案号下发后步骤 10**）
 
 ### 7.2 前端分层
 

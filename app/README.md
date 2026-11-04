@@ -43,7 +43,7 @@ npm run build        # 生产构建
 
 ## 待办（按顺序）
 
-1. 步骤 9：IP 直连首次部署（本地 build 上传 `app/dist` + Nginx 深链/反代/gzip + systemd；`/api/report` 需 `proxy_read_timeout ≥60s`，SSE 需 `proxy_buffering off`），无前置（`/reports` 基线已验收）；步骤 10 备案通过后域名 + HTTPS。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
+1. 步骤 9：IP 直连首次部署（本地 build 上传 `app/dist` + Nginx 深链/反代/gzip + systemd；`/api/report` 需 `proxy_read_timeout ≥60s`，SSE 需 `proxy_buffering off`），无前置（`/reports` 基线已验收）；步骤 10 等备案号下发后做域名 + HTTPS（备案进度：阿里云初审 ✅ 2026-11-04，2026-11-05 提交管局）。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
 2. 步骤 11–14（P4）：先做 8d 数据历史化（训练真实历史、饮食/饮水/计划按日台账、`schemaVersion` 1→2、备份 0.3.0），再做设备令牌 + 增量同步、服务端聚合 + AI 综合分析、备份/恢复/导出/删除；前端侧改动集中在 `types.ts`、`persist-state.ts` 迁移、`FitnessPage`/`DietPage`/`HomePage` 历史读取与设置页同步区块。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §6–§7。
 
 已完成（2026-11-04）：
