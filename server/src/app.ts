@@ -4,6 +4,7 @@ import { errorBody } from './contract.js'
 import { createRateLimiter } from './rate-limit.js'
 import { registerChatRoute } from './routes/chat.js'
 import { registerHealthRoute } from './routes/health.js'
+import { registerReportRoute } from './routes/report.js'
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify'
 
 /**
@@ -48,6 +49,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   registerHealthRoute(app, { config: options.config })
   registerChatRoute(app, { config: options.config, ai, limiter })
+  registerReportRoute(app, { config: options.config, ai, limiter })
 
   return app
 }

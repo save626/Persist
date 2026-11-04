@@ -174,6 +174,8 @@ export interface ReportRecord {
   conclusions: string[]
   actions: string[]
   evidence: string[]
+  /** 这份报告的来源：经服务端调用 DeepSeek，或本地 Mock 规则生成；旧数据没有该字段。 */
+  origin?: 'ai' | 'mock'
 }
 
 export type PlanCadence = 'weekly' | 'cycle'

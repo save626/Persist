@@ -32,6 +32,11 @@ function localDateValue() {
 test('generated daily brief enters history and applies its plan suggestion', async ({ page }) => {
   await page.goto('/reports')
 
+  // E2E 环境没有后端（PERSIST_API_TARGET 指向不可达端口），健康检查必然失败，
+  // 页面必须如实退回本地 Mock，而不是假装调用过 DeepSeek。
+  await expect(page.locator('.reports-mock-badge')).toContainText('本地生成 · Mock 报告')
+  await expect(page.locator('.reports-service')).toContainText('本地 Mock 模式')
+
   await expect(page.locator('.reports-history-count')).toHaveText('4 份')
   await page.getByRole('button', { name: '生成今日简报', exact: true }).click()
   await expect(page.getByText('今日简报已生成')).toBeVisible()
@@ -40,6 +45,7 @@ test('generated daily brief enters history and applies its plan suggestion', asy
   await page.getByRole('button', { name: '查看简报', exact: true }).click()
   const detail = page.getByRole('dialog', { name: '先把训练安排好，再收住晚间学习' })
   await expect(detail).toBeVisible()
+  await expect(detail.locator('.surface-note')).toContainText('本地 Mock 规则生成，未调用真实模型')
   await detail.getByRole('button', { name: '应用建议' }).click()
 
   await expect(page.getByRole('alertdialog', { name: '把这些建议应用到今日计划？' })).toBeVisible()

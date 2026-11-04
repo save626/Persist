@@ -1,4 +1,4 @@
-﻿/* Reports: synthesis, generation states, history and evidence. */
+/* Reports: synthesis, generation states, history and evidence. */
 .reports-head {
   align-items: flex-start;
 }
@@ -103,6 +103,10 @@
   color: var(--muted);
   font-size: 10px;
   line-height: 1.55;
+}
+
+.reports-generation-copy .reports-fallback-note {
+  color: #8b5651;
 }
 
 .reports-generation-actions {

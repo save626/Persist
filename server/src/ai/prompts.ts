@@ -1,5 +1,5 @@
 import type { ChatMessage } from './deepseek.js'
-import type { ChatRequest, ProfileData } from '../contract.js'
+import type { ChatRequest, ProfileData, ReportRequest } from '../contract.js'
 
 /**
  * 提示词与提示词上下文构建。
@@ -142,6 +142,106 @@ export function buildExtractionMessages(request: ChatRequest): ChatMessage[] {
   ].join('\n')
   return [
     { role: 'system', content: buildExtractionSystemPrompt() },
+    { role: 'user', content: userContent },
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// AI 报告（8c）
+//
+// 报告只让模型写「文字结论」：数字、指标与引用依据由前端按本地记录确定性生成。
+// 因此提示词只给已授权的摘要，并反复强调不得编造未给出的数字。
+// ---------------------------------------------------------------------------
+
+export const REPORT_SYSTEM_PROMPT = `你是「Persist」App 的复盘助手，用简体中文写一份基于本地记录的简报。
+职责：把训练、饮食、学习与个人档案的摘要整理成「今天发生了什么、接下来做什么」，语气克制、具体、可执行。
+
+硬性规则：
+1. 只能使用用户数据摘要里直接出现的数字与事实；不得编造，也不得自行做数值推算——包括由摘要数字相减、相加、取平均或按比例算出的数字。要表达缺口时只说「按目标补齐」「把未完成的组数补齐」，不写具体差额。
+2. 摘要里没有出现的来源，视为用户未授权：不要提及，也不要推测。
+3. 不评价记忆力、意志力或人品；不做医疗诊断，不承诺效果。涉及伤病、用药、极端节食时，写清建议就医或咨询专业人士。
+4. 不输出 Markdown 表格、代码块、标题符号或列表符号；只输出一个 JSON 对象。
+5. 不输出真实姓名、联系方式、身份证号等隐私，也不要要求用户提供。
+6. 只输出下面列出的字段，不额外输出 metric、evidence、date 等字段。
+
+输出 JSON 形状：
+{
+  "title": "……",
+  "status": "……",
+  "summary": "……",
+  "conclusions": ["……", "……"],
+  "actions": ["……", "……"],
+  "warnings": []
+}
+
+字段要求：
+- title：8–20 字，概括今天最值得守住的一件事，不带日期。
+- status：4–8 字，如「节奏稳定」「先补饮水」「待推进」。
+- summary：120–220 字，一段话，先说事实再说判断，不要分点。
+- conclusions：2–3 条，每条 10–60 字，只写能从摘要里看出来的事实与趋势。
+- actions：2–3 条，每条 10–60 字，必须具体到时间、动作或已有记录节点；其中的数量只能引用摘要里出现的数字，没有可引用数字时不要编造，可写「按目标补齐」这类表述；不要写「保持良好习惯」这类空话。
+- warnings：0–2 条，每条 10–60 字，只写摘要里真实存在的风险；没有风险就给空数组。`
+
+/** 把摘要渲染成紧凑文本：只列已授权来源，避免模型把缺失数据当成「零」。 */
+export function reportDigestSummary(request: ReportRequest): string {
+  const lines: string[] = []
+  const { fitness, study, diet, profile } = request.digest
+
+  if (fitness) {
+    lines.push('训练记录：')
+    lines.push(`- 今日是否已有训练会话：${fitness.hasSession ? '是' : '否'}`)
+    lines.push(
+      `- 动作 ${fitness.exerciseCount} 个；完成 ${fitness.doneSets} / ${fitness.totalSets} 组`,
+    )
+    const extras: string[] = []
+    if (fitness.strengthVolumeKg > 0) extras.push(`力量容量 ${fitness.strengthVolumeKg} kg`)
+    if (fitness.durationMinutes > 0) extras.push(`累计时长 ${fitness.durationMinutes} 分钟`)
+    if (fitness.distanceKm > 0) extras.push(`距离 ${fitness.distanceKm} km`)
+    if (extras.length > 0) lines.push(`- ${extras.join('；')}`)
+    if (fitness.exerciseNames.length > 0) {
+      lines.push(`- 动作名称：${fitness.exerciseNames.join('、')}`)
+    }
+  }
+
+  if (study) {
+    lines.push('学习记录：')
+    lines.push(
+      `- 共 ${study.recordCount} 条（英语 ${study.englishCount} 条、高数 ${study.mathCount} 条），累计 ${study.totalMinutes} 分钟`,
+    )
+  }
+
+  if (diet) {
+    lines.push('饮食与饮水：')
+    lines.push(`- 有食物的餐次 ${diet.mealCount} 个，食物条目 ${diet.foodEntryCount} 个`)
+    lines.push(`- 饮水 ${diet.waterLiters.toFixed(2)} L（${diet.waterEvents} 个记录节点）`)
+  }
+
+  if (profile) {
+    lines.push('个人档案（用户已填写，可直接引用）：')
+    lines.push(profileSummary(profile))
+  }
+
+  if (lines.length === 0) return '（没有可引用的数据）'
+  return lines.join('\n')
+}
+
+export function buildReportMessages(
+  request: ReportRequest,
+  today: string = todayInShanghai(),
+): ChatMessage[] {
+  const rangeLabel =
+    request.rangeDays === 7 ? '近 7 天' : request.rangeDays === 30 ? '近 30 天' : '近 90 天'
+  const userContent = [
+    `今天是 ${today}（Asia/Shanghai），统计区间为${rangeLabel}。`,
+    `报告类型：${request.type}。`,
+    '',
+    '以下是用户已授权的数据摘要（未列出的来源视为未授权，不要提及）：',
+    reportDigestSummary(request),
+    '',
+    '请输出 JSON。',
+  ].join('\n')
+  return [
+    { role: 'system', content: REPORT_SYSTEM_PROMPT },
     { role: 'user', content: userContent },
   ]
 }

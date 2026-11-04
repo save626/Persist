@@ -1,16 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMemo } from 'react'
 import { Icon } from '../components/Icon'
 import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
 import { calculateProfileCompleteness, countProfileFields } from '../data/profile'
 import { formatTrainingSummary, summarizeFitness } from '../lib/fitness'
+import {
+  AI_REPORT_LABEL,
+  MOCK_REPORT_LABEL,
+  REPORT_FALLBACK_NOTE,
+  ReportContractError,
+  ReportUnavailableError,
+  probeAiReport,
+  requestAiReport,
+} from '../lib/ai-report-client'
+import type { ReportContent, ReportDigest, ReportRangeDays } from '../lib/report-types'
 import type { DataSource, PlanItem, ReportRecord } from '../types'
 
 type GenerationState = 'idle' | 'loading' | 'success' | 'error'
 type RangeKey = '7' | '30' | '90'
+/** 当前生成引擎：正在检测 / 真实模型（经服务端代理）/ 本地 Mock。 */
+type ReportSource = 'probing' | 'ai' | 'mock'
 
 function updatePlanItem(items: PlanItem[], id: string, patch: Partial<PlanItem>) {
   return items.map((item) => (item.id === id && !item.done ? { ...item, ...patch } : item))
@@ -123,6 +134,27 @@ function defaultUpdatedAt() {
   }).format(new Date())
 }
 
+type DailyDraft = Omit<ReportRecord, 'id' | 'date' | 'updatedAt' | 'origin'>
+
+/**
+ * 合成一条日报记录：数字、指标与依据始终来自本地规则（可复算），
+ * 只有标题、状态、摘要、结论与建议允许由模型撰写（content 为空即本地 Mock）。
+ */
+function buildDailyReport(draft: DailyDraft, content?: ReportContent): ReportRecord {
+  return {
+    ...draft,
+    title: content?.title ?? draft.title,
+    status: content?.status ?? draft.status,
+    summary: content?.summary ?? draft.summary,
+    conclusions: content?.conclusions ?? draft.conclusions,
+    actions: content?.actions ?? draft.actions,
+    origin: content ? 'ai' : 'mock',
+    id: `report-daily-${Date.now()}`,
+    date: formatReportDate(new Date()),
+    updatedAt: defaultUpdatedAt(),
+  }
+}
+
 function ReportDetailSheet({
   report,
   onClose,
@@ -185,7 +217,13 @@ function ReportDetailSheet({
       </div>
       <div className="surface-note">
         <Icon name="lock" className="icon-sm" />
-        <span>当前内容来自前端 Mock。未来接入服务端后，只发送生成报告所需的摘要数据。</span>
+        <span>
+          {report.origin === 'ai'
+            ? '本报告由 DeepSeek 生成 · 经本站服务端代理；请求只包含你在设置中授权的摘要，API Key 不会出现在浏览器。'
+            : report.origin === 'mock'
+              ? '本报告由本地 Mock 规则生成，未调用真实模型。'
+              : '这条报告来自本地示例数据，用于展示报告结构。'}
+        </span>
       </div>
       <div className="surface-form-actions">
         <button className="btn secondary" type="button" onClick={onClose}>
@@ -217,7 +255,11 @@ export function ReportsPage() {
   const navigate = useNavigate()
   const [range, setRange] = useState<RangeKey>('7')
   const [generation, setGeneration] = useState<GenerationState>('idle')
-  const [forceFailure, setForceFailure] = useState(false)
+  const [probeState, setProbeState] = useState<ReportSource>('probing')
+  // 没有授权时一律视为本地 Mock，不等待、也不发起健康检查。
+  const reportSource: ReportSource = aiConsent ? probeState : 'mock'
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null)
+  const [generationError, setGenerationError] = useState<string | null>(null)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [selectedReport, setSelectedReport] = useState<ReportRecord | null>(null)
@@ -416,32 +458,133 @@ export function ReportsPage() {
     waterLiters,
   ])
 
-  useEffect(() => {
-    if (generation !== 'loading') return
-    const timer = window.setTimeout(() => {
-      if (forceFailure) {
-        setGeneration('error')
-        return
-      }
-      const next: ReportRecord = {
-        ...todayBriefDraft,
-        id: `report-daily-${Date.now()}`,
-        date: formatReportDate(new Date()),
-        updatedAt: defaultUpdatedAt(),
-      }
-      setReports((current) => [next, ...current])
-      setGeneratedReport(next)
-      setGeneration('success')
-    }, 1_250)
-    return () => window.clearTimeout(timer)
-  }, [forceFailure, generation, setReports, todayBriefDraft])
+  /**
+   * 发给服务端的最小化摘要：只包含「已授权 + 来源开关打开」的模块，
+   * 其余模块保持 null，绝不用 0 顶替（否则模型会把未授权误当成「没有记录」）。
+   */
+  const reportDigest = useMemo<ReportDigest>(() => {
+    const digest: ReportDigest = { fitness: null, study: null, diet: null, profile: null }
 
-  const generate = (fail = false) => {
-    setForceFailure(fail)
+    if (fitnessSourceEnabled) {
+      const sessionExercises = fitnessSession?.exercises ?? []
+      const names = Array.from(new Set(sessionExercises.map((exercise) => exercise.name.trim())))
+        .filter((name) => name.length > 0)
+        .slice(0, 6)
+      digest.fitness = {
+        hasSession: Boolean(fitnessSession),
+        exerciseCount: sessionExercises.length,
+        doneSets,
+        totalSets: fitnessSummary.totalSets,
+        strengthVolumeKg: fitnessSummary.strengthVolume,
+        durationMinutes: fitnessSummary.durationMinutes,
+        distanceKm: fitnessSummary.distanceKm,
+        exerciseNames: names,
+      }
+    }
+
+    if (studySourceEnabled) {
+      digest.study = {
+        recordCount: studyCount,
+        englishCount,
+        mathCount,
+        totalMinutes: studyMinutes,
+      }
+    }
+
+    if (dietSourceEnabled) {
+      digest.diet = {
+        mealCount,
+        foodEntryCount,
+        waterLiters,
+        waterEvents: waterCount,
+      }
+    }
+
+    if (profileSourceEnabled) digest.profile = { ...profile, aiConsent: true }
+
+    return digest
+  }, [
+    dietSourceEnabled,
+    doneSets,
+    englishCount,
+    fitnessSession,
+    fitnessSourceEnabled,
+    fitnessSummary.distanceKm,
+    fitnessSummary.durationMinutes,
+    fitnessSummary.strengthVolume,
+    fitnessSummary.totalSets,
+    foodEntryCount,
+    mathCount,
+    mealCount,
+    profile,
+    profileSourceEnabled,
+    studyCount,
+    studyMinutes,
+    studySourceEnabled,
+    waterCount,
+    waterLiters,
+  ])
+
+  // 打开页面时检测服务端是否真的能调用模型：只有明确可用才展示 DeepSeek 标签。
+  useEffect(() => {
+    if (!aiConsent) return
+    let active = true
+    void probeAiReport().then((available) => {
+      if (active) setProbeState(available ? 'ai' : 'mock')
+    })
+    return () => {
+      active = false
+    }
+  }, [aiConsent])
+
+  const canUseAi =
+    aiConsent && reportSource === 'ai' && (referencedRecordTotal > 0 || profileSourceEnabled)
+
+  const finishGeneration = (content?: ReportContent) => {
+    const next = buildDailyReport(todayBriefDraft, content)
+    setReports((current) => [next, ...current])
+    setGeneratedReport(next)
+    setGeneration('success')
+  }
+
+  const generate = async () => {
+    if (generation === 'loading') return
     setGeneration('loading')
+    setGenerationError(null)
+    setFallbackNote(null)
     setGeneratedReport(null)
     setSummaryOpen(false)
     setEvidenceOpen(false)
+
+    if (!canUseAi) {
+      // 本地 Mock：规则生成是同步的，留一点整理时间让状态变化可见。
+      await new Promise((resolve) => window.setTimeout(resolve, 600))
+      finishGeneration()
+      return
+    }
+
+    try {
+      const content = await requestAiReport({
+        type: '今日简报',
+        rangeDays: Number(range) as ReportRangeDays,
+        digest: reportDigest,
+      })
+      finishGeneration(content)
+    } catch (error) {
+      if (error instanceof ReportUnavailableError) {
+        // 服务端暂时不可用：回退本地 Mock，并如实说明这一次不是真实模型生成的。
+        setProbeState('mock')
+        setFallbackNote(`${REPORT_FALLBACK_NOTE}（${error.message}）`)
+        finishGeneration()
+        return
+      }
+      if (error instanceof ReportContractError) {
+        setGenerationError(`${error.message}记录本身没有受影响，可以直接重试。`)
+        setGeneration('error')
+        return
+      }
+      throw error
+    }
   }
 
   const requestApply = (report: ReportRecord) => {
@@ -461,7 +604,7 @@ export function ReportsPage() {
 
   const openReportType = (title: string) => {
     if (title === '今日简报') {
-      generate(false)
+      void generate()
       return
     }
     const report = reports.find((item) => item.type === title)
@@ -484,13 +627,19 @@ export function ReportsPage() {
         </div>
         <div className="head-actions reports-head-actions">
           <span className="reports-mock-badge">
-            <Icon name="lock" className="icon-sm" />
-            前端 Mock · 未调用 DeepSeek
+            <Icon name={reportSource === 'ai' ? 'spark' : 'lock'} className="icon-sm" />
+            {reportSource === 'probing'
+              ? '正在检测模型服务…'
+              : reportSource === 'ai'
+                ? AI_REPORT_LABEL
+                : MOCK_REPORT_LABEL}
           </span>
           <button
             className="btn primary"
             type="button"
-            onClick={() => generate(false)}
+            onClick={() => {
+              void generate()
+            }}
             disabled={generation === 'loading'}
           >
             <Icon name="spark" className="icon-sm" />
@@ -519,35 +668,42 @@ export function ReportsPage() {
                 {localRecordTotal}
                 {' 条本地记录，本次可引用 '}
                 {referencedRecordTotal}
-                {' 条，可以生成一份约 200 字的简报。'}
+                {' 条。'}
+                {canUseAi
+                  ? '将由本站服务端调用 DeepSeek 生成一份约 200 字的简报。'
+                  : '将用本地 Mock 规则生成一份约 200 字的简报。'}
               </p>
             </>
           )}
           {generation === 'loading' && (
             <>
               <h2>正在整理今天的记录</h2>
-              <p>模拟读取训练、饮食、学习与个人档案摘要，通常需要几秒。</p>
+              <p>
+                {canUseAi
+                  ? '正在经本站服务端读取授权摘要并请求模型，通常需要几秒到十几秒。'
+                  : '正在本地按规则整理训练、饮食、学习与个人档案摘要。'}
+              </p>
             </>
           )}
           {generation === 'success' && (
             <>
               <h2>今日简报已生成</h2>
               <p>{generatedReport?.summary ?? latestReport.summary}</p>
+              {fallbackNote && (
+                <p className="reports-fallback-note" role="status">
+                  {fallbackNote}
+                </p>
+              )}
             </>
           )}
           {generation === 'error' && (
             <>
               <h2>这次生成没有完成</h2>
-              <p>Mock 服务返回了模拟错误。记录本身没有受影响，可以直接重试。</p>
+              <p>{generationError ?? '报告服务返回了错误。记录本身没有受影响，可以直接重试。'}</p>
             </>
           )}
         </div>
         <div className="reports-generation-actions">
-          {generation === 'idle' && (
-            <button className="btn quiet" type="button" onClick={() => generate(true)}>
-              模拟失败
-            </button>
-          )}
           {generation === 'loading' && (
             <span className="reports-loading-dots">
               <i />
@@ -556,21 +712,22 @@ export function ReportsPage() {
             </span>
           )}
           {generation === 'success' && (
-            <>
-              <button className="btn quiet" type="button" onClick={() => generate(true)}>
-                模拟失败
-              </button>
-              <button
-                className="btn primary"
-                type="button"
-                onClick={() => setSelectedReport(generatedReport ?? latestReport)}
-              >
-                查看简报
-              </button>
-            </>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => setSelectedReport(generatedReport ?? latestReport)}
+            >
+              查看简报
+            </button>
           )}
           {generation === 'error' && (
-            <button className="btn primary" type="button" onClick={() => generate(false)}>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => {
+                void generate()
+              }}
+            >
               <Icon name="undo" className="icon-sm" />
               重试
             </button>
@@ -666,7 +823,8 @@ export function ReportsPage() {
                 <div>
                   <Icon name="lock" className="icon-sm" />
                   <span>
-                    真正接入服务端后，API Key 不会出现在浏览器；发送内容将由你在设置中控制。
+                    API Key
+                    只保存在你的服务器；发送内容由设置中的来源开关控制，未授权来源不会出现在摘要里。
                   </span>
                 </div>
               </div>
@@ -812,17 +970,29 @@ export function ReportsPage() {
               </span>
               <div>
                 <small>DEEPSEEK SERVICE</small>
-                <h2 id="reportServiceTitle">服务端代理预留</h2>
+                <h2 id="reportServiceTitle">
+                  {reportSource === 'ai' ? '服务端代理已连接' : '本地 Mock 模式'}
+                </h2>
               </div>
             </div>
             <p>
-              前端只展示 Mock 结果。正式版本将由你的服务器保存 API
-              Key，并按请求组装最小化的数据摘要。
+              生成报告时，浏览器只把你在设置中授权的摘要发给本站服务端，由服务端携带 API Key 调用
+              DeepSeek；浏览器接触不到 Key，也拿不到除了报告文字之外的模型输出。
             </p>
             <div className="reports-service-status">
               <span className="dot" />
-              <strong>界面状态：可用</strong>
-              <small>未发起真实请求</small>
+              <strong>
+                {reportSource === 'probing'
+                  ? '状态：正在检测'
+                  : reportSource === 'ai'
+                    ? '状态：已连接 DeepSeek'
+                    : '状态：生成时使用本地 Mock'}
+              </strong>
+              <small>
+                {reportSource === 'ai'
+                  ? '请求经 /api/report 代理转发'
+                  : '本地规则生成，不发送任何模型请求'}
+              </small>
             </div>
           </section>
         </aside>
