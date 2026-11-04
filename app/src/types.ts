@@ -19,6 +19,8 @@ export interface PlanItem {
   kind: PlanKind
   done: boolean
   actionable?: boolean
+  /** 计划归属日（YYYY-MM-DD，本地时区）。v2 起必填；v1 数据迁移时补当天日期。 */
+  date: string
 }
 
 export type StudyCategory = 'english' | 'math'
@@ -147,6 +149,29 @@ export interface WaterLogEntry {
   id: string
   milliliters: number
   time: string
+  /** 饮水归属日（YYYY-MM-DD，本地时区）。v2 起必填。 */
+  date: string
+}
+
+/** 一天的饮食台账：`meals` 是该日四个餐次（含空餐次）的快照。 */
+export interface DietDay {
+  date: string
+  meals: Meal[]
+}
+
+/**
+ * 已完成的训练归档。与 `FitnessSessionState`（进行中的那个会话）区分：
+ * 历史记录多了 `id` / `date` / `completedAt`，可以按日排序和批量检索。
+ */
+export interface FitnessSessionRecord {
+  id: string
+  /** 完成训练当天（YYYY-MM-DD，本地时区）。 */
+  date: string
+  /** 完成时刻（ISO 8601），同一天多次训练按它排序。 */
+  completedAt: string
+  templateId: string
+  elapsedSeconds: number
+  exercises: Exercise[]
 }
 
 export interface EveningReviewPayload {
@@ -222,11 +247,17 @@ export interface MockSnapshot {
 
 export interface ImportableMockData {
   goals: Goal[]
+  /** 全部日期的计划项；按日筛选由 lib/history.ts 的 `planItemsForDate` 完成。 */
   planItems: PlanItem[]
+  /** 全部日期的饮水记录；按日汇总由 `waterForDate` 完成。 */
   waterLog: WaterLogEntry[]
   studyRecords: StudyRecord[]
-  meals: Meal[]
+  /** 饮食按日台账（v2 起替代原来的「只有今天」的 `meals` 切片）。 */
+  dietDays: DietDay[]
+  /** 进行中的训练会话；完成后归档进 `fitnessHistory`。 */
   fitnessSession: FitnessSessionState | null
+  /** 已完成的训练历史（v2 新增）。 */
+  fitnessHistory: FitnessSessionRecord[]
   profile: ProfileData
   settings: MockSettings
   aiConsent: boolean

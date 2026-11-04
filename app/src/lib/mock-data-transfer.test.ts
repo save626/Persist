@@ -7,9 +7,13 @@ import {
   LEGACY_BACKUP_VERSION,
   normalizeBackupVersion,
   parseMockBackupJson,
+  parseMockBackupValue,
   PERSIST_BACKUP_VERSION,
+  PRE_HISTORY_BACKUP_VERSION,
   readMockBackupVersion,
   serializeMockBackup,
+  upgradeMockBackupData,
+  upgradeMockBackupPayload,
 } from './mock-data-transfer'
 
 const EXPORTED_AT = new Date(Date.UTC(2026, 10, 2, 3, 4, 5))
@@ -67,7 +71,7 @@ describe('serializeMockBackup 序列化', () => {
 
     expect(payload.app).toBe('Persist')
     expect(payload.version).toBe(PERSIST_BACKUP_VERSION)
-    expect(payload.version).toBe('0.2.0')
+    expect(payload.version).toBe('0.3.0')
     expect(payload.mode).toBe('frontend-mock')
     expect(payload.exportedAt).toBe(EXPORTED_AT.toISOString())
   })
@@ -79,7 +83,7 @@ describe('serializeMockBackup 序列化', () => {
     expect(Number.isNaN(Date.parse(payload.exportedAt))).toBe(false)
   })
 
-  it('保持原有切片顺序，并把 longTermPlans 追加在 data 末尾', () => {
+  it('保持 0.3.0 的切片顺序，并把 longTermPlans 追加在 data 末尾', () => {
     const payload = serializeMockBackup(dataWithPlans(), EXPORTED_AT)
 
     expect(Object.keys(payload.data)).toEqual([
@@ -87,8 +91,9 @@ describe('serializeMockBackup 序列化', () => {
       'planItems',
       'waterLog',
       'studyRecords',
-      'meals',
+      'dietDays',
       'fitnessSession',
+      'fitnessHistory',
       'profile',
       'settings',
       'aiConsent',
@@ -284,6 +289,106 @@ describe('countMockRecords 统计长期计划', () => {
 
     expect(Number.isFinite(countMockRecords(base))).toBe(true)
     expect(countMockRecords({ ...base, longTermPlans: [] })).toBe(countMockRecords(base))
+  })
+})
+
+const UPGRADE_NOW = new Date(2026, 10, 5, 0, 30)
+
+/**
+ * 用当前序列化结果反向造一份 0.2.0 备份：计划/饮水没有 date、饮食只有当天 meals、
+ * 没有 fitnessHistory。版本号也一起改回 0.2.0。
+ */
+function preHistoryPayload(version = PRE_HISTORY_BACKUP_VERSION) {
+  const payload = backupObject(dataWithPlans())
+  payload.version = version
+  const data = payload.data
+  const stripDate = (list: unknown) => {
+    if (!Array.isArray(list)) return list
+    return list.map((item) => {
+      const { date: _date, ...rest } = item as Record<string, unknown>
+      return rest
+    })
+  }
+
+  data.planItems = stripDate(data.planItems)
+  data.waterLog = stripDate(data.waterLog)
+  const dietDays = data.dietDays as Array<{ date: string; meals: unknown }>
+  data.meals = dietDays[0]?.meals ?? []
+  delete data.dietDays
+  delete data.fitnessHistory
+  return payload
+}
+
+describe('历史化升级：0.2.0 备份补齐日期与历史切片', () => {
+  it('缺少 date 的计划与饮水按导入当天补日期，meals 变成一条 dietDays', () => {
+    const parsed = parseMockBackupValue(preHistoryPayload(), UPGRADE_NOW)
+    const today = '2026-11-05'
+
+    expect(parsed.planItems.every((item) => item.date === today)).toBe(true)
+    expect(parsed.waterLog.every((entry) => entry.date === today)).toBe(true)
+    expect(parsed.dietDays).toHaveLength(1)
+    expect(parsed.dietDays[0].date).toBe(today)
+    expect(parsed.dietDays[0].meals).toHaveLength(4)
+    expect('meals' in (parsed as unknown as Record<string, unknown>)).toBe(false)
+    expect(parsed.fitnessHistory).toEqual([])
+  })
+
+  it('升级时用本地自然日，UTC 与本地跨天不会写错日期', () => {
+    const parsed = parseMockBackupValue(preHistoryPayload(), new Date(2026, 10, 5, 0, 30))
+
+    expect(parsed.dietDays[0].date).toBe('2026-11-05')
+  })
+
+  it('已经是 0.3.0 形状的数据不再补日期、不丢历史', () => {
+    const data = dataWithPlans()
+    const upgraded = upgradeMockBackupData(data, UPGRADE_NOW) as typeof data
+
+    expect(upgraded.planItems).toEqual(data.planItems)
+    expect(upgraded.dietDays).toEqual(data.dietDays)
+    expect(upgraded.fitnessHistory).toEqual([])
+  })
+
+  it('升级整个负载时把版本号写成 0.3.0', () => {
+    const upgraded = upgradeMockBackupPayload(preHistoryPayload(), UPGRADE_NOW) as {
+      version: string
+      data: Record<string, unknown>
+    }
+
+    expect(upgraded.version).toBe('0.3.0')
+    expect(parseMockBackupJson(JSON.stringify(upgraded)).dietDays).toHaveLength(1)
+  })
+
+  it('0.2.0 备份里的已完成会话在文件导入时保持原样（不擅自归档）', () => {
+    const payload = preHistoryPayload()
+    ;(payload.data as Record<string, unknown>).fitnessSession = {
+      ...(payload.data as { fitnessSession: Record<string, unknown> }).fitnessSession,
+      sessionStatus: 'completed',
+    }
+
+    const parsed = parseMockBackupValue(payload, UPGRADE_NOW)
+
+    expect(parsed.fitnessSession?.sessionStatus).toBe('completed')
+    expect(parsed.fitnessHistory).toEqual([])
+  })
+
+  it('本地迁移时把已完成会话归档进历史并清空会话', () => {
+    const payload = preHistoryPayload()
+    const legacySession = (payload.data as { fitnessSession: Record<string, unknown> })
+      .fitnessSession
+    ;(payload.data as Record<string, unknown>).fitnessSession = {
+      ...legacySession,
+      sessionStatus: 'completed',
+    }
+
+    const upgraded = upgradeMockBackupData(payload.data, UPGRADE_NOW, {
+      archiveCompletedSession: true,
+    }) as { fitnessSession: unknown; fitnessHistory: Array<Record<string, unknown>> }
+
+    expect(upgraded.fitnessSession).toBeNull()
+    expect(upgraded.fitnessHistory).toHaveLength(1)
+    expect(upgraded.fitnessHistory[0].id).toBe(`workout-legacy-${UPGRADE_NOW.getTime()}`)
+    expect(upgraded.fitnessHistory[0].date).toBe('2026-11-05')
+    expect(upgraded.fitnessHistory[0].completedAt).toBe(UPGRADE_NOW.toISOString())
   })
 })
 

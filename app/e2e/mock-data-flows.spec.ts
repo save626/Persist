@@ -158,7 +158,7 @@ test('JSON backup keeps long-term plans across export and re-import', async ({ p
     version: string
     data: { longTermPlans: Array<{ title: string }> }
   }
-  expect(backup.version).toBe('0.2.0')
+  expect(backup.version).toBe('0.3.0')
   expect(backup.data.longTermPlans).toHaveLength(1)
   expect(backup.data.longTermPlans[0].title).toBe('E2E 备份保留计划')
 

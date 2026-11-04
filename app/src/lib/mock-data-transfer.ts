@@ -1,8 +1,11 @@
 import { countProfileFields } from '../data/profile'
 import { isExerciseKind } from './fitness'
+import { todayDateKey } from './history'
 import { isValidIsoDate, MAX_PER_WEEK, PLAN_MODULES, WEEKLY_TARGET_UNITS } from './long-term-plan'
 import type {
+  DietDay,
   Exercise,
+  FitnessSessionRecord,
   FitnessSessionState,
   ImportableMockData,
   LongTermPlan,
@@ -14,6 +17,7 @@ import type {
   ReportRecord,
   StudyCategory,
   StudyRecord,
+  WaterLogEntry,
   WorkoutSet,
 } from '../types'
 
@@ -110,7 +114,39 @@ function isStringArray(value: unknown): value is string[] {
 
 function isPlanItem(value: unknown): value is PlanItem {
   return (
-    hasStrings(value, ['id', 'name', 'time', 'detail', 'kind']) && typeof value.done === 'boolean'
+    hasStrings(value, ['id', 'name', 'time', 'detail', 'kind']) &&
+    typeof value.done === 'boolean' &&
+    isValidIsoDateValue(value.date)
+  )
+}
+
+function isWaterLogEntry(value: unknown): value is WaterLogEntry {
+  return (
+    hasStrings(value, ['id', 'time']) &&
+    typeof value.milliliters === 'number' &&
+    Number.isFinite(value.milliliters) &&
+    isValidIsoDateValue(value.date)
+  )
+}
+
+function isMealList(value: unknown): value is Meal[] {
+  return Array.isArray(value) && value.every(isMeal)
+}
+
+function isDietDay(value: unknown): value is DietDay {
+  return isRecord(value) && isValidIsoDateValue(value.date) && isMealList(value.meals)
+}
+
+function isFitnessSessionRecord(value: unknown): value is FitnessSessionRecord {
+  return (
+    hasStrings(value, ['id', 'completedAt', 'templateId']) &&
+    Boolean((value.id as string).trim()) &&
+    Boolean((value.templateId as string).trim()) &&
+    isValidIsoDateValue(value.date) &&
+    isValidIsoDateTimeValue(value.completedAt) &&
+    isNonNegativeNumber(value.elapsedSeconds) &&
+    Array.isArray(value.exercises) &&
+    value.exercises.every(isExercise)
   )
 }
 
@@ -297,9 +333,15 @@ function requireLongTermPlans(value: unknown, label = '备份'): LongTermPlan[] 
   return plans
 }
 
-export const PERSIST_BACKUP_VERSION = '0.2.0'
+/**
+ * 当前备份版本。0.3.0 起 `data` 里用 `dietDays` 取代 `meals`，并新增 `fitnessHistory`，
+ * `planItems` / `waterLog` 的每条记录都带 `date`。
+ */
+export const PERSIST_BACKUP_VERSION = '0.3.0'
 /** 0.1.0 的备份没有 longTermPlans 字段，导入时按「零个长期计划」兼容。 */
 export const LEGACY_BACKUP_VERSION = '0.1.0'
+/** 0.2.0 的备份只有「今天」的饮食与无日期的计划/饮水，导入时统一补日期。 */
+export const PRE_HISTORY_BACKUP_VERSION = '0.2.0'
 
 export type PersistBackupPayload = {
   app: 'Persist'
@@ -324,10 +366,87 @@ export function readMockBackupVersion(text: string): string {
   }
 }
 
+/** 判断一条记录的 `date` 是否已经存在（只补缺失，不改写已有值，坏值交给校验层报错）。 */
+function hasDate(value: unknown) {
+  return isRecord(value) && typeof value.date === 'string' && value.date.trim().length > 0
+}
+
+function withLegacyDate(list: unknown, date: string): unknown {
+  if (!Array.isArray(list)) return list
+  return list.map((item) => (hasDate(item) ? item : isRecord(item) ? { ...item, date } : item))
+}
+
+export interface UpgradeBackupOptions {
+  /**
+   * 本地迁移专用：把「已完成」的进行中会话搬进 `fitnessHistory` 并清空会话。
+   * 文件导入不开启，保证旧备份导入后页面表现与导出时一致。
+   */
+  archiveCompletedSession?: boolean
+}
+
+/**
+ * 把 0.1.0 / 0.2.0 的 `data` 升级成 0.3.0 的形状，供「备份导入」与「Schema 迁移」共用：
+ * - `planItems` / `waterLog` 缺 `date` 的补上 `now` 当天；
+ * - 只有 `meals` 的补成 `dietDays: [{ date, meals }]`，并移除旧字段；
+ * - 补 `fitnessHistory: []`；
+ * - 可选地把已完成会话归档进历史。
+ * 函数保持纯函数式：不修改入参，返回新对象；无法识别的输入原样返回交给校验层报错。
+ */
+export function upgradeMockBackupData(
+  data: unknown,
+  now: Date = new Date(),
+  options: UpgradeBackupOptions = {},
+): unknown {
+  if (!isRecord(data)) return data
+  const today = todayDateKey(now)
+  const next: UnknownRecord = { ...data }
+
+  next.planItems = withLegacyDate(next.planItems, today)
+  next.waterLog = withLegacyDate(next.waterLog, today)
+
+  if (!Array.isArray(next.dietDays) && Array.isArray(next.meals)) {
+    next.dietDays = [{ date: today, meals: next.meals }]
+  }
+  delete next.meals
+
+  if (!Array.isArray(next.fitnessHistory)) next.fitnessHistory = []
+
+  if (options.archiveCompletedSession) {
+    const session = next.fitnessSession
+    if (isRecord(session) && session.sessionStatus === 'completed' && isFitnessSession(session)) {
+      const completedAt = new Date(now).getTime()
+      next.fitnessHistory = [
+        ...(next.fitnessHistory as unknown[]),
+        {
+          id: `workout-legacy-${completedAt}`,
+          date: todayDateKey(now),
+          completedAt: new Date(completedAt).toISOString(),
+          templateId: session.activeTemplateId,
+          elapsedSeconds: session.elapsedSeconds,
+          exercises: session.exercises,
+        },
+      ]
+      next.fitnessSession = null
+    }
+  }
+
+  return next
+}
+
+/** 升级整个备份负载：补版本号并把 `data` 升到当前形状；非备份对象原样返回。 */
+export function upgradeMockBackupPayload(payload: unknown, now: Date = new Date()): unknown {
+  if (!isRecord(payload)) return payload
+  return {
+    ...payload,
+    version: PERSIST_BACKUP_VERSION,
+    data: upgradeMockBackupData(payload.data, now),
+  }
+}
+
 /**
  * 备份序列化的唯一入口（SettingsPage 的旧内联导出后续改为调用它）。
- * - 字段顺序与旧内联导出完全一致，longTermPlans 追加在 data 末尾；
- * - longTermPlans 缺失时显式写成 []，保证 PersistBackupPayload 的形状是确定的；
+ * - 0.3.0 起导出 `dietDays` 与 `fitnessHistory`，不再导出旧的 `meals` 切片；
+ * - `longTermPlans` 追加在 data 末尾，缺失时显式写成 []，保证负载形状确定；
  * - 只校验计划切片，其余切片沿用「导出不校验、导入才校验」的既有约定，
  *   避免给导出流程新增失败路径。
  */
@@ -345,8 +464,9 @@ export function serializeMockBackup(
       planItems: data.planItems,
       waterLog: data.waterLog,
       studyRecords: data.studyRecords,
-      meals: data.meals,
+      dietDays: data.dietDays,
       fitnessSession: data.fitnessSession,
+      fitnessHistory: data.fitnessHistory,
       profile: data.profile,
       settings: data.settings,
       aiConsent: data.aiConsent,
@@ -374,13 +494,18 @@ export function parseMockBackupJson(text: string): ImportableMockData {
  * 校验「已经是对象」的备份负载。
  * 文件导入（parseMockBackupJson）与 IndexedDB 本地持久化（lib/persist-state.ts）共用同一套
  * 字段级校验，避免本地数据用另一套更宽松的规则把脏数据写回存储。
+ *
+ * 0.1.0 / 0.2.0 的旧备份先由 `upgradeMockBackupData` 补成 0.3.0 形状再校验，
+ * 因此「缺 date 的计划/饮水」「只有 meals 没有 dietDays」「没有 fitnessHistory」都能直接导入。
  */
-export function parseMockBackupValue(payload: unknown): ImportableMockData {
+export function parseMockBackupValue(payload: unknown, now: Date = new Date()): ImportableMockData {
   if (!isRecord(payload) || payload.app !== 'Persist' || !isRecord(payload.data)) {
     throw new Error('不是 Persist Mock 备份，缺少 app 或 data 数据块')
   }
 
-  const data = payload.data
+  const upgraded = upgradeMockBackupData(payload.data, now)
+  if (!isRecord(upgraded)) throw new Error('备份 data 数据块格式不正确')
+  const data = upgraded
   if (!isRecord(data.profile) || !isRecord(data.settings)) {
     throw new Error('备份缺少个人档案或设置数据')
   }
@@ -401,9 +526,8 @@ export function parseMockBackupValue(payload: unknown): ImportableMockData {
   const reports = requireArray(data.reports, '报告历史', isReport)
   if (reports.length === 0) throw new Error('报告历史不能为空')
 
-  // 版本号（0.2.0 / 0.1.0 / 缺失）本轮不做门禁：备份真正的契约是 data 的字段形状，
-  // 由下面的字段级校验兜底；未知版本也先按同一套规则尽量读入，等迁移阶段再用
-  // normalizeBackupVersion / readMockBackupVersion 按版本分流，避免升级后读不了新备份。
+  // 版本号（0.3.0 / 0.2.0 / 0.1.0 / 缺失）不做门禁：备份真正的契约是 data 的字段形状，
+  // 由下面的字段级校验兜底；未知版本也先按同一套规则尽量读入。
   const longTermPlans = requireLongTermPlans(data.longTermPlans)
 
   return {
@@ -415,17 +539,11 @@ export function parseMockBackupValue(payload: unknown): ImportableMockData {
         typeof item.enabled === 'boolean',
     ),
     planItems: requireArray(data.planItems, '今日计划', isPlanItem),
-    waterLog: requireArray(
-      data.waterLog,
-      '饮水记录',
-      (item): item is ImportableMockData['waterLog'][number] =>
-        hasStrings(item, ['id', 'time']) &&
-        typeof item.milliliters === 'number' &&
-        Number.isFinite(item.milliliters),
-    ),
+    waterLog: requireArray(data.waterLog, '饮水记录', isWaterLogEntry),
     studyRecords: requireArray(data.studyRecords, '学习记录', isStudyRecord),
-    meals: requireArray(data.meals, '饮食记录', isMeal),
+    dietDays: requireArray(data.dietDays, '饮食记录', isDietDay),
     fitnessSession,
+    fitnessHistory: requireArray(data.fitnessHistory, '训练历史', isFitnessSessionRecord),
     profile: data.profile as unknown as ProfileData,
     settings: data.settings as unknown as ImportableMockData['settings'],
     aiConsent: data.aiConsent,
@@ -626,16 +744,29 @@ export function parseStudyCsv(text: string): StudyRecord[] {
 
 /**
  * 统计一份 Mock 数据里的记录条数（首页快照与设置页文案共用同一口径）：
- * 重要目标、今日计划、饮水（固定 1 条基线）、饮水记录、学习记录、饮食条目、
- * 已完成训练套组、个人档案字段，以及长期计划（旧备份没有该字段时按 0 计）。
+ * 重要目标、全部日期的计划项、饮水（固定 1 条基线）、饮水记录、学习记录、
+ * 全部日期的饮食条目、已完成训练套组（含历史归档）、个人档案字段，
+ * 以及长期计划（旧备份没有该字段时按 0 计）。
  */
 export function countMockRecords(data: ImportableMockData) {
-  const doneSets =
+  const sessionDoneSets =
     data.fitnessSession?.exercises.reduce(
       (total, exercise) => total + exercise.sets.filter((set) => set.done).length,
       0,
     ) ?? 0
-  const foodEntries = data.meals.reduce((total, meal) => total + meal.entries.length, 0)
+  const historyDoneSets = data.fitnessHistory.reduce(
+    (total, record) =>
+      total +
+      record.exercises.reduce(
+        (sum, exercise) => sum + exercise.sets.filter((set) => set.done).length,
+        0,
+      ),
+    0,
+  )
+  const foodEntries = data.dietDays.reduce(
+    (total, day) => total + day.meals.reduce((sum, meal) => sum + meal.entries.length, 0),
+    0,
+  )
 
   return (
     data.goals.length +
@@ -644,7 +775,9 @@ export function countMockRecords(data: ImportableMockData) {
     data.waterLog.length +
     data.studyRecords.length +
     foodEntries +
-    doneSets +
+    sessionDoneSets +
+    historyDoneSets +
+    data.fitnessHistory.length +
     countProfileFields(data.profile) +
     (data.longTermPlans?.length ?? 0)
   )

@@ -1,4 +1,5 @@
 import type {
+  DietDay,
   EveningReviewPayload,
   FitnessSessionState,
   Goal,
@@ -66,7 +67,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
     },
   ]
 
-  const planItems: PlanItem[] = [
+  const planItems: Array<Omit<PlanItem, 'date'>> = [
     {
       id: 'morning',
       name: '早餐与晨间记录',
@@ -126,7 +127,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
     },
   ]
 
-  const waterLog: WaterLogEntry[] = [
+  const waterLog: Array<Omit<WaterLogEntry, 'date'>> = [
     { id: 'water-demo-1', milliliters: 250, time: '10:15' },
     { id: 'water-demo-2', milliliters: 250, time: '12:40' },
     { id: 'water-demo-3', milliliters: 300, time: '15:30' },
@@ -729,13 +730,18 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
     },
   ]
 
+  // 演示数据只覆盖「今天」这一天：计划与饮水盖上当天日期，饮食装进按日台账。
+  const todayKey = dateKey(now)
+  const dietDays: DietDay[] = [{ date: todayKey, meals }]
+
   return {
     goals,
-    planItems,
-    waterLog,
+    planItems: planItems.map((item) => ({ ...item, date: todayKey })),
+    waterLog: waterLog.map((entry) => ({ ...entry, date: todayKey })),
     studyRecords,
-    meals,
+    dietDays,
     fitnessSession,
+    fitnessHistory: [],
     profile,
     settings,
     aiConsent: true,

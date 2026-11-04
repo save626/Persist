@@ -98,8 +98,8 @@ const baseInput = {
   meals,
   waterLiters: 1.2,
   waterLog: [
-    { id: 'w1', milliliters: 300, time: '09:10' },
-    { id: 'w2', milliliters: 400, time: '14:20' },
+    { id: 'w1', milliliters: 300, time: '09:10', date: '2026-11-04' },
+    { id: 'w2', milliliters: 400, time: '14:20', date: '2026-11-04' },
   ],
 }
 

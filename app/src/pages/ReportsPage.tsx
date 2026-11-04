@@ -6,6 +6,7 @@ import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
 import { calculateProfileCompleteness, countProfileFields } from '../data/profile'
 import { formatTrainingSummary, summarizeFitness } from '../lib/fitness'
+import { todayDateKey } from '../lib/history'
 import {
   AI_REPORT_LABEL,
   MOCK_REPORT_LABEL,
@@ -28,12 +29,17 @@ function updatePlanItem(items: PlanItem[], id: string, patch: Partial<PlanItem>)
   return items.map((item) => (item.id === id && !item.done ? { ...item, ...patch } : item))
 }
 
-function upsertPlanItem(items: PlanItem[], suggestion: PlanItem) {
-  const index = items.findIndex((item) => item.id === suggestion.id)
-  if (index === -1) return [...items, suggestion]
+/**
+ * 报告建议落到「今天」的计划里：建议本身不带日期，插入时统一盖上今天，
+ * 避免把建议写到别的日期上。
+ */
+function upsertPlanItem(items: PlanItem[], suggestion: Omit<PlanItem, 'date'>) {
+  const dated: PlanItem = { ...suggestion, date: todayDateKey() }
+  const index = items.findIndex((item) => item.id === dated.id)
+  if (index === -1) return [...items, dated]
   if (items[index].done) return items
   return items.map((item, itemIndex) =>
-    itemIndex === index ? { ...item, ...suggestion, done: false } : item,
+    itemIndex === index ? { ...item, ...dated, done: false } : item,
   )
 }
 

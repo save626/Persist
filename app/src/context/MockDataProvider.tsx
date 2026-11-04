@@ -5,6 +5,16 @@ import { INITIAL_REPORTS } from '../data/reports'
 import { INITIAL_SETTINGS } from '../data/settings'
 import { INITIAL_STUDY_RECORDS } from '../data/study'
 import {
+  createFitnessSessionRecord,
+  mealsForDate,
+  patchMealsForDate,
+  patchPlanItemsForDate,
+  planItemsForDate,
+  sortFitnessHistoryDesc,
+  todayDateKey,
+  waterForDate,
+} from '../lib/history'
+import {
   activateLongTermPlan,
   createLongTermPlan,
   type LongTermPlanDraft,
@@ -13,7 +23,9 @@ import { countMockRecords } from '../lib/mock-data-transfer'
 import { PERSIST_SAVE_DEBOUNCE_MS } from '../lib/persist-state'
 import { clearPersistedState, loadPersistedState, savePersistedState } from '../lib/persist-storage'
 import type {
+  DietDay,
   EveningReviewPayload,
+  FitnessSessionRecord,
   FitnessSessionState,
   Goal,
   ImportableMockData,
@@ -48,7 +60,8 @@ const INITIAL_GOALS: Goal[] = [
   },
 ]
 
-const INITIAL_PLAN: PlanItem[] = [
+/** 演示计划不带日期：首次启动时统一盖上「今天」，保证以后按日筛选也能命中。 */
+const INITIAL_PLAN: Array<Omit<PlanItem, 'date'>> = [
   {
     id: 'morning',
     name: '早餐与晨间记录',
@@ -94,18 +107,26 @@ const INITIAL_PLAN: PlanItem[] = [
 
 const INITIAL_WATER_MILLILITERS = 1_200
 
+/** 把不带日期的演示计划盖上指定日期。 */
+function planForDate(date: string): PlanItem[] {
+  return INITIAL_PLAN.map((item) => ({ ...item, date }))
+}
+
 /**
- * 首次启动的基线状态：12 个切片与上面 useState 的初值一一对应（快照与长期计划为空）。
+ * 首次启动的基线状态：各切片与上面 useState 的初值一一对应（快照与长期计划为空）。
  * 「清空本机数据」复用它，保证清空后与第一次打开 App 看到的内容完全一致。
+ * v2 起演示数据只落在「当天」这一天：饮食进 `dietDays`，计划与饮水带 `date`。
  */
-function createInitialMockData(): ImportableMockData {
+function createInitialMockData(now: Date = new Date()): ImportableMockData {
+  const today = todayDateKey(now)
   return {
     goals: INITIAL_GOALS,
-    planItems: INITIAL_PLAN,
+    planItems: planForDate(today),
     waterLog: [],
     studyRecords: INITIAL_STUDY_RECORDS,
-    meals: INITIAL_MEALS,
+    dietDays: [{ date: today, meals: INITIAL_MEALS }],
     fitnessSession: null,
+    fitnessHistory: [],
     profile: INITIAL_PROFILE,
     settings: INITIAL_SETTINGS,
     aiConsent: INITIAL_PROFILE.aiConsent,
@@ -116,12 +137,22 @@ function createInitialMockData(): ImportableMockData {
 }
 
 export function MockDataProvider({ children }: { children: ReactNode }) {
+  /** 本次会话的「今天」。日期只在挂载时取一次，避免跨零点后页面数据整体跳变。 */
+  const [today] = useState(() => todayDateKey())
+
   const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS)
-  const [planItems, setPlanItems] = useState<PlanItem[]>(INITIAL_PLAN)
-  const [waterLog, setWaterLog] = useState<WaterLogEntry[]>([])
+  /** 全部日期的计划项（0.3.0 起每条都带 `date`）。 */
+  const [planItems, setPlanItemsState] = useState<PlanItem[]>(() => planForDate(today))
+  /** 全部日期的饮水记录。 */
+  const [waterLog, setWaterLogState] = useState<WaterLogEntry[]>([])
   const [studyRecords, setStudyRecords] = useState<StudyRecord[]>(INITIAL_STUDY_RECORDS)
-  const [meals, setMeals] = useState<Meal[]>(INITIAL_MEALS)
+  /** 饮食按日台账；页面仍通过 `meals` 拿「今天」的切片。 */
+  const [dietDays, setDietDaysState] = useState<DietDay[]>(() => [
+    { date: today, meals: INITIAL_MEALS },
+  ])
   const [fitnessSession, setFitnessSession] = useState<FitnessSessionState | null>(null)
+  /** 已完成训练的归档历史（新→旧）。 */
+  const [fitnessHistory, setFitnessHistory] = useState<FitnessSessionRecord[]>([])
   const [profile, setProfileState] = useState<ProfileData>(INITIAL_PROFILE)
   const [settings, setSettings] = useState<MockSettings>(INITIAL_SETTINGS)
   const [aiConsent, setAiConsentState] = useState(INITIAL_PROFILE.aiConsent)
@@ -141,24 +172,71 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   /** 当前排队的防抖写入定时器；「清空本机数据」必须先掐掉它，否则旧数据会被写回。 */
   const saveTimerRef = useRef<number | null>(null)
 
+  /** 「今天」的切片：页面读到的 `planItems` / `waterLog` / `meals` 语义不变，只表示今天。 */
+  const todayPlanItems = useMemo(() => planItemsForDate(planItems, today), [planItems, today])
+  const todayWaterLog = useMemo(() => waterForDate(waterLog, today), [waterLog, today])
+  const meals = useMemo(() => mealsForDate(dietDays, today), [dietDays, today])
+
+  /** 兼容旧调用点：写「今日计划」时只替换今天这一块，其他日期原样保留。 */
+  const setPlanItems = useCallback(
+    (action: React.SetStateAction<PlanItem[]>) => {
+      setPlanItemsState((current) =>
+        patchPlanItemsForDate(current, today, (items) =>
+          typeof action === 'function' ? action(items) : action,
+        ),
+      )
+    },
+    [today],
+  )
+
+  /** 兼容旧调用点：写「今日饮食」时只替换今天这一块，其他日期原样保留。 */
+  const setMeals = useCallback(
+    (action: React.SetStateAction<Meal[]>) => {
+      setDietDaysState((current) =>
+        patchMealsForDate(current, today, (items) =>
+          typeof action === 'function' ? action(items) : action,
+        ),
+      )
+    },
+    [today],
+  )
+
+  /** 把已完成的训练会话归档进历史；返回生成的记录，方便调用方立即用到 id。 */
+  const archiveFitnessSession = useCallback((session: FitnessSessionState, now: Date = new Date()) => {
+    const record = createFitnessSessionRecord(session, now)
+    setFitnessHistory((current) => sortFitnessHistoryDesc([record, ...current]))
+    return record
+  }, [])
+
   const updateGoal = useCallback((id: string, patch: Partial<Goal>) => {
     setGoals((current) => current.map((goal) => (goal.id === id ? { ...goal, ...patch } : goal)))
   }, [])
 
-  const addWater = useCallback((milliliters: number) => {
-    if (!Number.isFinite(milliliters) || milliliters <= 0) return
-    const amount = Math.round(milliliters)
-    const time = new Intl.DateTimeFormat('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(new Date())
-    setWaterLog((current) => [...current, { id: `water-${Date.now()}`, milliliters: amount, time }])
-  }, [])
+  const addWater = useCallback(
+    (milliliters: number) => {
+      if (!Number.isFinite(milliliters) || milliliters <= 0) return
+      const amount = Math.round(milliliters)
+      const time = new Intl.DateTimeFormat('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date())
+      setWaterLogState((current) => [
+        ...current,
+        { id: `water-${Date.now()}`, milliliters: amount, time, date: today },
+      ])
+    },
+    [today],
+  )
 
+  /** 撤销「今天」的最后一次饮水；其他日期的历史不受影响。 */
   const undoWater = useCallback(() => {
-    setWaterLog((current) => current.slice(0, -1))
-  }, [])
+    setWaterLogState((current) => {
+      const todayEntries = waterForDate(current, today)
+      const last = todayEntries[todayEntries.length - 1]
+      return last ? current.filter((entry) => entry.id !== last.id) : current
+    })
+  }, [today])
 
   const setAiConsent = useCallback((enabled: boolean) => {
     setAiConsentState(enabled)
@@ -217,11 +295,12 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
 
   const replaceMockData = useCallback((data: ImportableMockData) => {
     setGoals(data.goals)
-    setPlanItems(data.planItems)
-    setWaterLog(data.waterLog)
+    setPlanItemsState(data.planItems)
+    setWaterLogState(data.waterLog)
     setStudyRecords(data.studyRecords)
-    setMeals(data.meals)
+    setDietDaysState(data.dietDays)
     setFitnessSession(data.fitnessSession)
+    setFitnessHistory(sortFitnessHistoryDesc(data.fitnessHistory))
     setProfileState({ ...data.profile, aiConsent: data.aiConsent })
     setSettings(data.settings)
     setAiConsentState(data.aiConsent)
@@ -261,8 +340,9 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
         planItems,
         waterLog,
         studyRecords,
-        meals,
+        dietDays,
         fitnessSession,
+        fitnessHistory,
         profile,
         settings,
         aiConsent,
@@ -275,11 +355,12 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     return next
   }, [
     aiConsent,
+    dietDays,
     eveningReview,
+    fitnessHistory,
     fitnessSession,
     goals,
     longTermPlans,
-    meals,
     planItems,
     profile,
     reports,
@@ -312,15 +393,16 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     }
   }, [replaceMockData])
 
-  /** 待持久化的切片与备份 0.2.0 的 data 完全一致：本地存储、导出文件、导入校验同构。 */
+  /** 待持久化的切片与备份 0.3.0 的 data 完全一致：本地存储、导出文件、导入校验同构。 */
   const persistableData = useMemo<ImportableMockData>(
     () => ({
       goals,
       planItems,
       waterLog,
       studyRecords,
-      meals,
+      dietDays,
       fitnessSession,
+      fitnessHistory,
       profile,
       settings,
       aiConsent,
@@ -330,11 +412,12 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     }),
     [
       aiConsent,
+      dietDays,
       eveningReview,
+      fitnessHistory,
       fitnessSession,
       goals,
       longTermPlans,
-      meals,
       planItems,
       profile,
       reports,
@@ -381,32 +464,46 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     }
   }, [hydrated])
 
+  /** 今日饮水 = 基线 1.2 L + 今天的记录；其他日期的历史不计入今日进度。 */
   const waterLiters = useMemo(
     () =>
       (INITIAL_WATER_MILLILITERS +
-        waterLog.reduce((total, entry) => total + entry.milliliters, 0)) /
+        todayWaterLog.reduce((total, entry) => total + entry.milliliters, 0)) /
       1000,
-    [waterLog],
+    [todayWaterLog],
   )
-  const lastWaterMilliliters = waterLog.at(-1)?.milliliters ?? null
+  const lastWaterMilliliters = todayWaterLog.at(-1)?.milliliters ?? null
 
   const value = useMemo(
     () => ({
       goals,
       updateGoal,
-      planItems,
+      /** 「今天」的计划项切片。 */
+      planItems: todayPlanItems,
       setPlanItems,
+      /** 全部日期的计划项，供历史/报告按日筛选。 */
+      planHistory: planItems,
       waterLiters,
-      waterLog,
+      /** 「今天」的饮水记录切片。 */
+      waterLog: todayWaterLog,
+      /** 全部日期的饮水记录，供历史/报告按日筛选。 */
+      waterHistory: waterLog,
       addWater,
       lastWaterMilliliters,
       undoWater,
       studyRecords,
       setStudyRecords,
+      /** 「今天」的四个餐次切片。 */
       meals,
       setMeals,
+      /** 饮食按日台账。 */
+      dietDays,
       fitnessSession,
       setFitnessSession,
+      fitnessHistory,
+      archiveFitnessSession,
+      /** 本次会话的「今天」（YYYY-MM-DD，本地时区）。 */
+      today,
       profile,
       updateProfile,
       settings,
@@ -435,10 +532,13 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       activatePlan,
       aiConsent,
       appendStudyRecords,
+      archiveFitnessSession,
       archiveLongTermPlan,
       clearLocalData,
       createMockSnapshot,
+      dietDays,
       eveningReview,
+      fitnessHistory,
       fitnessSession,
       goals,
       lastWaterMilliliters,
@@ -450,9 +550,14 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       reports,
       resetSettings,
       setAiConsent,
+      setMeals,
+      setPlanItems,
       settings,
       snapshot,
       studyRecords,
+      today,
+      todayPlanItems,
+      todayWaterLog,
       undoWater,
       updateGoal,
       updateLongTermPlan,

@@ -1348,7 +1348,7 @@ function HistoryDetailSheet({
 }
 export function FitnessPage() {
   const { showToast } = useUI()
-  const { setPlanItems, fitnessSession, setFitnessSession } = useMockData()
+  const { setPlanItems, fitnessSession, setFitnessSession, archiveFitnessSession } = useMockData()
   const newRecord = useNewRecordParam()
   const initialSession = useMemo(() => createFitnessSession(), [])
   const session = fitnessSession ?? initialSession
@@ -1588,7 +1588,10 @@ export function FitnessPage() {
       showToast('至少完成一组后再结束训练')
       return
     }
-    updateSession((current) => ({ ...current, sessionStatus: 'completed' }))
+    const completed: FitnessSessionState = { ...session, sessionStatus: 'completed' }
+    setFitnessSession(completed)
+    // 归档进训练历史：日期取完成当天，记录里保留当时的动作与套组快照。
+    archiveFitnessSession(completed)
     setPlanItems((items) =>
       items.map((item) => (item.id === 'training' ? { ...item, done: true } : item)),
     )

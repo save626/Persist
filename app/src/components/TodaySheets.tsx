@@ -8,7 +8,9 @@ import type {
   PlanKind,
   ProfileData,
   StudyRecord,
+  WaterLogEntry,
 } from '../types'
+import { todayDateKey } from '../lib/history'
 import {
   MORNING_BRIEF_LOADING_NOTE,
   generateMorningBrief,
@@ -66,6 +68,8 @@ export function PlanEditorSheet({
       detail: '补充这项安排的具体内容',
       kind: 'default',
       done: false,
+      // 弹层编辑的是「今天」这一份计划，新条目沿用同一天的日期。
+      date: draft[0]?.date ?? items[0]?.date ?? todayDateKey(),
     }
     setDraft((current) => [...current, next])
     setError('')
@@ -280,7 +284,7 @@ export function MorningBriefSheet({
 }: {
   planItems: PlanItem[]
   waterLiters: number
-  waterLog: Array<{ id: string; milliliters: number; time: string }>
+  waterLog: WaterLogEntry[]
   meals: Meal[]
   studyRecords: StudyRecord[]
   fitnessSession: FitnessSessionState | null

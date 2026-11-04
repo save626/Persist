@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCompleteMockData } from '../data/complete-mock-data'
 import type { ImportableMockData, MockSnapshot } from '../types'
+import { todayDateKey } from './history'
 import { PERSIST_BACKUP_VERSION, serializeMockBackup } from './mock-data-transfer'
 import {
   createPersistedStateRecord,
@@ -42,7 +43,7 @@ function record(): PersistedStateRecord {
 }
 
 describe('createPersistedStateRecord', () => {
-  it('写入固定主键、当前结构版本，并复用 0.2.0 备份格式', () => {
+  it('写入固定主键、当前结构版本，并复用 0.3.0 备份格式', () => {
     const state = record()
 
     expect(state.id).toBe(PERSIST_STATE_RECORD_ID)
@@ -137,5 +138,114 @@ describe('与导出备份的关系', () => {
   it('serializeMockBackup 与记录里的 backup 是同一结构（本地存储与导出文件同构）', () => {
     const state = record()
     expect(state.backup).toEqual(clone(serializeMockBackup(sampleData(), SAVED_AT)))
+  })
+})
+
+/** 造一条 v1 记录：备份是 0.2.0 的老形状（计划/饮水无 date、只有当天 meals、没有训练历史）。 */
+function legacyV1Record(): PersistedStateRecord {
+  const legacy = clone(record()) as unknown as Record<string, unknown>
+  legacy.schemaVersion = 1
+  const backup = legacy.backup as { version: string; data: Record<string, unknown> }
+  backup.version = '0.2.0'
+  const data = backup.data
+  const stripDate = (list: unknown) => {
+    if (!Array.isArray(list)) return list
+    return list.map((item) => {
+      const { date: _date, ...rest } = item as Record<string, unknown>
+      return rest
+    })
+  }
+
+  data.planItems = stripDate(data.planItems)
+  data.waterLog = stripDate(data.waterLog)
+  const dietDays = data.dietDays as Array<{ date: string; meals: unknown }>
+  data.meals = dietDays[0]?.meals ?? []
+  delete data.dietDays
+  delete data.fitnessHistory
+  return legacy as unknown as PersistedStateRecord
+}
+
+describe('v1 → v2 迁移（8d 数据历史化）', () => {
+  const LOCAL_SAVE_DAY = todayDateKey(SAVED_AT)
+
+  it('升级到结构版本 2 与 0.3.0 备份，并补齐日期与历史切片', () => {
+    const migrated = migratePersistedStateRecord(legacyV1Record())
+
+    expect(migrated?.schemaVersion).toBe(2)
+    const backup = migrated?.backup as unknown as { version: string; data: ImportableMockData }
+    expect(backup.version).toBe('0.3.0')
+    expect(backup.data.planItems.every((item) => item.date === LOCAL_SAVE_DAY)).toBe(true)
+    expect(backup.data.waterLog.every((entry) => entry.date === LOCAL_SAVE_DAY)).toBe(true)
+    expect(backup.data.dietDays).toHaveLength(1)
+    expect(backup.data.dietDays[0].date).toBe(LOCAL_SAVE_DAY)
+    expect(backup.data.fitnessHistory).toEqual([])
+    expect('meals' in (backup.data as unknown as Record<string, unknown>)).toBe(false)
+  })
+
+  it('迁移日期取保存当天（本地自然日），而不是迁移时刻', () => {
+    // 迁移时刻故意给次日：补日期仍应落在 savedAt 的本地自然日上。
+    const migrated = migratePersistedStateRecord(
+      legacyV1Record(),
+      new Date(2026, 10, 3, 9, 0, 0),
+    )
+    const backup = migrated?.backup as unknown as { data: ImportableMockData }
+
+    expect(LOCAL_SAVE_DAY).toBe('2026-11-02')
+    expect(backup.data.dietDays[0].date).toBe(LOCAL_SAVE_DAY)
+  })
+
+  it('读回 v1 记录时自动迁移，页面拿到的是新形状', () => {
+    const state = readPersistedState(legacyV1Record())
+
+    expect(state?.data.dietDays).toHaveLength(1)
+    expect(state?.data.fitnessHistory).toEqual([])
+    expect(
+      (state?.data.planItems ?? []).every((item) => item.date === LOCAL_SAVE_DAY),
+    ).toBe(true)
+    // 迁移前不归档：演示数据里的会话本来就是进行中，不属于「已完成但没进历史」。
+    expect(state?.data.fitnessSession?.sessionStatus).toBe('active')
+  })
+
+  it('v1 里已完成但没进历史的会话，迁移时归档到当天并清空会话', () => {
+    const legacy = legacyV1Record()
+    const legacyData = legacy.backup.data as unknown as Record<string, unknown>
+    legacyData.fitnessSession = {
+      ...(legacyData.fitnessSession as Record<string, unknown>),
+      sessionStatus: 'completed',
+    }
+
+    const state = readPersistedState(legacy)
+
+    expect(state?.data.fitnessSession).toBeNull()
+    expect(state?.data.fitnessHistory).toHaveLength(1)
+    expect(state?.data.fitnessHistory[0].date).toBe(LOCAL_SAVE_DAY)
+    expect(state?.data.fitnessHistory[0].id).toBe(`workout-legacy-${Date.parse(SAVED_AT.toISOString())}`)
+  })
+
+  it('已经是 v2 形状的 v1 记录迁移后数据不变，不会重复补日期', () => {
+    const current = clone(record()) as unknown as Record<string, unknown>
+    current.schemaVersion = 1
+    const before = clone(current.backup)
+
+    const migrated = migratePersistedStateRecord(current as unknown as PersistedStateRecord)
+
+    expect(migrated?.schemaVersion).toBe(2)
+    expect(migrated?.backup).toEqual(before)
+  })
+
+  it('不修改传入的旧记录（迁移是纯函数）', () => {
+    const legacy = legacyV1Record()
+    const snapshot = clone(legacy)
+
+    migratePersistedStateRecord(legacy)
+
+    expect(legacy).toEqual(snapshot)
+  })
+
+  it('损坏的 v1 记录仍然返回 null，迁移不放宽校验', () => {
+    const broken = legacyV1Record()
+    delete (broken.backup.data as unknown as Record<string, unknown>).studyRecords
+
+    expect(readPersistedState(broken)).toBeNull()
   })
 })

@@ -22,6 +22,11 @@ function backupText(data: ImportableMockData) {
   })
 }
 
+/** 演示数据只覆盖今天一天，取当天这一份餐次快照。 */
+function mealsOfToday(data: ImportableMockData) {
+  return data.dietDays.find((day) => day.date === localDateKey())?.meals ?? []
+}
+
 describe('complete mock data', () => {
   it('covers every importable Mock data slice with actionable records', () => {
     const data = createCompleteMockData()
@@ -70,9 +75,11 @@ describe('complete mock data', () => {
       ),
     ).toBe(true)
 
-    expect(data.meals).toHaveLength(4)
-    expect(data.meals.every((meal) => meal.entries.length > 0)).toBe(true)
-    expect(data.meals.filter((meal) => meal.photoName).length).toBeGreaterThanOrEqual(1)
+    const todayMeals = mealsOfToday(data)
+    expect(todayMeals).toHaveLength(4)
+    expect(todayMeals.every((meal) => meal.entries.length > 0)).toBe(true)
+    expect(todayMeals.filter((meal) => meal.photoName).length).toBeGreaterThanOrEqual(1)
+    expect(data.dietDays).toHaveLength(1)
 
     expect(data.fitnessSession?.sessionStatus).toBe('active')
     expect(data.fitnessSession?.exercises.length).toBeGreaterThanOrEqual(4)
@@ -123,7 +130,9 @@ describe('complete mock data', () => {
     expect(parsed.planItems).toHaveLength(data.planItems.length)
     expect(parsed.waterLog).toHaveLength(data.waterLog.length)
     expect(parsed.studyRecords).toHaveLength(data.studyRecords.length)
-    expect(parsed.meals).toHaveLength(data.meals.length)
+    expect('meals' in parsed).toBe(false)
+    expect(parsed.dietDays).toHaveLength(data.dietDays.length)
+    expect(parsed.fitnessHistory).toHaveLength(0)
     expect(exercises).toHaveLength(data.fitnessSession?.exercises.length ?? 0)
     expect(parsed.reports).toHaveLength(data.reports.length)
     expect(exercises.some((exercise) => exercise.kind === 'duration')).toBe(true)

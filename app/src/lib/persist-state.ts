@@ -2,6 +2,8 @@ import type { ImportableMockData, MockSnapshot } from '../types'
 import {
   parseMockBackupValue,
   serializeMockBackup,
+  PERSIST_BACKUP_VERSION,
+  upgradeMockBackupData,
   type PersistBackupPayload,
 } from './mock-data-transfer'
 
@@ -12,14 +14,16 @@ export const PERSIST_STATE_STORE_NAME = 'mock-state'
 /**
  * 本地记录结构版本。改动 `PersistedStateRecord` 的形状就必须 +1，
  * 并在下面的 `MIGRATIONS` 里补一条「从旧版本升到该版本」的纯函数。
+ * v2（8d 数据历史化）：计划/饮水带 `date`，饮食升级为按日台账 `dietDays`，
+ * 新增 `fitnessHistory`，备份格式同步升到 0.3.0。
  */
-export const PERSIST_STATE_SCHEMA_VERSION = 1
+export const PERSIST_STATE_SCHEMA_VERSION = 2
 /** 交互后合并写入的防抖窗口，避免每次输入都开一个 IndexedDB 事务。 */
 export const PERSIST_SAVE_DEBOUNCE_MS = 200
 
 /**
  * 本地持久化记录：备份负载 + 快照 + 存储元信息。
- * `backup` 复用导出备份的 0.2.0 结构，因此「本地数据」和「备份文件」走同一套字段校验，
+ * `backup` 复用导出备份的 0.3.0 结构，因此「本地数据」和「备份文件」走同一套字段校验，
  * 也让后续 P4 的真实备份/恢复可以直接搬运这一层。
  */
 export type PersistedStateRecord = {
@@ -73,15 +77,35 @@ export function createPersistedStateRecord(
 
 /**
  * 每条迁移只负责把记录从 version 升到 version + 1，保持纯函数。
- * 版本 0 是「还没有 schemaVersion 字段」的早期记录（只有 backup/snapshot）。
+ * 版本 0 是「还没有 schemaVersion 字段」的早期记录（只有 backup/snapshot）；
+ * 版本 1 → 2 是 8d 数据历史化：补日期、饮食改按日台账、训练历史归档。
  */
-const MIGRATIONS: Record<number, (record: UnknownRecord) => UnknownRecord> = {
+const MIGRATIONS: Record<number, (record: UnknownRecord, now: Date) => UnknownRecord> = {
   0: (record) => ({
     ...record,
     schemaVersion: 1,
     savedAt:
       typeof record.savedAt === 'string' ? record.savedAt : readBackupExportedAt(record.backup),
   }),
+  1: (record, now) => {
+    // 归档日期取「上次保存那一天」，比迁移当天更接近真实完成时间。
+    const savedAtMs = typeof record.savedAt === 'string' ? Date.parse(record.savedAt) : Number.NaN
+    const archiveNow = Number.isNaN(savedAtMs) ? now : new Date(savedAtMs)
+    const backup = isRecord(record.backup) ? record.backup : null
+    return {
+      ...record,
+      schemaVersion: 2,
+      backup: backup
+        ? {
+            ...backup,
+            version: PERSIST_BACKUP_VERSION,
+            data: upgradeMockBackupData(backup.data, archiveNow, {
+              archiveCompletedSession: true,
+            }),
+          }
+        : record.backup,
+    }
+  },
 }
 
 function detectSchemaVersion(record: UnknownRecord): number | null {
@@ -102,8 +126,12 @@ export function readPersistedSchemaVersion(raw: unknown): number | null {
 /**
  * 把任意读到的对象迁移到当前版本。
  * 未来版本（大于当前）返回 null：宁可这一轮不读，也不要用旧代码覆盖新版数据。
+ * `now` 只用于给旧数据补日期（缺日期的计划/饮水算作当天），便于单测注入固定时间。
  */
-export function migratePersistedStateRecord(raw: unknown): UnknownRecord | null {
+export function migratePersistedStateRecord(
+  raw: unknown,
+  now: Date = new Date(),
+): UnknownRecord | null {
   if (!isRecord(raw)) return null
   const version = detectSchemaVersion(raw)
   if (version === null || version > PERSIST_STATE_SCHEMA_VERSION) return null
@@ -112,7 +140,7 @@ export function migratePersistedStateRecord(raw: unknown): UnknownRecord | null 
   for (let from = version; from < PERSIST_STATE_SCHEMA_VERSION; from += 1) {
     const step = MIGRATIONS[from]
     if (!step) return null
-    record = step(record)
+    record = step(record, now)
   }
   return record
 }
@@ -121,13 +149,13 @@ export function migratePersistedStateRecord(raw: unknown): UnknownRecord | null 
  * 把 IndexedDB 读到的原始记录还原成可用的业务数据。
  * 任何校验失败都返回 null（调用方回退到演示数据），不抛错——本地数据永远不该让页面白屏。
  */
-export function readPersistedState(raw: unknown): PersistedState | null {
-  const record = migratePersistedStateRecord(raw)
+export function readPersistedState(raw: unknown, now: Date = new Date()): PersistedState | null {
+  const record = migratePersistedStateRecord(raw, now)
   if (!record || record.schemaVersion !== PERSIST_STATE_SCHEMA_VERSION) return null
 
   try {
     return {
-      data: parseMockBackupValue(record.backup),
+      data: parseMockBackupValue(record.backup, now),
       snapshot: isMockSnapshot(record.snapshot) ? record.snapshot : null,
       savedAt: typeof record.savedAt === 'string' ? record.savedAt : '',
     }
