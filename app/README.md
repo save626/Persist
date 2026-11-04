@@ -37,13 +37,14 @@ npm run build        # 生产构建
 
 主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话在授权且服务端可用时调用真实 DeepSeek（标注「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock（标注「本地生成 · Mock 对话」）。`/reports` 的「今日简报」同理：授权 + 服务端可用时经 `/api/report` 生成文字（标注「DeepSeek 生成 · 经本站服务端代理」），否则本地 Mock（标注「本地生成 · Mock 报告」）。
 
-测试现状（2026-11-04 步骤 8c 后复跑）：`npm test` **149 条**单元测试（10 个文件，新增 `src/lib/ai-report-client.test.ts` 10 条），`npx playwright test` 51 用例 × 2 项目 = **102 次执行**（0 跳过），`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图（**8c 改了 `/reports` 文案与按钮，reports 基线已过期、待重跑并经用户验收**）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
+测试现状（2026-11-04 步骤 8c + reports 基线重跑后）：`npm test` **149 条**单元测试（10 个文件，含 `src/lib/ai-report-client.test.ts` 10 条），`npx playwright test` 51 用例 × 2 项目 = **102 次执行**（0 跳过），`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图（**8c 改动后 reports 6 张基线已单独重跑、各项 0、exit 0，并经用户双端验收，随 `7625865` 入库**）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
 
 > **`visual:check` 的前置条件**：脚本只连接已在运行的 4173，**自己不启动后端**。步骤 8b 之后 `/plans` 会先探测 `/api/health`，步骤 8c 之后 `/reports` 同样探测，所以跑之前要另开终端起本机后端 `cd ../server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，页面显示 Mock，与基线一致）。后端不在时 Vite 代理返回 502，浏览器把每个 `/plans`、`/reports` 状态记控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判失败（exit 1，截图像素本身没问题）。
 
 ## 待办（按顺序）
 
-1. 步骤 9：IP 直连首次部署（本地 build 上传 `app/dist` + Nginx 深链/反代/gzip + systemd；`/api/report` 需 `proxy_read_timeout ≥60s`，SSE 需 `proxy_buffering off`），部署前先重跑 `/reports` 视觉基线并让用户验收；步骤 10 备案通过后域名 + HTTPS。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
+1. 步骤 9：IP 直连首次部署（本地 build 上传 `app/dist` + Nginx 深链/反代/gzip + systemd；`/api/report` 需 `proxy_read_timeout ≥60s`，SSE 需 `proxy_buffering off`），无前置（`/reports` 基线已验收）；步骤 10 备案通过后域名 + HTTPS。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
+2. 步骤 11–14（P4）：先做 8d 数据历史化（训练真实历史、饮食/饮水/计划按日台账、`schemaVersion` 1→2、备份 0.3.0），再做设备令牌 + 增量同步、服务端聚合 + AI 综合分析、备份/恢复/导出/删除；前端侧改动集中在 `types.ts`、`persist-state.ts` 迁移、`FitnessPage`/`DietPage`/`HomePage` 历史读取与设置页同步区块。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §6–§7。
 
 已完成（2026-11-04）：
 

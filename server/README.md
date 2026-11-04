@@ -1,13 +1,13 @@
 # Server
 
-Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 再加 SQLite 备份/同步。
+Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 再加 SQLite 数据副本、增量同步与**服务端聚合的事实包 + AI 综合分析**（设计见 `docs/P4-数据层与AI综合分析设计方案.md`，**尚未实施**）。
 
 ## 约束（不要破坏）
 
 - 监听 `127.0.0.1:3000`，**不直接对外**；生产由 Nginx 反代 `/api/*`（见 `docs/部署与服务器现状.md`）。
-- 服务器运行时是 **Node.js v20.20.2**（本机 v22.19.0），代码与依赖必须兼容 Node 20；`engines` 写 `>=20.19`，**不能用 `node:sqlite`**。
+- 服务器运行时是 **Node.js v20.20.2**（本机 v22.19.0），代码与依赖必须兼容 Node 20；`engines` 写 `>=20.19`，**当前用不了内置 `node:sqlite`**。P4 开发前必须先拍板：把服务器升到 Node 22/24（用内置 `node:sqlite`，无 native 依赖，推荐）或保留 Node 20 用 `better-sqlite3`（需 gcc-c++/make/python3 编译）。二选一与影响见 `docs/P4-数据层与AI综合分析设计方案.md` §4/§18-1。
 - 任何 API Key 只能保存在服务器 `/etc/persist/server.env`（权限 `600`）；仓库只提交 `.env.example`，禁止 Key 进入 Web 构建产物或 Android 安装包。日志里也不打印 Key。
-- P3 阶段**不引入数据库**（代理是无状态转发）。P4 用 **SQLite 单文件库**（`/var/lib/persist/persist.sqlite`），**不装 MySQL/MariaDB**。
+- P3 阶段**不引入数据库**（代理是无状态转发）。P4 用 **SQLite 单文件库**（`/var/lib/persist/persist.sqlite` + 备份目录 `/var/lib/persist/backups`），**不装 MySQL/MariaDB**；不用 ORM，直接 SQL（`server/src/db/*` 隔离驱动）。
 - 前端只请求相对路径 `/api/*`；Mock 是「无 Key / 服务不可用」时的降级路径，降级时界面必须如实标注。
 - 流式接口是 SSE；Nginx 侧必须 `proxy_buffering off`，否则整段回答会一次性吐出。`/api/report` 是**非流式 JSON**（一次调用等 10–25 s 才返回），Nginx 侧 `proxy_read_timeout` 要 ≥60 s。
 - `/api/chat` 与 `/api/report` **共用同一个按 IP 限流器**（默认 20 次 / 5 分钟），这是有意的：两个接口都消耗同一个 DeepSeek 额度。
@@ -181,4 +181,5 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 - ✅ 8c（`bdd4265`，2026-11-04）报告接服务端：新增 `POST /api/report`（非流式 JSON）+ `ai/report.ts` 净化 + 报告提示词；前端 `app/src/lib/ai-report-client.ts` 先 `probeAiReport()` 探活，可用才走真实生成，不可用/失败自动回退本地 Mock 并如实标注。**已用真实 Key 验证**：完整摘要 2.7 s 返回、只授权学习时报告不出现训练/饮食字样；提示词原版允许「推算」，真实调用确实算出了「再补水约 0.5 L」这类未授权数字，已改为**禁止任何推算**并复验通过。
 - ⚠️ 联调用过的真实 Key 必须在上线前轮换；并发、按 IP 限流命中、Nginx 反代下的 SSE 与 `/api/report` 长连接超时需部署后复验。
 - ⬜ 9 部署：systemd `persist-server.service` + `/etc/persist/server.env`(600) + Nginx（`/api` 反代 + SSE `proxy_buffering off` + `proxy_read_timeout ≥60s`）。
-- 结构说明：请求/响应类型暂放 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），`shared/` 迁移**推迟**——前端已冻结，现在挪动会同时改 app 的 tsconfig/构建，收益不抵风险；P3 收尾或 P4 再统一。
+- ⬜ P4（步骤 12–14，设计已定稿未实施）：`src/db/*`（driver/repo/migrate）、设备令牌（`token_hash` + 恢复码）、`/api/v1/sync/{bootstrap,push,pull}`、服务端 SQL 聚合 + `ANALYSIS_SYSTEM_PROMPT` + `/api/v1/analysis/*`、报告归档/缓存/可选定时、备份 `VACUUM INTO` 与导出/删除账号。**前置是步骤 11（8d 数据历史化）**——当前只有学习记录有真实历史，训练历史是前端演示常量，服务端即使有库也分析不出趋势。见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
+- 结构说明：请求/响应类型暂放 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），`shared/` 迁移**推迟**——前端已冻结，现在挪动会同时改 app 的 tsconfig/构建，收益不抵风险；P3 收尾或 P4 再统一（P4 方案 §17 已把这一步记为技术债，建议在步骤 12 前完成）。
