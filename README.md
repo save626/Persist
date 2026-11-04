@@ -4,11 +4,11 @@ Persist 是一款以“今日”为中心的个人长期记录工具，用于统
 
 ## 当前阶段
 
-前端产品原型已完成并通过视觉验收（2026-11-03）：八个页面可完整点击验收，AI 引导建档 → 长期计划闭环已打通（步骤 8b 起可经本站服务端调用 DeepSeek，服务不可用时诚实回退本地 Mock），JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），**全部业务数据已写入浏览器本机 IndexedDB**（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划、设置、复盘、快照），设置页提供「清空本机数据」入口可一键回到初始示例数据，单元测试 139 条与 E2E 102 次执行（0 跳过）全绿；全页面视觉基线 15 状态 × 6 视口（1440 / 500 / 430 / 421×926 / 390 / 360）已由用户在桌面端与移动端逐页验收通过（设置页新增的清空卡片待重新验收），前端视觉范围冻结。Git 提交链已全部推送至 [save626/Persist](https://github.com/save626/Persist)（`bd779eb` 初始提交、`da787c4`/`e3e9730` 文档同步、`128d6a2` 步骤 6 持久化、`a544a38` 步骤 7 清空入口、`d4c9696` 清理、`style:` 格式化），仓库具备回滚基线。后端、DeepSeek API、真实备份恢复与 Android 打包均在此之后开始。
+前端产品原型已完成并通过视觉验收（2026-11-03）：八个页面可完整点击验收，AI 引导建档 → 长期计划闭环已打通（步骤 8b 起可经本站服务端调用 DeepSeek），AI 报告文字也已接真实模型（步骤 8c，服务不可用时诚实回退本地 Mock），JSON 导出导入已是备份 0.2.0（含长期计划、兼容旧 0.1.0），**全部业务数据已写入浏览器本机 IndexedDB**（刷新 / 关闭标签页 / 重开浏览器不丢，含长期计划、设置、复盘、快照），设置页提供「清空本机数据」入口可一键回到初始示例数据，单元测试 149 条（app，另服务端 58 条）与 E2E 102 次执行（0 跳过）全绿；全页面视觉基线 15 状态 × 6 视口（1440 / 500 / 430 / 421×926 / 390 / 360）已由用户在桌面端与移动端逐页验收通过（`/reports` 因 8c 文案变更待重新验收），前端视觉范围冻结。Git 提交链已全部推送至 [save626/Persist](https://github.com/save626/Persist)（`bd779eb` 初始提交、`da787c4`/`e3e9730` 文档同步、`128d6a2` 步骤 6 持久化、`a544a38` 步骤 7 清空入口、`d4c9696` 清理、`style:` 格式化、`9138175` 8a、`b99d3ad` 8b、`bdd4265` 8c），仓库具备回滚基线。后端数据库、真实备份恢复与 Android 打包均在此之后开始。
 
 详细现状、契约与已知问题以 `HANDOFF.md` 为准（其中 §0.4 是下一步执行计划，§6.6 是持久化说明）；一页速览见 [`docs/项目现状总览.md`](docs/项目现状总览.md)。
 
-服务器环境已就绪（2026-11-03）：阿里云 ECS 2 核 2 GiB（Alibaba Cloud Linux 3），已装 Node.js 20 + Nginx，80 端口已开放；域名 `wpersist.top` 已购买、实名认证已通过、ICP 备案已提交（阿里云初审中），**项目代码尚未部署**。服务端 P3 已实现（`server/`，8a `9138175` + 8b `b99d3ad`）：Fastify 监听 `127.0.0.1:3000`，提供 `GET /api/health` 与 SSE `POST /api/chat`（DeepSeek 流式回复 + 结构化抽取、白名单净化、按 IP 限流、超时/取消/有限重试），单测 41 条全绿；前端 `PlanChatSheet` 已接入 `/api/chat`（仅在档案页开启 AI 数据授权且服务端健康时调用，失败/未授权回退本地 Mock 并如实标注），**已用真实 DeepSeek Key 完成端到端联调**（真实调用暴露模型给出过去日期的问题，已通过提示词注入北京日期 + 前端日期兜底修复并复验）。AI 报告仍为本地 Mock（8c 待做）；**项目代码尚未部署**，部署见步骤 9。目标架构是 Nginx 托管前端静态产物 + `/api` 反向代理到 Fastify，约束见 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)。
+服务器环境已就绪（2026-11-03）：阿里云 ECS 2 核 2 GiB（Alibaba Cloud Linux 3），已装 Node.js 20 + Nginx，80 端口已开放；域名 `wpersist.top` 已购买、实名认证已通过、ICP 备案已提交（阿里云初审中），**项目代码尚未部署**。服务端 P3 已实现（`server/`，8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`）：Fastify 监听 `127.0.0.1:3000`，提供 `GET /api/health`、SSE `POST /api/chat` 与 JSON `POST /api/report`（DeepSeek 流式回复 + 结构化抽取 + 报告文字生成、白名单净化、按 IP 限流、超时/取消/有限重试），单测 58 条全绿；前端 `PlanChatSheet` 已接入 `/api/chat`、`ReportsPage` 已接入 `/api/report`（仅在档案页开启 AI 数据授权且服务端健康时调用，失败/未授权回退本地 Mock 并如实标注），**两处都已用真实 DeepSeek Key 完成端到端联调**（先后暴露「过去日期」与「模型擅自推算数字」两类缺陷，均已通过提示词修复并复验）。报告的指标与依据仍由前端按本地记录生成，「训练建议 / 学习观察」仍打开本地报告；**项目代码尚未部署**，部署见步骤 9。目标架构是 Nginx 托管前端静态产物 + `/api` 反向代理到 Fastify，约束见 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)。
 
 ## 下一步（按顺序）
 
@@ -19,8 +19,8 @@ Persist 是一款以“今日”为中心的个人长期记录工具，用于统
 | 步骤 5 | 清理待删文件后建立**首个 Git 提交**并推送到 GitHub | ✅ 已完成（2026-11-03，`main` / `bd779eb` + 文档 `da787c4`） |
 | 步骤 6 | 本机持久化（原生 IndexedDB，未引入 Dexie） | ✅ 已完成（2026-11-03，`main` / `128d6a2` 已推送） |
 | 步骤 7 | 设置页「清空本机数据」入口（P3-0） | ✅ 已完成（2026-11-03，`a544a38` 已推送） |
-| 步骤 8 | Fastify + DeepSeek 服务端代理（P3） | 🔄 进行中：8a 服务端（`9138175`，单测 41/41）与 8b 前端接入 + 真实 Key 联调（`b99d3ad`）已完成；8c AI 报告接服务端待做 |
-| 步骤 9 | IP 直连首次部署（本地构建上传 + Nginx 深链/反代/缓存） | 待开始 |
+| 步骤 8 | Fastify + DeepSeek 服务端代理（P3） | ✅ 代码完成：8a 服务端（`9138175`）、8b 前端接入 + 真实 Key 联调（`b99d3ad`）、8c 报告接入 + 真实 Key 联调（`bdd4265`，服务端单测 58/58）；剩步骤 9 部署验收与 `/reports` 视觉基线重跑 |
+| 步骤 9 | IP 直连首次部署（本地构建上传 + Nginx 深链/反代/缓存） | 待开始（部署前先重跑 `/reports` 视觉基线并验收） |
 | 步骤 10 | 备案通过后：域名 + HTTPS + 安全加固 | 待备案 |
 | 后续 | 真实备份恢复（P4）→ Capacitor Android（P5） | 未开始 |
 
@@ -28,7 +28,7 @@ Persist 是一款以“今日”为中心的个人长期记录工具，用于统
 
 ```text
 app/      React + Vite Web 客户端
-server/   Fastify + DeepSeek 代理（P3 8a+8b）：/api/health 与 SSE /api/chat
+server/   Fastify + DeepSeek 代理（P3 8a+8b+8c）：/api/health、SSE /api/chat、POST /api/report
 shared/   跨端共享类型和纯净业务工具（仍为占位，类型暂在 server/src/contract.ts）
 design/   已确认的视觉原型与截图
 docs/     产品规划与工程约定
@@ -47,22 +47,22 @@ npm run dev -- --port 4173
 ```powershell
 npm run lint
 npm run typecheck
-npm test               # 139 条单元测试（9 个文件）
+npm test               # 149 条单元测试（10 个文件）
 npx playwright test    # 51 用例 × 2 项目 = 102 次执行，0 跳过
-npm run visual:check   # 15 状态 × 6 视口 = 91 张截图到 design/
+npm run visual:check   # 15 状态 × 6 视口 = 91 张截图到 design/（需先起无 Key 后端；reports 基线待重跑）
 npm run build
 ```
 
-服务端（P3 8a+8b，详见 [`server/README.md`](server/README.md)）：
+服务端（P3 8a+8b+8c，详见 [`server/README.md`](server/README.md)）：
 
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
 npm run typecheck      # 0 错
-npm test               # 41 条单元测试（7 个文件）
+npm test               # 58 条单元测试（8 个文件）
 npm run build          # tsc → dist/
 Copy-Item .env.example .env   # 本机联调才需要填 DEEPSEEK_API_KEY；.env 不入库、用完即删
-node dist/index.js            # 默认 127.0.0.1:3000，无 Key 时 /api/chat 返回 503
+node dist/index.js            # 默认 127.0.0.1:3000，无 Key 时 /api/chat、/api/report 返回 503
 ```
 
 ## 视觉基线
@@ -71,7 +71,7 @@ node dist/index.js            # 默认 127.0.0.1:3000，无 Key 时 /api/chat �
 
 主色为灰白与低饱和浅蓝，固定一级导航为“今日 / 健身 / 饮食 / 学习 / AI 报告”（五项，不随功能增加）。重要目标倒计时为两个独立目标，不与今日计划强绑定。
 
-长期计划页 `/plans` 不占主导航，从个人档案页「AI 建档」、今日页计划区底部「长期计划 →」或直接访问 `/plans` 进入；该页的 AI 对话在「档案页开启 AI 数据授权 + 服务端可用」时经本站 `/api/chat` 调用 DeepSeek（标题标「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock 并标注「本地生成 · Mock 对话」（本次请求失败时也会在对话底部明确说明已回退）。
+长期计划页 `/plans` 不占主导航，从个人档案页「AI 建档」、今日页计划区底部「长期计划 →」或直接访问 `/plans` 进入；该页的 AI 对话在「档案页开启 AI 数据授权 + 服务端可用」时经本站 `/api/chat` 调用 DeepSeek（标题标「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock 并标注「本地生成 · Mock 对话」（本次请求失败时也会在对话底部明确说明已回退）。AI 报告页 `/reports` 的「今日简报」同理：授权 + 服务端可用时经 `/api/report` 生成报告文字（标注「DeepSeek 生成 · 经本站服务端代理」），否则标注「本地生成 · Mock 报告」；报告的统计数字与依据条目始终由前端按本地记录生成。
 
 ## 数据保存在哪里
 
