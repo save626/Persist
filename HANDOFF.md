@@ -1,6 +1,6 @@
 # Persist 项目交接文档
 
-> 更新：2026-11-04 · 分支 `main` · 基线 `e260602` + 本次两个提交：步骤 9 IP 直连部署验收（`76df093`）与晨间简报接真实模型（`9f9cc71`）（本文件随之提交并推送）
+> 更新：2026-11-04 · 分支 `main` · 基线 `e260602` + 本次提交链：步骤 9 IP 直连部署（`76df093`）→ 晨间简报接真实模型（`9f9cc71`）→ 文档同步（`267146a`）→ 双端验收通过记录（本提交）
 > 本文件是「**现在是什么 + 下一步做什么**」的唯一事实源。其他分工：项目介绍与长期规划 → [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)（v2.0）；部署与服务器 → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)；P4 终态设计 → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md)；工程/视觉/测试约定 → [`docs/工程约定.md`](docs/工程约定.md)。
 > 当前阶段：八个页面（含 `/plans`）与既有交互已完成并视觉验收，**前端已冻结**——唯一例外是 2026-11-04 经用户批准的「今日页晨间简报接入真实 AI」（`9f9cc71`，仅动该面板与其摘要模块，未改其他页面行为）；服务端 P3（8a/8b/8c）已完成，**步骤 9（IP 直连部署）已于 2026-11-04 完成并通过验收**（真实 DeepSeek Key 已轮换，只存服务器 `/etc/persist/server.env`），晨间简报接入后已重新部署；P4 终态设计已定稿、未实施；ICP 备案阿里云初审已通过（2026-11-04），计划 2026-11-05 提交管局，**备案号未下发 ⇒ 仍属「备案中」，不得宣称「已上线」**。
 > 本地验收地址：`http://127.0.0.1:4173/`（`cd app` 后 `npm run dev -- --port 4173`；手机访问加 `--host 0.0.0.0`）。
@@ -178,7 +178,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 设置 | 已完成 | Mock 已完成 | 已完成 | 已完成（本机 IndexedDB） | 已覆盖（含刷新恢复） |
 | 长期计划 | 已完成（`/plans`） | 已完成（含 AI 建档对话；8b 起可走真实 DeepSeek，失败回退 Mock） | 已完成 | 已完成（本机 IndexedDB） | 已覆盖（含刷新恢复、回退用例） |
 | 服务端 | 仅 API（`/api/health`、SSE `/api/chat`、JSON `/api/report`），无页面 | 8a/8b/8c 已完成（Fastify + DeepSeek 代理骨架 + 前端接入 + 报告生成） | 已接入（`/api/chat` 供 AI 建档；`/api/report` 供报告） | 无（P3 无状态；P4 用 SQLite 单文件） | 服务端单测 58/58；E2E 用不可达端口验证回退 |
-| 部署 / 服务器 | ECS 2C2G 已装 Node 20 + Nginx；2026-11-04 部署前端静态 + Fastify（IP 直连） | 无（P3 无状态） | 无（同源相对 `/api`） | 无（无服务端存储） | ✅ 步骤 9 验收 7/7 通过（§13.2） |
+| 部署 / 服务器 | ECS 2C2G 已装 Node 20 + Nginx；2026-11-04 部署前端静态 + Fastify（IP 直连） | 无（P3 无状态） | 无（同源相对 `/api`） | 无（无服务端存储） | ✅ 步骤 9 验收 7/7 通过（含用户双端人工验收，§13.2） |
 | Android | 未开始 | 无 | 无 | 无 | 无 |
 
 说明：持久化是**整库单记录**方案——13 个状态切片合成一条 `persist-mock-state` 记录，不按模块拆分 store；任一模块改动都会重写整条记录（写入量约 100–300 KB/次，200 ms 防抖）。
@@ -1393,7 +1393,7 @@ npm run visual:check
 6. **长请求**：`/api/report` 需 `proxy_read_timeout ≥ 60s`（服务端 25 s 超时 + 网络余量）。
 7. **限流真实命中**：`/api/chat` 与 `/api/report` 共用 20 次 / 5 分钟；上线前轮换曾出现在对话里的真实 Key，并复扫 `app/dist` / `server/dist` 无 `sk-`。
 
-**实测（2026-11-04，基线 `e260602`）**：本地 `npm run build` 产物与服务器逐文件 sha256 一致；`/var/www/persist` 为 `index.html` 611 B + `index-CrJgYfMj.css` 137705 B + `index-DmnjkjkL.js` 564705 B；`npm ci --omit=dev` 48 包；`/etc/persist/server.env` `600 root:root`，`/api/health` 返回 `ai:"deepseek"`；8 个页面深链 + 不存在路径全部 `200 text/html` 611 B；`index.html` `Cache-Control: no-cache`，hashed 资源 `public, max-age=31536000, immutable`；JS gzip 后 167325 B；SSE 200 / `text/event-stream` / chunked，首包 0.118 s、末包 4.215 s、188 个事件（末段 `proposal`→`warnings`→`done`）；`/api/report` 200 / 2.78 s；限流临时 `RATE_LIMIT_MAX=1` 时第 2 次 `429` + `Retry-After: 298`，随后恢复 20 并重启；`sk-[A-Za-z0-9]{16,}` 在 `/var/www/persist`、`/opt/persist/server`、journal 中命中 0（仅 env 文件 1 处）。用户双端人工验收见下方待办。
+**实测（2026-11-04，基线 `e260602`）**：本地 `npm run build` 产物与服务器逐文件 sha256 一致；`/var/www/persist` 为 `index.html` 611 B + `index-CrJgYfMj.css` 137705 B + `index-DmnjkjkL.js` 564705 B；`npm ci --omit=dev` 48 包；`/etc/persist/server.env` `600 root:root`，`/api/health` 返回 `ai:"deepseek"`；8 个页面深链 + 不存在路径全部 `200 text/html` 611 B；`index.html` `Cache-Control: no-cache`，hashed 资源 `public, max-age=31536000, immutable`；JS gzip 后 167325 B；SSE 200 / `text/event-stream` / chunked，首包 0.118 s、末包 4.215 s、188 个事件（末段 `proposal`→`warnings`→`done`）；`/api/report` 200 / 2.78 s；限流临时 `RATE_LIMIT_MAX=1` 时第 2 次 `429` + `Retry-After: 298`，随后恢复 20 并重启；`sk-[A-Za-z0-9]{16,}` 在 `/var/www/persist`、`/opt/persist/server`、journal 中命中 0（仅 env 文件 1 处）。用户已于 2026-11-04 完成桌面 + 手机双端人工验收（通过）。
 
 **同日再次部署（晨间简报接入真实模型，`9f9cc71`）**：仍为同一 IP 直连环境，`/var/www/persist` 更新为 `index.html` 611 B + `index-CrJgYfMj.css` 137705 B + **`index-V0Wxk7Aw.js` 567713 B**，旧 `index-DmnjkjkL.js` 返回 404（153 B 错误页）；JS gzip **168582 B**；`/` 与 `/reports` 均 200 / 611 B；`/api/health` 200 `ai:"deepseek"`；真实 `POST /api/report` **200 / 2.701 s**（`title:"先把餐次和饮水补齐"`、`status:"待推进"`、conclusions 3 / actions 3 / warnings 0）；本地与远程 sha256 逐个一致。
 
