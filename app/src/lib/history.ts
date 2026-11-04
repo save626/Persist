@@ -23,6 +23,21 @@ export function todayDateKey(now: Date = new Date()): string {
   return toIsoDate(now)
 }
 
+/**
+ * 日期键 → 界面文案：`{ date: '11 月 4 日', weekday: '周三' }`。
+ * 用本地时区构造日期再格式化，避免 `new Date('YYYY-MM-DD')` 被当成 UTC 而串日；
+ * 非法键原样返回 `date`、`weekday` 为空串，交给界面决定怎么兜底。
+ */
+export function dateKeyLabel(dateKey: string): { date: string; weekday: string } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
+  if (!match) return { date: dateKey, weekday: '' }
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return {
+    date: `${Number(match[2])} 月 ${Number(match[3])} 日`,
+    weekday: new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(date),
+  }
+}
+
 /** 在日期键上加减天数；非法键原样返回，避免把脏数据扩散成 `NaN-NaN-NaN`。 */
 export function addDaysToDateKey(dateKey: string, days: number): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)

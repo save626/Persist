@@ -14,6 +14,11 @@ import {
   summarizeFitness,
   type RecordedWorkout,
 } from '../lib/fitness'
+import {
+  buildHistorySessions,
+  type HistorySessionRow,
+  type HistorySetRow,
+} from '../lib/fitness-history'
 import { useNewRecordParam } from '../lib/use-new-record-param'
 import type {
   Exercise,
@@ -32,24 +37,6 @@ interface WorkoutTemplate {
   duration: number
   description: string
   exercises: Exercise[]
-}
-
-interface HistoryExercise {
-  name: string
-  muscle: string
-  sets: Array<{ weight: number; reps: number; rpe?: number }>
-}
-
-interface HistorySession {
-  id: string
-  date: string
-  weekday: string
-  title: string
-  detail: string
-  duration: string
-  volume: string
-  sets: string
-  exercises: HistoryExercise[]
 }
 
 const INITIAL_EXERCISES: Exercise[] = [
@@ -419,132 +406,6 @@ const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
           { id: 'curl-1', weight: 10, reps: 12, done: false },
           { id: 'curl-2', weight: 10, reps: 11, done: false },
           { id: 'curl-3', weight: 10, reps: 10, done: false },
-        ],
-      },
-    ],
-  },
-]
-
-const HISTORY: HistorySession[] = [
-  {
-    id: 'history-1',
-    date: '10 月 24 日',
-    weekday: '周五',
-    title: '下肢力量 B',
-    detail: '深蹲 · 罗马尼亚硬拉 · 腿举',
-    duration: '48 min',
-    volume: '6,280 kg',
-    sets: '12 组',
-    exercises: [
-      {
-        name: '杠铃深蹲',
-        muscle: '股四头 / 臀',
-        sets: [
-          { weight: 70, reps: 8, rpe: 7.5 },
-          { weight: 70, reps: 8, rpe: 8 },
-          { weight: 70, reps: 7, rpe: 8.5 },
-        ],
-      },
-      {
-        name: '罗马尼亚硬拉',
-        muscle: '腘绳肌 / 臀',
-        sets: [
-          { weight: 60, reps: 10, rpe: 8 },
-          { weight: 60, reps: 10, rpe: 8.5 },
-          { weight: 60, reps: 9, rpe: 9 },
-        ],
-      },
-      {
-        name: '腿举',
-        muscle: '股四头 / 臀',
-        sets: [
-          { weight: 100, reps: 12, rpe: 7 },
-          { weight: 100, reps: 12, rpe: 7.5 },
-          { weight: 100, reps: 11, rpe: 8 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'history-2',
-    date: '10 月 22 日',
-    weekday: '周三',
-    title: '上肢力量 A',
-    detail: '卧推 · 划船 · 推举',
-    duration: '43 min',
-    volume: '5,760 kg',
-    sets: '11 组',
-    exercises: [
-      {
-        name: '杠铃平板卧推',
-        muscle: '胸',
-        sets: [
-          { weight: 60, reps: 8, rpe: 7 },
-          { weight: 60, reps: 8, rpe: 7.5 },
-          { weight: 60, reps: 8, rpe: 8 },
-          { weight: 60, reps: 7, rpe: 8.5 },
-        ],
-      },
-      {
-        name: '杠铃划船',
-        muscle: '背',
-        sets: [
-          { weight: 50, reps: 10, rpe: 7.5 },
-          { weight: 50, reps: 9, rpe: 8 },
-          { weight: 50, reps: 8, rpe: 8.5 },
-        ],
-      },
-      {
-        name: '坐姿哑铃推肩',
-        muscle: '肩',
-        sets: [
-          { weight: 16, reps: 10, rpe: 7.5 },
-          { weight: 16, reps: 9, rpe: 8 },
-          { weight: 16, reps: 8, rpe: 8.5 },
-          { weight: 16, reps: 8, rpe: 8.5 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'history-3',
-    date: '10 月 20 日',
-    weekday: '周一',
-    title: '下肢力量 A',
-    detail: '硬拉 · 保加利亚分腿蹲',
-    duration: '51 min',
-    volume: '7,180 kg',
-    sets: '13 组',
-    exercises: [
-      {
-        name: '传统硬拉',
-        muscle: '后链',
-        sets: [
-          { weight: 90, reps: 5, rpe: 7.5 },
-          { weight: 90, reps: 5, rpe: 8 },
-          { weight: 90, reps: 5, rpe: 8.5 },
-          { weight: 90, reps: 4, rpe: 9 },
-        ],
-      },
-      {
-        name: '保加利亚分腿蹲',
-        muscle: '股四头 / 臀',
-        sets: [
-          { weight: 20, reps: 10, rpe: 8 },
-          { weight: 20, reps: 10, rpe: 8 },
-          { weight: 20, reps: 9, rpe: 8.5 },
-          { weight: 20, reps: 9, rpe: 8.5 },
-        ],
-      },
-      {
-        name: '腿弯举',
-        muscle: '腘绳肌',
-        sets: [
-          { weight: 35, reps: 12, rpe: 7.5 },
-          { weight: 35, reps: 12, rpe: 8 },
-          { weight: 35, reps: 11, rpe: 8 },
-          { weight: 35, reps: 10, rpe: 8.5 },
-          { weight: 35, reps: 10, rpe: 8.5 },
         ],
       },
     ],
@@ -1226,10 +1087,12 @@ function AddExerciseSheet({
   )
 }
 function FullHistorySheet({
+  sessions,
   onSelect,
   onClose,
 }: {
-  onSelect: (session: HistorySession) => void
+  sessions: HistorySessionRow[]
+  onSelect: (session: HistorySessionRow) => void
   onClose: () => void
 }) {
   return (
@@ -1239,40 +1102,56 @@ function FullHistorySheet({
       onClose={onClose}
       className="mock-detail-sheet"
     >
-      <div className="full-history-list">
-        {HISTORY.map((session) => (
-          <button
-            className="full-history-row"
-            type="button"
-            key={session.id}
-            onClick={() => onSelect(session)}
-          >
-            <span className="full-history-date">
-              <strong>{session.date}</strong>
-              <small>{session.weekday}</small>
-            </span>
-            <span className="full-history-copy">
-              <strong>{session.title}</strong>
-              <small>{session.detail}</small>
-            </span>
-            <span className="full-history-stats">
-              <span>{session.duration}</span>
-              <span>{session.sets}</span>
-              <span>{session.volume}</span>
-            </span>
-            <Icon name="chev" className="icon-sm" />
-          </button>
-        ))}
-      </div>
+      {sessions.length === 0 ? (
+        <div className="surface-note">
+          <Icon name="fitness" className="icon-sm" />
+          <span>还没有训练记录。完成一次训练后，这里会出现当天的动作与组数。</span>
+        </div>
+      ) : (
+        <div className="full-history-list">
+          {sessions.map((session) => (
+            <button
+              className="full-history-row"
+              type="button"
+              key={session.id}
+              onClick={() => onSelect(session)}
+            >
+              <span className="full-history-date">
+                <strong>{session.date}</strong>
+                <small>{session.weekday}</small>
+              </span>
+              <span className="full-history-copy">
+                <strong>{session.title}</strong>
+                <small>{session.detail}</small>
+              </span>
+              <span className="full-history-stats">
+                <span>{session.duration}</span>
+                <span>{session.sets}</span>
+                <span>{session.volume}</span>
+              </span>
+              <Icon name="chev" className="icon-sm" />
+            </button>
+          ))}
+        </div>
+      )}
     </PageSheet>
   )
+}
+
+function setLineValues(set: HistorySetRow): string[] {
+  const values: string[] = []
+  if (set.weight !== undefined) values.push(`${set.weight} kg`)
+  if (set.reps !== undefined) values.push(`${set.reps} 次`)
+  if (set.durationMinutes !== undefined) values.push(`${set.durationMinutes} min`)
+  if (set.distanceKm !== undefined) values.push(`${set.distanceKm} km`)
+  return values
 }
 
 function HistoryDetailSheet({
   session,
   onClose,
 }: {
-  session: HistorySession
+  session: HistorySessionRow
   onClose: () => void
 }) {
   const allSets = session.exercises.flatMap((exercise) => exercise.sets)
@@ -1313,7 +1192,7 @@ function HistoryDetailSheet({
           </span>
           <div>
             <h3>动作与组数</h3>
-            <p>重量单位为 kg，RPE 为当时记录的主观强度。</p>
+            <p>力量组看重量与次数，有氧组看时长与距离；RPE 为当时记录的主观强度。</p>
           </div>
         </div>
         <div className="history-exercise-list">
@@ -1329,8 +1208,9 @@ function HistoryDetailSheet({
                 {exercise.sets.map((set, index) => (
                   <div className="history-set-line" key={`${exercise.name}-${index}`}>
                     <strong>#{index + 1}</strong>
-                    <span>{set.weight} kg</span>
-                    <span>{set.reps} 次</span>
+                    {setLineValues(set).map((value) => (
+                      <span key={value}>{value}</span>
+                    ))}
                     <span>{set.rpe ? `RPE ${set.rpe}` : 'RPE —'}</span>
                   </div>
                 ))}
@@ -1341,14 +1221,15 @@ function HistoryDetailSheet({
       </div>
       <div className="surface-note">
         <Icon name="lock" className="icon-sm" />
-        <span>这是历史 Mock 记录，不会因为切换今日模板或应用新建议而被改写。</span>
+        <span>这是完成训练时保存的真实记录，切换今日模板或应用新建议都不会改写它。</span>
       </div>
     </PageSheet>
   )
 }
 export function FitnessPage() {
   const { showToast } = useUI()
-  const { setPlanItems, fitnessSession, setFitnessSession, archiveFitnessSession } = useMockData()
+  const { setPlanItems, fitnessSession, setFitnessSession, archiveFitnessSession, fitnessHistory } =
+    useMockData()
   const newRecord = useNewRecordParam()
   const initialSession = useMemo(() => createFitnessSession(), [])
   const session = fitnessSession ?? initialSession
@@ -1364,9 +1245,15 @@ export function FitnessPage() {
   const [recordOpen, setRecordOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [selectedHistory, setSelectedHistory] = useState<HistorySession | null>(null)
+  const [selectedHistory, setSelectedHistory] = useState<HistorySessionRow | null>(null)
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [selectedExerciseId, setSelectedExerciseId] = useState('')
+
+  // 历史列表由真实的完成记录派生：完成训练时已归档，刷新后仍然可读。
+  const historySessions = useMemo(
+    () => buildHistorySessions(fitnessHistory, WORKOUT_TEMPLATES),
+    [fitnessHistory],
+  )
 
   // 地址栏的 ?new=1 直接派生出「记录运动」弹层，不再用 effect 复制状态。
   const recordSheetOpen = recordOpen || newRecord.active
@@ -1848,36 +1735,45 @@ export function FitnessPage() {
                 </h2>
                 <p className="panel-sub">回看完成度，也回看当时的状态。</p>
               </div>
-              <button className="btn quiet" type="button" onClick={() => setHistoryOpen(true)}>
-                查看全部
-                <Icon name="chev" className="icon-sm" />
-              </button>
-            </div>
-            <div className="fit-history-list">
-              {HISTORY.map((session) => (
-                <button
-                  className="fit-history-row"
-                  type="button"
-                  key={session.id}
-                  onClick={() => setSelectedHistory(session)}
-                >
-                  <span className="fit-history-date">
-                    <strong>{session.date}</strong>
-                    <small>{session.weekday}</small>
-                  </span>
-                  <span className="fit-history-copy">
-                    <strong>{session.title}</strong>
-                    <small>{session.detail}</small>
-                  </span>
-                  <span className="fit-history-stats">
-                    <span>{session.duration}</span>
-                    <span>{session.sets}</span>
-                    <span>{session.volume}</span>
-                  </span>
+              {historySessions.length > 0 && (
+                <button className="btn quiet" type="button" onClick={() => setHistoryOpen(true)}>
+                  查看全部
                   <Icon name="chev" className="icon-sm" />
                 </button>
-              ))}
+              )}
             </div>
+            {historySessions.length === 0 ? (
+              <div className="surface-note">
+                <Icon name="fitness" className="icon-sm" />
+                <span>还没有训练记录。完成一次训练后，这里会出现当天的动作与组数。</span>
+              </div>
+            ) : (
+              <div className="fit-history-list">
+                {historySessions.slice(0, 3).map((session) => (
+                  <button
+                    className="fit-history-row"
+                    type="button"
+                    key={session.id}
+                    onClick={() => setSelectedHistory(session)}
+                  >
+                    <span className="fit-history-date">
+                      <strong>{session.date}</strong>
+                      <small>{session.weekday}</small>
+                    </span>
+                    <span className="fit-history-copy">
+                      <strong>{session.title}</strong>
+                      <small>{session.detail}</small>
+                    </span>
+                    <span className="fit-history-stats">
+                      <span>{session.duration}</span>
+                      <span>{session.sets}</span>
+                      <span>{session.volume}</span>
+                    </span>
+                    <Icon name="chev" className="icon-sm" />
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
         </div>
 
@@ -2019,6 +1915,7 @@ export function FitnessPage() {
       )}
       {historyOpen && (
         <FullHistorySheet
+          sessions={historySessions}
           onClose={() => setHistoryOpen(false)}
           onSelect={(session) => {
             setHistoryOpen(false)
@@ -2089,8 +1986,8 @@ export function FitnessPage() {
             {
               title: '历史记录对照',
               detail:
-                '最近三次训练摘要与平均 RPE 会作为后续 DeepSeek 建议的上下文，但不会上传原始备注。',
-              value: `${HISTORY.length} 次`,
+                '最近的训练记录与平均 RPE 会作为后续 DeepSeek 建议的上下文，但不会上传原始备注。',
+              value: `${historySessions.length} 次`,
             },
           ]}
           note="当前为前端 Mock 依据。正式接入 DeepSeek 后，只发送训练摘要与你授权的档案字段。"

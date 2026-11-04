@@ -3,6 +3,7 @@ import type { DietDay, FitnessSessionState, Meal, MealId, PlanItem, WaterLogEntr
 import {
   addDaysToDateKey,
   createFitnessSessionRecord,
+  dateKeyLabel,
   dateKeysBetween,
   mealsForDate,
   patchMealsForDate,
@@ -28,6 +29,17 @@ describe('todayDateKey', () => {
 
   it('晚上 23:30 仍属于当天，不滚到第二天', () => {
     expect(todayDateKey(new Date(2026, 10, 4, 23, 30))).toBe('2026-11-04')
+  })
+})
+
+describe('dateKeyLabel', () => {
+  it('日期键转成界面文案，星期按本地时区计算', () => {
+    expect(dateKeyLabel('2026-11-04')).toEqual({ date: '11 月 4 日', weekday: '周三' })
+    expect(dateKeyLabel('2026-01-01')).toEqual({ date: '1 月 1 日', weekday: '周四' })
+  })
+
+  it('非法日期键原样返回，星期留空让界面兜底', () => {
+    expect(dateKeyLabel('2026/11/04')).toEqual({ date: '2026/11/04', weekday: '' })
   })
 })
 
@@ -108,8 +120,24 @@ describe('饮水与计划按日筛选', () => {
     { id: 'w3', milliliters: 400, time: '15:00', date: '2026-11-04' },
   ]
   const planItems: PlanItem[] = [
-    { id: 'p1', name: '昨日计划', time: '08:00', detail: '', kind: 'default', done: true, date: '2026-11-03' },
-    { id: 'p2', name: '今日计划', time: '09:00', detail: '', kind: 'study', done: false, date: '2026-11-04' },
+    {
+      id: 'p1',
+      name: '昨日计划',
+      time: '08:00',
+      detail: '',
+      kind: 'default',
+      done: true,
+      date: '2026-11-03',
+    },
+    {
+      id: 'p2',
+      name: '今日计划',
+      time: '09:00',
+      detail: '',
+      kind: 'study',
+      done: false,
+      date: '2026-11-04',
+    },
   ]
 
   it('饮水按日期筛选且保持写入顺序', () => {
@@ -189,7 +217,9 @@ describe('sortFitnessHistoryDesc', () => {
   })
 
   it('不修改入参数组', () => {
-    const input = [{ ...base, id: 'a', date: '2026-11-01', completedAt: '2026-11-01T10:00:00.000Z' }]
+    const input = [
+      { ...base, id: 'a', date: '2026-11-01', completedAt: '2026-11-01T10:00:00.000Z' },
+    ]
     sortFitnessHistoryDesc(input)
 
     expect(input).toHaveLength(1)

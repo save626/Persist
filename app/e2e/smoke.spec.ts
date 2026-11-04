@@ -252,23 +252,43 @@ test('quick record URLs open the matching mock forms', async ({ page }) => {
   await expect(editor).toBeVisible()
 })
 
-test('fitness template, evidence and history details are interactive', async ({ page }) => {
+test('fitness template, evidence and completed history details are interactive', async ({
+  page,
+}) => {
   await page.goto('/fitness')
 
   await page.locator('.fit-template-row').filter({ hasText: '下肢力量 B' }).click()
   await expect(page.getByText('已切换到 下肢力量 B，当前训练已重置')).toBeVisible()
   await expect(page.locator('.progress .count-note')).toContainText('下肢力量 B')
 
+  // 新会话还没有历史：依据里为 0 次，列表面板是空态而不是演示行。
   await page.getByRole('button', { name: '查看依据' }).click()
-  await expect(page.getByRole('dialog', { name: '训练分析依据' })).toBeVisible()
-  await expect(page.getByText('历史记录对照')).toBeVisible()
+  const evidence = page.getByRole('dialog', { name: '训练分析依据' })
+  await expect(evidence).toBeVisible()
+  await expect(evidence.getByText('历史记录对照')).toBeVisible()
+  await expect(evidence.getByText('0 次', { exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
+  await expect(page.locator('.fit-history')).toContainText('还没有训练记录')
+
+  // 完成一组并结束训练，历史由真实记录生成，刷新后仍在。
+  await page.getByRole('button', { name: /标记杠铃深蹲第 1 组完成/ }).click()
+  await page.getByRole('button', { name: '完成训练', exact: true }).click()
+  await expect(page.getByText('今日训练已完成')).toBeVisible()
+
+  // 本地持久化是 200ms 防抖写入，留一倍余量等 IndexedDB 落盘再刷新。
+  await page.waitForTimeout(450)
+  await page.reload()
+  const historyPanel = page.locator('.fit-history')
+  await expect(historyPanel).toContainText('下肢力量 B')
+  await expect(historyPanel).toContainText('杠铃深蹲')
+  await expect(historyPanel).not.toContainText('还没有训练记录')
 
   await page.getByRole('button', { name: '查看全部' }).click()
-  await expect(page.getByRole('dialog', { name: '训练历史' })).toBeVisible()
-  await page.locator('.full-history-row').first().click()
+  const historyDialog = page.getByRole('dialog', { name: '训练历史' })
+  await expect(historyDialog).toBeVisible()
+  await historyDialog.locator('.full-history-row').first().click()
   await expect(page.getByText('动作与组数')).toBeVisible()
-  await expect(page.getByText('历史 Mock 记录', { exact: false })).toBeVisible()
+  await expect(page.getByText('这是完成训练时保存的真实记录', { exact: false })).toBeVisible()
 })
 
 test('diet evidence sheet reflects recorded nutrition and water', async ({ page }) => {
