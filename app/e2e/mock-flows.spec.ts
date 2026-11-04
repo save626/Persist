@@ -199,14 +199,16 @@ test('report summaries update from study, diet and water changes', async ({ page
 
   await openReportsFromStudy(page)
   await expect(
-    page.getByText('当前有 11 条本地记录，本次可引用 11 条', { exact: false }),
+    page.getByText('近 7 天共 10 条本地记录，本次可引用 10 条', { exact: false }),
   ).toBeVisible()
   await page.getByRole('button', { name: '查看分析依据' }).click()
   await expect(
-    page.getByText('学习记录：共 6 条，英语 4 条、高数 2 条，累计 191 分钟'),
+    page.getByText('学习记录：近 7 天共 6 条，英语 4 条、高数 2 条，累计 191 分钟'),
   ).toBeVisible()
-  await expect(page.getByText('饮食记录：3 个有食物的餐次，共 5 个食物条目')).toBeVisible()
-  await expect(page.getByText('饮水记录：当前 1.45 L，摘要中包含 2 个记录节点')).toBeVisible()
+  await expect(page.getByText('饮食记录：近 7 天 3 个有食物的餐次，共 5 个食物条目')).toBeVisible()
+  await expect(
+    page.getByText('饮水记录：近 7 天累计 0.25 L（1 次记录，日均 0.04 L）'),
+  ).toBeVisible()
 })
 
 test('disabled AI sources are reflected in report evidence', async ({ page }) => {

@@ -63,6 +63,32 @@ export function dateKeysBetween(startKey: string, endKey: string): string[] {
   return keys
 }
 
+/** 报告等场景使用的闭区间「统计窗口」，起止都取本地自然日键。 */
+export interface DateWindow {
+  startKey: string
+  endKey: string
+  /** 窗口天数（含首尾），至少 1 天。 */
+  days: number
+}
+
+/**
+ * 以 `endKey` 为最后一天，向前取 `days` 天的闭区间窗口。
+ * 天数不是正整数时按 1 天处理，上限 366 天，避免脏参数把窗口拉成十年。
+ */
+export function createDateWindow(days: number, endKey: string): DateWindow {
+  const span = Number.isFinite(days) ? Math.min(366, Math.max(1, Math.trunc(days))) : 1
+  return {
+    startKey: addDaysToDateKey(endKey, -(span - 1)),
+    endKey,
+    days: span,
+  }
+}
+
+/** 日期键是否落在窗口内（闭区间，按字符串比较即可）。 */
+export function isDateKeyInWindow(dateKey: string, window: DateWindow): boolean {
+  return dateKey >= window.startKey && dateKey <= window.endKey
+}
+
 /** 取某一天的饮食台账；没有记录时返回空数组（而不是四个空餐次）。 */
 export function mealsForDate(dietDays: DietDay[], date: string): Meal[] {
   return dietDays.find((day) => day.date === date)?.meals ?? []

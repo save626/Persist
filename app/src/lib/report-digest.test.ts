@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { FitnessSessionState, Meal, MockSettings, ProfileData, StudyRecord } from '../types'
+import type {
+  DietDay,
+  FitnessSessionRecord,
+  FitnessSessionState,
+  Meal,
+  MockSettings,
+  ProfileData,
+  StudyRecord,
+  WaterLogEntry,
+} from '../types'
+import { createDateWindow } from './history'
 import {
   buildReportDigest,
   digestFingerprint,
@@ -176,12 +186,141 @@ describe('buildReportDigest', () => {
   })
 })
 
+describe('buildReportDigest 窗口口径（8d）', () => {
+  const window = createDateWindow(7, '2026-11-04')
+  const archived: FitnessSessionRecord = {
+    id: 'workout-1',
+    date: '2026-11-02',
+    completedAt: '2026-11-02T10:00:00.000Z',
+    templateId: 'tpl',
+    elapsedSeconds: 1_800,
+    exercises: [
+      {
+        id: 'e2',
+        name: '深蹲',
+        kind: 'strength',
+        muscle: '腿',
+        equipment: '杠铃',
+        targetReps: '8',
+        rest: '90s',
+        sets: [{ id: 's9', weight: 100, reps: 8, done: true }],
+      },
+    ],
+  }
+  const oldArchived: FitnessSessionRecord = {
+    ...archived,
+    id: 'workout-old',
+    date: '2026-09-01',
+    completedAt: '2026-09-01T10:00:00.000Z',
+  }
+  const dietDays: DietDay[] = [
+    {
+      date: '2026-11-04',
+      meals: [
+        ...meals,
+        { id: 'dinner', label: '晚餐', time: '18:30', entries: [] },
+        { id: 'snack', label: '加餐', time: '16:00', entries: [] },
+      ],
+    },
+    {
+      date: '2026-11-02',
+      meals: [
+        {
+          id: 'lunch',
+          label: '午餐',
+          time: '12:30',
+          entries: [
+            {
+              id: 'f9',
+              name: '鸡胸',
+              portion: '150 g',
+              calories: 200,
+              protein: 30,
+              carbs: 0,
+              fat: 5,
+            },
+          ],
+        },
+        { id: 'breakfast', label: '早餐', time: '08:00', entries: [] },
+        { id: 'dinner', label: '晚餐', time: '18:30', entries: [] },
+        { id: 'snack', label: '加餐', time: '16:00', entries: [] },
+      ],
+    },
+  ]
+  const waterHistory: WaterLogEntry[] = [
+    { id: 'w1', milliliters: 300, time: '09:10', date: '2026-11-04' },
+    { id: 'w2', milliliters: 400, time: '14:20', date: '2026-11-02' },
+    { id: 'w3', milliliters: 900, time: '14:20', date: '2026-09-01' },
+  ]
+
+  const windowInput = {
+    ...baseInput,
+    window,
+    fitnessHistory: [archived, oldArchived],
+    dietDays,
+    waterHistory,
+  }
+
+  it('训练取窗口内归档 + 进行中会话，窗口外的归档不算', () => {
+    const digest = buildReportDigest(windowInput)
+
+    expect(digest.fitness).toMatchObject({
+      hasSession: true,
+      exerciseCount: 2,
+      doneSets: 2,
+      strengthVolumeKg: 100 * 8 + 60 * 8,
+      exerciseNames: ['深蹲', '卧推'],
+    })
+  })
+
+  it('学习只统计窗口内的记录', () => {
+    const digest = buildReportDigest({
+      ...windowInput,
+      studyRecords: [
+        ...studyRecords,
+        {
+          id: 'st-old',
+          category: 'math',
+          source: '高数',
+          date: '2026-09-01',
+          startTime: '20:00',
+          duration: 60,
+          note: '',
+        },
+      ],
+    })
+
+    expect(digest.study).toEqual({
+      recordCount: 2,
+      englishCount: 1,
+      mathCount: 1,
+      totalMinutes: 75,
+    })
+  })
+
+  it('饮食按窗口内多日台账统计，饮水累加真实记录、不叠加今日基线', () => {
+    const digest = buildReportDigest(windowInput)
+
+    expect(digest.diet).toEqual({
+      mealCount: 2,
+      foodEntryCount: 3,
+      waterLiters: 0.7,
+      waterEvents: 2,
+    })
+  })
+
+  it('digest 字段形状不变，只携带 4 个模块', () => {
+    const digest = buildReportDigest(windowInput)
+
+    expect(Object.keys(digest).sort()).toEqual(['diet', 'fitness', 'profile', 'study'])
+    expect(digest.profile).toMatchObject({ ...profile, aiConsent: true })
+  })
+})
+
 describe('digestFingerprint', () => {
   it('摘要内容变化后指纹随之变化，用于让晨间简报缓存失效', () => {
     const before = digestFingerprint(buildReportDigest(baseInput))
-    const after = digestFingerprint(
-      buildReportDigest({ ...baseInput, waterLiters: 1.5 }),
-    )
+    const after = digestFingerprint(buildReportDigest({ ...baseInput, waterLiters: 1.5 }))
 
     expect(before).not.toBe(after)
     expect(digestFingerprint(buildReportDigest(baseInput))).toBe(before)

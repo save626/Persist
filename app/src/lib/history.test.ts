@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { DietDay, FitnessSessionState, Meal, MealId, PlanItem, WaterLogEntry } from '../types'
 import {
   addDaysToDateKey,
+  createDateWindow,
   createFitnessSessionRecord,
   dateKeyLabel,
   dateKeysBetween,
+  isDateKeyInWindow,
   mealsForDate,
   patchMealsForDate,
   patchPlanItemsForDate,
@@ -223,5 +225,42 @@ describe('sortFitnessHistoryDesc', () => {
     sortFitnessHistoryDesc(input)
 
     expect(input).toHaveLength(1)
+  })
+})
+
+describe('createDateWindow', () => {
+  it('以结束日为最后一天，向前覆盖 days 天（含首尾）', () => {
+    expect(createDateWindow(7, '2026-11-04')).toEqual({
+      startKey: '2026-10-29',
+      endKey: '2026-11-04',
+      days: 7,
+    })
+    expect(createDateWindow(1, '2026-11-04')).toEqual({
+      startKey: '2026-11-04',
+      endKey: '2026-11-04',
+      days: 1,
+    })
+  })
+
+  it('天数被夹到 1..366，脏参数不会拉出超长窗口', () => {
+    expect(createDateWindow(0, '2026-11-04').days).toBe(1)
+    expect(createDateWindow(-5, '2026-11-04').days).toBe(1)
+    expect(createDateWindow(2.9, '2026-11-04').days).toBe(2)
+    expect(createDateWindow(9999, '2026-11-04').days).toBe(366)
+    expect(createDateWindow(Number.NaN, '2026-11-04').days).toBe(1)
+  })
+})
+
+describe('isDateKeyInWindow', () => {
+  const window = createDateWindow(7, '2026-11-04')
+
+  it('首尾两天都算在窗口内', () => {
+    expect(isDateKeyInWindow('2026-10-29', window)).toBe(true)
+    expect(isDateKeyInWindow('2026-11-04', window)).toBe(true)
+  })
+
+  it('窗口外一天不算', () => {
+    expect(isDateKeyInWindow('2026-10-28', window)).toBe(false)
+    expect(isDateKeyInWindow('2026-11-05', window)).toBe(false)
   })
 })

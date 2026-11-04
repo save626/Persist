@@ -5,8 +5,7 @@ import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
 import { calculateProfileCompleteness, countProfileFields } from '../data/profile'
-import { formatTrainingSummary, summarizeFitness } from '../lib/fitness'
-import { todayDateKey } from '../lib/history'
+import { createDateWindow, todayDateKey } from '../lib/history'
 import {
   AI_REPORT_LABEL,
   MOCK_REPORT_LABEL,
@@ -17,6 +16,7 @@ import {
   requestAiReport,
 } from '../lib/ai-report-client'
 import { buildReportDigest } from '../lib/report-digest'
+import { collectReportWindowFacts } from '../lib/report-window'
 import type { ReportContent, ReportDigest, ReportRangeDays } from '../lib/report-types'
 import type { DataSource, PlanItem, ReportRecord } from '../types'
 
@@ -253,8 +253,13 @@ export function ReportsPage() {
     meals,
     studyRecords,
     waterLog,
-    waterLiters,
+    waterLiters: todayWaterLiters,
     fitnessSession,
+    fitnessHistory,
+    dietDays,
+    waterHistory,
+    planHistory,
+    today,
     aiConsent,
     reports,
     setReports,
@@ -275,18 +280,46 @@ export function ReportsPage() {
   const [generatedReport, setGeneratedReport] = useState<ReportRecord | null>(null)
 
   const sourceEnabled = (source: DataSource) => aiConsent && settings.sources[source]
-  const exercises = fitnessSession?.exercises ?? []
-  const fitnessSummary = summarizeFitness(exercises)
-  const doneSets = fitnessSummary.doneSets
-  const trainingSummaryText = formatTrainingSummary(exercises)
-  const trainingCount = doneSets > 0 || fitnessSession?.sessionStatus === 'completed' ? 1 : 0
-  const studyCount = studyRecords.length
-  const englishCount = studyRecords.filter((record) => record.category === 'english').length
-  const mathCount = studyRecords.filter((record) => record.category === 'math').length
-  const studyMinutes = studyRecords.reduce((total, record) => total + record.duration, 0)
-  const mealCount = meals.filter((meal) => meal.entries.length > 0).length
-  const foodEntryCount = meals.reduce((total, meal) => total + meal.entries.length, 0)
-  const waterCount = waterLog.length + 1
+
+  // 报告窗口「近 7 / 30 / 90 天」以本机今天为最后一天；下面的所有数字都按这个窗口汇总。
+  const reportWindow = useMemo(() => createDateWindow(Number(range), today), [range, today])
+  const windowFacts = useMemo(
+    () =>
+      collectReportWindowFacts({
+        window: reportWindow,
+        fitnessSession,
+        fitnessHistory,
+        studyRecords,
+        dietDays,
+        waterHistory,
+        planHistory,
+      }),
+    [
+      dietDays,
+      fitnessHistory,
+      fitnessSession,
+      planHistory,
+      reportWindow,
+      studyRecords,
+      waterHistory,
+    ],
+  )
+  const fitnessFacts = windowFacts.fitness
+  const studyFacts = windowFacts.study
+  const dietFacts = windowFacts.diet
+  const waterFacts = windowFacts.water
+  const planFacts = windowFacts.plan
+  const rangeLabel = RANGE_LABELS[range]
+  const doneSets = fitnessFacts.doneSets
+  const trainingSummaryText = fitnessFacts.summaryText
+  const trainingCount = fitnessFacts.sessionCount
+  const studyCount = studyFacts.recordCount
+  const englishCount = studyFacts.englishCount
+  const mathCount = studyFacts.mathCount
+  const studyMinutes = studyFacts.totalMinutes
+  const mealCount = dietFacts.mealCount
+  const foodEntryCount = dietFacts.foodEntryCount
+  const waterCount = waterFacts.eventCount
   const profileFieldCount = countProfileFields(profile)
   const profileCompleteness = calculateProfileCompleteness(profile)
   const fitnessSourceEnabled = aiConsent && settings.sources.fitness
@@ -351,18 +384,18 @@ export function ReportsPage() {
   const evidenceItems = useMemo(
     () => [
       fitnessSourceEnabled
-        ? fitnessSession
-          ? `训练记录：${trainingSummaryText}`
-          : '训练记录：今天尚未开始训练'
+        ? trainingSummaryText
+          ? `训练记录：${rangeLabel} ${trainingSummaryText}`
+          : `训练记录：${rangeLabel}还没有训练记录`
         : '训练记录：本次不引用',
       studySourceEnabled
-        ? `学习记录：共 ${studyCount} 条，英语 ${englishCount} 条、高数 ${mathCount} 条，累计 ${studyMinutes} 分钟`
+        ? `学习记录：${rangeLabel}共 ${studyCount} 条，英语 ${englishCount} 条、高数 ${mathCount} 条，累计 ${studyMinutes} 分钟`
         : '学习记录：本次不引用',
       dietSourceEnabled
-        ? `饮食记录：${mealCount} 个有食物的餐次，共 ${foodEntryCount} 个食物条目`
+        ? `饮食记录：${rangeLabel} ${mealCount} 个有食物的餐次，共 ${foodEntryCount} 个食物条目`
         : '饮食记录：本次不引用',
       dietSourceEnabled
-        ? `饮水记录：当前 ${waterLiters.toFixed(2)} L，摘要中包含 ${waterCount} 个记录节点`
+        ? `饮水记录：${rangeLabel}累计 ${waterFacts.liters.toFixed(2)} L（${waterCount} 次记录，日均 ${waterFacts.dailyAverage.toFixed(2)} L）`
         : '饮水记录：本次不引用',
       profileSourceEnabled
         ? `个人档案：已填写 ${profileFieldCount} / 14 项，完整度 ${profileCompleteness}%`
@@ -371,7 +404,6 @@ export function ReportsPage() {
     [
       dietSourceEnabled,
       englishCount,
-      fitnessSession,
       fitnessSourceEnabled,
       foodEntryCount,
       mathCount,
@@ -379,68 +411,85 @@ export function ReportsPage() {
       profileCompleteness,
       profileFieldCount,
       profileSourceEnabled,
+      rangeLabel,
       studyCount,
       studyMinutes,
       studySourceEnabled,
       trainingSummaryText,
       waterCount,
-      waterLiters,
+      waterFacts.dailyAverage,
+      waterFacts.liters,
     ],
   )
 
   const latestReport = reports[0]
 
   const todayBriefDraft = useMemo(() => {
-    const waterGap = Math.max(0, 2 - waterLiters)
-    const trainingDone = trainingCount > 0
-    const status = waterGap > 0.05 ? '先补饮水' : trainingDone ? '节奏稳定' : '待推进'
-    const summary = `今天已留下 ${localRecordTotal} 条本地记录，其中可引用 ${referencedRecordTotal} 条。${
+    // 「今天」的饮水缺口仍按今日切片算（2 L 目标是每日目标）；窗口内累计只用于汇总口径。
+    const todayWaterGap = Math.max(0, 2 - todayWaterLiters)
+    const trainingDone = trainingCount > 0 || fitnessFacts.hasSession
+    const status = todayWaterGap > 0.05 ? '先补饮水' : trainingDone ? '节奏稳定' : '待推进'
+    const planSummary =
+      planFacts.total > 0 ? `${rangeLabel}计划完成 ${planFacts.done} / ${planFacts.total} 项。` : ''
+    const summary = `${rangeLabel}已留下 ${localRecordTotal} 条本地记录，其中可引用 ${referencedRecordTotal} 条。${planSummary}${
       trainingDone
-        ? '训练已经开始，晚间更适合安排一次轻量学习复盘。'
-        : '训练尚未开始，建议先守住最重要的训练安排。'
-    }${waterGap > 0.05 ? `饮水还差约 ${Math.round(waterGap * 1000)} ml。` : '饮水已达到今日目标。'}`
+        ? '训练记录已经进入窗口，晚间更适合安排一次轻量学习复盘。'
+        : '窗口内还没有训练，建议先守住今天最重要的训练安排。'
+    }${
+      todayWaterGap > 0.05
+        ? `今天饮水还差约 ${Math.round(todayWaterGap * 1000)} ml。`
+        : '今天饮水已达到目标。'
+    }`
 
     const conclusions = [
-      trainingDone
-        ? `训练记录已更新：${trainingSummaryText}。`
-        : '训练尚未开始，先完成计划中的训练，再决定是否追加学习任务。',
-      `学习记录累计 ${studyMinutes} 分钟，英语 ${englishCount} 条、高数 ${mathCount} 条。`,
-      waterGap > 0.05
-        ? `饮水当前 ${waterLiters.toFixed(2)} L，距离 2 L 目标还有 ${Math.round(waterGap * 1000)} ml。`
-        : '饮水已达到 2 L 目标，后续只需按节奏补充。',
+      trainingCount > 0
+        ? `${rangeLabel}训练 ${trainingCount} 次：${trainingSummaryText}。`
+        : fitnessFacts.hasSession
+          ? `今天已经开始训练：${trainingSummaryText}，尚未完成任何一组。`
+          : `${rangeLabel}还没有训练记录，先完成今天计划中的训练，再决定是否追加学习任务。`,
+      `${rangeLabel}学习累计 ${studyMinutes} 分钟，英语 ${englishCount} 条、高数 ${mathCount} 条。`,
+      `${rangeLabel}饮水累计 ${waterFacts.liters.toFixed(2)} L（${waterCount} 次记录，日均 ${waterFacts.dailyAverage.toFixed(2)} L）；今天${
+        todayWaterGap > 0.05
+          ? `距离 2 L 目标还有 ${Math.round(todayWaterGap * 1000)} ml`
+          : '已达到 2 L 目标'
+      }。`,
     ]
 
     const actions = [
-      waterGap > 0.05
-        ? `下午分两次补水，每次约 ${Math.max(150, Math.min(300, Math.round((waterGap * 1000) / 2)))} ml。`
+      todayWaterGap > 0.05
+        ? `下午分两次补水，每次约 ${Math.max(150, Math.min(300, Math.round((todayWaterGap * 1000) / 2)))} ml。`
         : '保持当前饮水节奏，不额外增加集中饮水。',
       trainingDone
         ? '训练后 2 小时内补充一餐含蛋白质的主食，并按实际运动量安排恢复。'
         : '把训练放在晚饭前，完成后根据实际记录决定是否追加运动量。',
-      studyMinutes >= 45
-        ? '晚间只做一次 20 分钟轻量复盘，不再新增高数任务。'
+      studyMinutes >= 45 * reportWindow.days
+        ? '窗口内学习投入已足，晚间只做一次 20 分钟轻量复盘，不再新增高数任务。'
         : '先用 20 分钟完成高数错题复盘，再结束今天的学习。',
     ]
 
     const metric = [
       {
         label: '训练',
-        value: trainingDone ? `${doneSets} 组` : '未开始',
-        detail: trainingDone ? '当前会话' : '按原计划推进',
+        value: `${trainingCount} 次`,
+        detail: `${rangeLabel}完成 ${doneSets} 组`,
       },
-      { label: '学习', value: `${studyMinutes} min`, detail: `${studyCount} 条记录` },
-      { label: '饮食记录', value: `${mealCount} 餐`, detail: `${foodEntryCount} 个食物条目` },
+      { label: '学习', value: `${studyMinutes} min`, detail: `${rangeLabel} ${studyCount} 条记录` },
       {
-        label: '饮水',
-        value: `${waterLiters.toFixed(2)} L`,
-        detail: waterGap > 0.05 ? `还差 ${Math.round(waterGap * 1000)} ml` : '已达标',
+        label: '饮食记录',
+        value: `${mealCount} 餐`,
+        detail: `${rangeLabel} ${foodEntryCount} 个食物条目`,
+      },
+      {
+        label: '饮水（日均）',
+        value: `${waterFacts.dailyAverage.toFixed(2)} L`,
+        detail: `${rangeLabel}累计 ${waterFacts.liters.toFixed(2)} L`,
       },
     ]
 
     return {
       type: '今日简报',
       title: trainingDone ? '训练已经落地，接下来守住补水与复盘' : '先把训练安排好，再收住晚间学习',
-      period: RANGE_LABELS[range],
+      period: rangeLabel,
       summary,
       status,
       metric,
@@ -452,22 +501,30 @@ export function ReportsPage() {
     doneSets,
     englishCount,
     evidenceItems,
+    fitnessFacts.hasSession,
     foodEntryCount,
     localRecordTotal,
     mathCount,
     mealCount,
-    range,
+    planFacts.done,
+    planFacts.total,
+    rangeLabel,
     referencedRecordTotal,
+    reportWindow.days,
     studyCount,
     studyMinutes,
+    todayWaterLiters,
     trainingCount,
     trainingSummaryText,
-    waterLiters,
+    waterCount,
+    waterFacts.dailyAverage,
+    waterFacts.liters,
   ])
 
   /**
    * 发给服务端的最小化摘要：只包含「已授权 + 来源开关打开」的模块，
    * 其余模块保持 null，绝不用 0 顶替（否则模型会把未授权误当成「没有记录」）。
+   * 传入 `window` 后训练 / 学习 / 饮食 / 饮水都按当前窗口汇总，字段形状不变。
    */
   const reportDigest = useMemo<ReportDigest>(
     () =>
@@ -478,10 +535,29 @@ export function ReportsPage() {
         fitnessSession,
         studyRecords,
         meals,
-        waterLiters,
+        waterLiters: todayWaterLiters,
         waterLog,
+        window: reportWindow,
+        fitnessHistory,
+        dietDays,
+        waterHistory,
+        planHistory,
       }),
-    [aiConsent, settings, profile, fitnessSession, studyRecords, meals, waterLiters, waterLog],
+    [
+      aiConsent,
+      dietDays,
+      fitnessHistory,
+      fitnessSession,
+      meals,
+      planHistory,
+      profile,
+      reportWindow,
+      settings,
+      studyRecords,
+      todayWaterLiters,
+      waterHistory,
+      waterLog,
+    ],
   )
 
   // 打开页面时检测服务端是否真的能调用模型：只有明确可用才展示 DeepSeek 标签。
@@ -581,7 +657,8 @@ export function ReportsPage() {
             下一步。
           </h1>
           <p className="subtitle">
-            报告只在你主动生成时运行。它引用训练、饮食、学习与个人档案的摘要，帮助你看见趋势，而不是制造新的任务压力。
+            报告只在你主动生成时运行。它引用近 7 / 30 / 90
+            天窗口内的训练、饮食、学习与个人档案摘要，帮助你看见趋势，而不是制造新的任务压力。
           </p>
         </div>
         <div className="head-actions reports-head-actions">
@@ -623,7 +700,8 @@ export function ReportsPage() {
             <>
               <h2>今日简报尚未生成</h2>
               <p>
-                {'当前有 '}
+                {rangeLabel}
+                {'共 '}
                 {localRecordTotal}
                 {' 条本地记录，本次可引用 '}
                 {referencedRecordTotal}
@@ -889,7 +967,7 @@ export function ReportsPage() {
                 <h2 className="panel-title" id="reportDataTitle">
                   本次数据摘要
                 </h2>
-                <p className="panel-sub">生成报告时可能引用的本地记录。</p>
+                <p className="panel-sub">按当前窗口汇总，生成报告时可能引用的本地记录。</p>
               </div>
             </div>
             <div className="reports-data-bars">
@@ -912,7 +990,7 @@ export function ReportsPage() {
             </div>
             <div className="reports-data-foot">
               <span>
-                本地共 {localRecordTotal} 条 · 本次引用 {referencedRecordTotal} 条
+                {rangeLabel}共 {localRecordTotal} 条 · 本次引用 {referencedRecordTotal} 条
               </span>
               <strong>
                 {sourceEnabled('profile')

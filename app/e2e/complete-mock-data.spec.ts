@@ -77,10 +77,12 @@ test('complete demo data feeds reports and respects AI source toggles', async ({
 
   const evidence = page.locator('.reports-evidence')
   await expect(evidence).toContainText(
-    '训练记录：6 个动作，完成 10 组，力量容量 2,680 kg，累计运动 37 分钟，距离 8.5 km',
+    '训练记录：近 7 天 6 个动作，完成 10 组，力量容量 2,680 kg，累计运动 37 分钟，距离 8.5 km',
   )
-  await expect(evidence).toContainText('学习记录：共 12 条，英语 6 条、高数 6 条，累计 446 分钟')
-  await expect(evidence).toContainText('饮水记录：当前 2.00 L，摘要中包含 4 个记录节点')
+  await expect(evidence).toContainText(
+    '学习记录：近 7 天共 12 条，英语 6 条、高数 6 条，累计 446 分钟',
+  )
+  await expect(evidence).toContainText('饮水记录：近 7 天累计 0.80 L（3 次记录，日均 0.11 L）')
   await expect(evidence).toContainText('个人档案：已填写 14 / 14 项，完整度 100%')
 
   await openShellLink(page, '打开设置')
