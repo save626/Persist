@@ -1,8 +1,8 @@
 # Persist 项目交接文档
 
-> 更新：2026-11-04 · 分支 `main` · 基线 `e260602` + 本次提交链：步骤 9 IP 直连部署（`76df093`）→ 晨间简报接真实模型（`9f9cc71`）→ 文档同步（`267146a`）→ 双端验收通过记录（本提交）
+> 更新：2026-11-04 · 分支 `main` · 基线 `e260602` + 本次提交链：步骤 9 IP 直连部署（`76df093`）→ 晨间简报接真实模型（`9f9cc71`）→ 文档同步（`267146a`）→ 双端验收通过记录（`27858da`）→ 清理 lint 警告与残留文件（`f5a57f5`）→ 第三次重部署与文档同步（本提交）
 > 本文件是「**现在是什么 + 下一步做什么**」的唯一事实源。其他分工：项目介绍与长期规划 → [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)（v2.0）；部署与服务器 → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)；P4 终态设计 → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md)；工程/视觉/测试约定 → [`docs/工程约定.md`](docs/工程约定.md)。
-> 当前阶段：八个页面（含 `/plans`）与既有交互已完成并视觉验收，**前端已冻结**——唯一例外是 2026-11-04 经用户批准的「今日页晨间简报接入真实 AI」（`9f9cc71`，仅动该面板与其摘要模块，未改其他页面行为）；服务端 P3（8a/8b/8c）已完成，**步骤 9（IP 直连部署）已于 2026-11-04 完成并通过验收**（真实 DeepSeek Key 已轮换，只存服务器 `/etc/persist/server.env`），晨间简报接入后已重新部署；P4 终态设计已定稿、未实施；ICP 备案阿里云初审已通过（2026-11-04），计划 2026-11-05 提交管局，**备案号未下发 ⇒ 仍属「备案中」，不得宣称「已上线」**。
+> 当前阶段：八个页面（含 `/plans`）与既有交互已完成并视觉验收，**前端已冻结**——唯一例外是 2026-11-04 经用户批准的「今日页晨间简报接入真实 AI」（`9f9cc71`，仅动该面板与其摘要模块，未改其他页面行为）；服务端 P3（8a/8b/8c）已完成，**步骤 9（IP 直连部署）已于 2026-11-04 完成并通过验收**（真实 DeepSeek Key 已轮换，只存服务器 `/etc/persist/server.env`），此后已两次重部署（晨间简报 `9f9cc71`、lint 清理 `f5a57f5`）；P4 终态设计已定稿、未实施；ICP 备案阿里云初审已通过（2026-11-04），计划 2026-11-05 提交管局，**备案号未下发 ⇒ 仍属「备案中」，不得宣称「已上线」**。
 > 本地验收地址：`http://127.0.0.1:4173/`（`cd app` 后 `npm run dev -- --port 4173`；手机访问加 `--host 0.0.0.0`）。
 > 本文档地位：**代码实现优先于任何文档**；如文档与代码冲突，以 `D:\Persist\app` 与 `D:\Persist\server` 为准。
 
@@ -12,7 +12,7 @@
 
 ### 0.1 一句话现状
 
-Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端产品原型 + 已接通的 AI 服务端**：8 个页面（今日 / 健身 / 饮食 / 学习 / 个人档案 / AI 报告 / 设置 / 长期计划）与 5 项主导航可用；业务数据写入本机 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢，含长期计划、设置、复盘、快照）；AI 引导建档、AI 报告文字与今日页晨间简报文字在「档案页开启授权 + 服务端可用」时经本站代理调用真实 DeepSeek，失败回退本地 Mock 并如实标注；JSON 导出导入为备份 0.2.0（含长期计划，兼容 0.1.0）；设置页有「清空本机数据」。自动化为 app 单测 168 条 + server 单测 58 条 + E2E 102 次执行 + 视觉基线 91 张全绿。服务端代码已于 2026-11-04 部署到服务器（IP 直连，仅内部调试）。
+Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端产品原型 + 已接通的 AI 服务端**：8 个页面（今日 / 健身 / 饮食 / 学习 / 个人档案 / AI 报告 / 设置 / 长期计划）与 5 项主导航可用；业务数据写入本机 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢，含长期计划、设置、复盘、快照）；AI 引导建档、AI 报告文字与今日页晨间简报文字在「档案页开启授权 + 服务端可用」时经本站代理调用真实 DeepSeek，失败回退本地 Mock 并如实标注；JSON 导出导入为备份 0.2.0（含长期计划，兼容 0.1.0）；设置页有「清空本机数据」。自动化为 app 单测 172 条 + server 单测 58 条 + E2E 102 次执行 + 视觉基线 91 张全绿（oxlint 0 错 0 警告）。服务端代码已于 2026-11-04 部署到服务器（IP 直连，仅内部调试）。
 
 ### 0.2 现在能做什么 / 不能做什么
 
@@ -59,7 +59,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 
 ### 0.6 必读顺序与文档地图
 
-新会话接手顺序：本文件 → [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)（项目介绍 + 长期规划） → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md) → [`docs/工程约定.md`](docs/工程约定.md) → [`README.md`](README.md) / [`app/README.md`](app/README.md) / [`server/README.md`](server/README.md) → 源码 `app/src/App.tsx` → `context/MockDataProvider.tsx` → `lib/persist-state.ts` → `lib/persist-storage.ts` → `types.ts` → `lib/chat-types.ts` / `lib/report-types.ts` / `lib/ai-chat-client.ts` / `lib/ai-report-client.ts` / `lib/report-digest.ts` / `lib/morning-brief.ts` → `pages/PlansPage.tsx` / `pages/ReportsPage.tsx` / `components/TodaySheets.tsx` → 视觉对照 `design/home-v3-countdown.html` 与 `design/*.png`。
+新会话接手顺序：本文件 → [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)（项目介绍 + 长期规划） → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md) → [`docs/工程约定.md`](docs/工程约定.md) → [`README.md`](README.md) / [`app/README.md`](app/README.md) / [`server/README.md`](server/README.md) → 源码 `app/src/App.tsx` → `context/MockDataProvider.tsx` → `lib/persist-state.ts` → `lib/persist-storage.ts` → `types.ts` → `lib/chat-types.ts` / `lib/report-types.ts` / `lib/ai-chat-client.ts` / `lib/ai-report-client.ts` / `lib/report-digest.ts` / `lib/morning-brief.ts` / `lib/use-new-record-param.ts` → `pages/PlansPage.tsx` / `pages/ReportsPage.tsx` / `components/TodaySheets.tsx` → 视觉对照 `design/home-v3-countdown.html` 与 `design/*.png`。
 
 | 文档 | 作用 |
 |---|---|
@@ -159,7 +159,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 收尾 | 死代码/历史制品清理 + 全仓格式化（移除 Tailwind Prettier 插件） | ✅ 已完成（2026-11-03，两个独立提交，验证全绿） |
 | 服务器 | 阿里云 ECS 环境准备（Node 20 + Nginx + 安全组 80） | ✅ 环境就绪（2026-11-03）；**代码已于 2026-11-04 部署**（见 `docs/部署与服务器现状.md`） |
 | 步骤 7 | P3-0：设置页「清空本机数据」入口 | ✅ 已完成（2026-11-03，`a544a38`，E2E 100 次全绿） |
-| 下一阶段 C | Fastify + DeepSeek 服务端代理（步骤 8） | ✅ 代码完成：8a 服务端骨架（`9138175`）、8b 前端接入 + 真实 Key 联调（`b99d3ad`）、8c AI 报告接服务端（`bdd4265`）；app 单测 168/168、server 58/58、E2E 102 全绿；**步骤 9 部署验收已完成（2026-11-04）**；此后今日页晨间简报也接入 `/api/report`（`9f9cc71`） |
+| 下一阶段 C | Fastify + DeepSeek 服务端代理（步骤 8） | ✅ 代码完成：8a 服务端骨架（`9138175`）、8b 前端接入 + 真实 Key 联调（`b99d3ad`）、8c AI 报告接服务端（`bdd4265`）；app 单测 172/172、server 58/58、E2E 102 全绿；**步骤 9 部署验收已完成（2026-11-04）**；此后今日页晨间简报也接入 `/api/report`（`9f9cc71`），并清理了 3 条 lint 警告（`f5a57f5`） |
 | 部署 | 步骤 9 IP 直连部署 → 步骤 10 备案后域名 + HTTPS | ✅ 步骤 9 完成（2026-11-04，仅 IP 直连内部调试，**未宣称上线**）；步骤 10 待备案号（阿里云初审 2026-11-04 通过，2026-11-05 提交管局） |
 | 下一阶段 D | 服务端备份、校验与恢复 | 未开始 |
 | 下一阶段 E | Capacitor / Android 发布 | 未开始 |
@@ -1036,12 +1036,12 @@ D:\Persist\app\src\lib\mock-data-transfer.ts
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 类型检查 | `npm run typecheck` | 通过，0 错误（2026-11-04 步骤 8c 后复跑） |
-| 单元测试 | `npm test` | **168/168 通过，12 个测试文件**（2026-11-04 晨间简报接入 `/api/report` 后复跑；新增 `report-digest.test.ts` 6 条 + `morning-brief.test.ts` 13 条） |
-| 端到端测试 | `npx playwright test` | **102 通过 / 0 跳过 / 0 失败**，51 个用例 × 2 个项目 = 102 次执行，53.5 s（2026-11-04 晨间简报接入后复跑；E2E 把 `/api` 指向不可达端口，故实际走的是「回退本机规则」路径） |
-| Lint | `npm run lint` | 0 错误，3 条既有 `react(set-state-in-effect)` 警告（`StudyPage.tsx` / `DietPage.tsx` / `FitnessPage.tsx`，2026-11-04 步骤 8c 后复跑） |
+| 类型检查 | `npm run typecheck` | 通过，0 错误（2026-11-04 清理 lint 警告后复跑） |
+| 单元测试 | `npm test` | **172/172 通过，13 个测试文件**（2026-11-04 清理 lint 警告后复跑；本次新增 `use-new-record-param.test.tsx` 4 条，此前晨间简报新增 `report-digest.test.ts` 6 条 + `morning-brief.test.ts` 13 条） |
+| 端到端测试 | `npx playwright test` | **102 通过 / 0 跳过 / 0 失败**，51 个用例 × 2 个项目 = 102 次执行，52.9 s（2026-11-04 清理 lint 警告后复跑；E2E 把 `/api` 指向不可达端口，故实际走的是「回退本机规则」路径；深链用例已扩到断言「关闭后 URL 回 `/study`、再点按钮可重开」） |
+| Lint | `npm run lint` | **0 错误 0 警告**（2026-11-04 清理后；3 条 `react(set-state-in-effect)` 已随 `f5a57f5` 消除） |
 | 格式检查 | `npx prettier --check .`（在 `app` 内执行） | 通过：`All matched files use Prettier code style!`（2026-11-04 步骤 8c 后复跑，含 vite/playwright 配置） |
-| 生产构建 | `npm run build` | 通过（`index-V0Wxk7Aw.js` 567.71 kB / gzip 169.28 kB，`index-CrJgYfMj.css` 137.70 kB / gzip 23.83 kB，2026-11-04 晨间简报接入后复跑） |
+| 生产构建 | `npm run build` | 通过（`index-DVS7rlR_.js` 567.59 kB / gzip 169.20 kB，`index-CrJgYfMj.css` 137.70 kB / gzip 23.83 kB，2026-11-04 清理 lint 警告后复跑） |
 | 视觉检查 | `npm run visual:check`（**前提：同源 `/api` 可达**，先起无 Key 后端，否则 502 会判 `consoleErrors > 0`） | 最近一次全量重跑为 2026-11-04 步骤 8b 后全绿：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（exit 0），77 张 png 更新并经用户双端验收通过后入库。**8c 改动 `/reports` 后，reports 相关基线已单独重跑（6 张 png 更新，各项 0、exit 0）并经用户双端验收通过，随 `7625865` 提交推送**。**晨间简报接入后再次重跑（未起后端）：91 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`reports` 与 `plans-ai` 各 6 视口报 `Failed to load resource: 502`（同源 `/api` 不可达，属运行前提未满足，非本次改动）；`design/` 仅首页实时日期文字导致 7 张像素漂移（0.035%），已还原未入库** |
 | 服务端类型/单测 | `npm run typecheck` + `npm test`（`server/`） | 0 错；**58/58**（8 个文件：config / contract / rate-limit / extract / deepseek / chat / prompts / report），Node 20 兼容，`format:check` 通过（2026-11-04 步骤 8c 后复跑） |
 | 服务端冒烟 | `node dist/index.js` + HTTP 调用 | 无 Key：`/api/health` 200（`ai: "disabled"`）、`/api/chat` 503、`/api/report` 503；真实 Key（本机临时进程，PORT=3001）：`/api/health` 200（`ai: "deepseek"`）、`POST /api/report` 200 + 中文简报（2.7 s）、只授权学习时无训练/饮食字样 |
@@ -1077,6 +1077,7 @@ Playwright 配置为两个项目：
 | `app\src\lib\ai-report-client.test.ts` | 10 | 步骤 8c：`/api/health` 探活（含 404/网络失败）、报告请求体与 JSON 头、503/429/网络失败的错误文案与 `status`、400/坏 JSON/坏形状 → `ReportContractError`、abort 透传、`parseReportContent` 未知字段与缺字段、来源标签常量 |
 | `app\src\lib\report-digest.test.ts` | 6 | 2026-11-04 晨间简报：完整摘要数值（含 `strengthVolumeKg: 480`、`waterEvents: 3`）、未授权时所有模块为 `null`、逐个来源开关只放开对应模块、摘要指纹随数据变化 |
 | `app\src\lib\morning-brief.test.ts` | 13 | 2026-11-04 晨间简报：未授权/无来源不发请求、成功写会话缓存且同摘要不重复请求、摘要变化与换天使缓存失效、不可用/契约错误回退且不写缓存、`AbortError` 透传、缓存拒绝非法内容、底部说明诚实性、请求体形状、`sessionStorage` 抛错时安全降级 |
+| `app\src\lib\use-new-record-param.test.tsx` | 4 | 2026-11-04 lint 清理：`?new=1` 命中、`clear()` 去掉 `new` 且保留其它参数、无参数时不改历史、`new` 取非 1 值不命中 |
 | `server\test\*.test.ts` | 58 | 服务端：config 4、contract 9、rate-limit 3、extract 8、deepseek 7、chat 7、prompts 3、report 17（报告请求校验 7 / 内容净化 4 / 路由 6） |
 | `app\src\lib\countdown.test.ts` | 4 | 倒计时边界和格式化 |
 
@@ -1087,7 +1088,7 @@ dist/index.html                  0.61 kB（611 B）
 dist/favicon.svg                9,522 B
 dist/icons.svg                  5,031 B
 dist/assets/index-CrJgYfMj.css  137,705 B（137.70 kB，gzip 23.83 kB）
-dist/assets/index-V0Wxk7Aw.js   567,713 B（567.71 kB，gzip 169.28 kB）
+dist/assets/index-DVS7rlR_.js   567,592 B（567.59 kB，gzip 169.20 kB）
 ```
 
 产物演进（便于识别“哈希变了是否正常”）：
@@ -1098,29 +1099,24 @@ dist/assets/index-V0Wxk7Aw.js   567,713 B（567.71 kB，gzip 169.28 kB）
 4. 步骤 7（`a544a38`）后：主 JS 从 552.61 kB 涨到 554.38 kB（`index-BBQQW4ug.js`，+1.77 kB：清空逻辑、基线构造函数与 Context 契约），**CSS 哈希完全未变**（`index-C9ZcsQCi.css` 137.64 kB）——因为新卡片复用了既有 `.settings-danger-card` / `.settings-danger-button` 样式，没有新增 CSS。看到 `index-BBQQW4ug.js` 即代表代码停在步骤 7 之后。
 5. 步骤 8b（`b99d3ad`）后：主 JS 从 554.38 kB 涨到 **560.36 kB**（`index-CsKy1ArK.js`，+5.98 kB：SSE 客户端、健康探测、回退逻辑、动态来源文案与日期兜底），**CSS 哈希与体积仍未变**（`index-C9ZcsQCi.css` 137.64 kB）——8b 只复用既有 `plan-chat-*` 样式并新增了一个复用基类的提示段落。看到 `index-CsKy1ArK.js` 即代表代码停在步骤 8b 之后。
 6. 步骤 8c（`bdd4265`）后：主 JS 涨到 **564.70 kB**（`index-DmnjkjkL.js`，+4.34 kB：报告客户端、探活与错误分流、报告页引用与文案），CSS 哈希变为 `index-CrJgYfMj.css`（137.70 kB，+0.06 kB：只新增了回退提示的一行颜色规则）。看到 `index-DmnjkjkL.js` + `index-CrJgYfMj.css` 即代表代码停在步骤 8c 之后。
-7. 晨间简报接真实模型（`9f9cc71`）后：主 JS 涨到 **567.71 kB**（`index-V0Wxk7Aw.js`，+3.01 kB；gzip 168.01 → 169.28 kB，+1.27 kB：`morning-brief` 客户端、摘要模块抽取与今日页接线），CSS 哈希仍为 `index-CrJgYfMj.css`（137.70 kB，**未新增任何样式类**，只改了底部说明文案与图标名）。看到 `index-V0Wxk7Aw.js` 即代表构建产物已含晨间简报接入。
+7. 晨间简报接真实模型（`9f9cc71`）后：主 JS 涨到 **567.71 kB**（`index-V0Wxk7Aw.js`，+3.01 kB；gzip 168.01 → 169.28 kB，+1.27 kB：`morning-brief` 客户端、摘要模块抽取与今日页接线），CSS 哈希仍为 `index-CrJgYfMj.css`（137.70 kB，**未新增任何样式类**，只改了底部说明文案与图标名）。
+8. lint 清理（`f5a57f5`）后：主 JS 略降到 **567.59 kB**（`index-DVS7rlR_.js`，−0.12 kB；gzip 169.28 → 169.20 kB），CSS 哈希仍为 `index-CrJgYfMj.css` 且体积未变（只改了状态派生方式与删掉 3 个残留 .txt，**零样式改动**）。看到 `index-DVS7rlR_.js` 即代表构建产物已含深链派生改造与 lint 清零。
 
 > 更正：清理后的 CSS 体积实测为 137.64 kB（早期摘要曾误记为 134.42 kB，以 §18.1 变更史为准）。
 
 2026-11-03 构建仍提示主 JS 超过 Vite 默认 500 kB 提示线。当前不影响验收，后续建议按路由懒加载拆包（`/plans` 是天然的懒加载候选）。
 
-### 10.4 Lint 警告
+### 10.4 Lint 警告（已清零）
 
-3 条均为既有 `react(set-state-in-effect)` 警告，模式一致（`?new=1` 深链参数在 effect 中同步 setState 打开面板）：
+历史上 3 条 `react(set-state-in-effect)` 警告已于 2026-11-04 随 `f5a57f5` 消除，现行 `npm run lint` 为 **0 错误 0 警告**。
 
-```text
-app\src\pages\StudyPage.tsx:339
-app\src\pages\DietPage.tsx:520
-app\src\pages\FitnessPage.tsx:1373
-```
+三条警告同一模式：`?new=1` 深链参数在 `useEffect` 里 `setXxx(...)` 打开面板，再 `setSearchParams` 去掉参数。修复方式是把地址栏当唯一真相，不再复制状态：
 
-注意：行号会随格式化/编辑漂移，判断依据是 `react(set-state-in-effect)` 与 `searchParams.get('new')` 这一对特征，不要只认行号。
+- 新增 `app/src/lib/use-new-record-param.ts`：`active` 直接推导自 `?new=1`，`clear()` 用 `replace` 删除该参数（保留其它参数）。
+- `FitnessPage` / `DietPage` / `StudyPage`：弹层展开条件改为 `本地状态 || active`；关闭、遮罩、保存、删除确认等所有收尾路径统一走 `closeXxx()`（置空本地状态 + `clear()`）。
+- 行为保持：深链首帧即打开弹层（视觉基线与 E2E 依赖此点）、快速记录同路由 `navigate('/x?new=1')` 仍能打开；关闭后地址栏回到无参路径。
 
-处理建议：
-
-- 不在视觉验收前大范围改写。
-- 修复时分别验证查询参数打开弹窗、页面数据同步和饮食记录状态。
-- 每次修复后重跑对应 E2E、全量 E2E 和构建。
+回归方式：`use-new-record-param.test.tsx` 4 条单测 + E2E「quick record URLs open the matching mock forms」（`/fitness?new=1`、`/diet?new=1`、`/study?new=1`，并断言关闭后 URL 回 `/study`、再点「新增记录」可重开）。若将来再出现同类警告，优先检查是否又引入了「effect 里同步 setState」的副本状态，而不是加 `eslint-disable`。
 
 ### 10.5 视觉检查细节
 
@@ -1379,7 +1375,7 @@ npm run visual:check
 | **P3** 服务端 AI 代理 | ✅ 2026-11-04 | `9138175` + `b99d3ad` + `bdd4265` + 步骤 9 部署（Nginx + systemd + SSE/长请求/限流实测通过），步骤 10 等备案号 |
 | **P4** 数据层与 AI 综合分析 | ⬜ 未开始 | 终态设计已定稿（`docs/P4-数据层与AI综合分析设计方案.md`），分步骤 11→12→13→14 实施 |
 | **P5** Capacitor Android | ⬜ 未开始 | 依赖前端冻结 + 部署稳定 |
-| **P6** 质量与性能清理 | 🟡 部分完成 | 已移除 `prettier-plugin-tailwindcss` 并全仓格式化；剩 lint 警告、包拆分、补单测等 |
+| **P6** 质量与性能清理 | 🟡 部分完成 | 已移除 `prettier-plugin-tailwindcss` 并全仓格式化；lint 警告已清零（`f5a57f5`）；剩包拆分、补单测等 |
 
 ### 13.2 步骤 9：IP 直连首次部署（✅ 2026-11-04 完成，验收记录如下）
 
@@ -1396,6 +1392,8 @@ npm run visual:check
 **实测（2026-11-04，基线 `e260602`）**：本地 `npm run build` 产物与服务器逐文件 sha256 一致；`/var/www/persist` 为 `index.html` 611 B + `index-CrJgYfMj.css` 137705 B + `index-DmnjkjkL.js` 564705 B；`npm ci --omit=dev` 48 包；`/etc/persist/server.env` `600 root:root`，`/api/health` 返回 `ai:"deepseek"`；8 个页面深链 + 不存在路径全部 `200 text/html` 611 B；`index.html` `Cache-Control: no-cache`，hashed 资源 `public, max-age=31536000, immutable`；JS gzip 后 167325 B；SSE 200 / `text/event-stream` / chunked，首包 0.118 s、末包 4.215 s、188 个事件（末段 `proposal`→`warnings`→`done`）；`/api/report` 200 / 2.78 s；限流临时 `RATE_LIMIT_MAX=1` 时第 2 次 `429` + `Retry-After: 298`，随后恢复 20 并重启；`sk-[A-Za-z0-9]{16,}` 在 `/var/www/persist`、`/opt/persist/server`、journal 中命中 0（仅 env 文件 1 处）。用户已于 2026-11-04 完成桌面 + 手机双端人工验收（通过）。
 
 **同日再次部署（晨间简报接入真实模型，`9f9cc71`）**：仍为同一 IP 直连环境，`/var/www/persist` 更新为 `index.html` 611 B + `index-CrJgYfMj.css` 137705 B + **`index-V0Wxk7Aw.js` 567713 B**，旧 `index-DmnjkjkL.js` 返回 404（153 B 错误页）；JS gzip **168582 B**；`/` 与 `/reports` 均 200 / 611 B；`/api/health` 200 `ai:"deepseek"`；真实 `POST /api/report` **200 / 2.701 s**（`title:"先把餐次和饮水补齐"`、`status:"待推进"`、conclusions 3 / actions 3 / warnings 0）；本地与远程 sha256 逐个一致。
+
+**第三次部署（lint 清理 `f5a57f5`，2026-11-04）**：仍为 IP 直连，`/var/www/persist` 更新为 `index.html` 611 B + `index-CrJgYfMj.css` 137705 B + **`index-DVS7rlR_.js` 567592 B**；旧 `index-V0Wxk7Aw.js` 返回 404（153 B 错误页）；JS gzip **168550 B**；8 个页面深链全部 200 / 611 B，`index.html` 仍 `no-cache`；`/api/health` 200 `ai:"deepseek"`；真实 `POST /api/report` **200 / 2.284 s**（`title:"先把餐次和饮水补齐"`、`status:"待推进"`、conclusions 2 / actions 3 / warnings 0）；本地与远程 sha256 三个文件逐个一致。服务端与 Nginx 配置本次**零改动**，只换静态产物。
 
 可并行、无硬依赖的收尾项：`训练建议` / `学习观察` 两类报告接服务端（`type` 已支持三种）、契约类型迁 `shared/`、账号鉴权与额度（归 P4 步骤 12）。
 
@@ -1422,7 +1420,7 @@ npm run visual:check
 ### 13.5 P5 / P6
 
 - **P5 Android**：接 Capacitor + Android 工程 → 网络/通知/分享/安全区 → 返回键、键盘、横竖屏、后台行为 → WebView 内 IndexedDB 持久化复验 → USB 安装与真机验证 → 离线与 AI 不可用降级（复用 8b/8c 的 Mock 回退）。验收：目标机可装可启动、断网可记录、升级安装不丢数据。
-- **P6 质量清理**：① 修 3 条 `set-state-in-effect` lint 警告；② 按路由 `React.lazy()` 拆主包（`/plans` 优先，当前主包 567.71 kB）；③ 健身历史升级为通用 `WorkoutSet`（依赖步骤 11）；④ 补纯业务单测（健身汇总、饮水边界、学习统计、报告数据源、导入导出）；⑤ 可复用类型/纯函数迁 `shared/`；⑥ 评估无障碍、键盘导航与焦点管理。
+- **P6 质量清理**：① ~~修 3 条 `set-state-in-effect` lint 警告~~ **已完成（`f5a57f5`，现行 oxlint 0 错 0 警告）**；② 按路由 `React.lazy()` 拆主包（`/plans` 优先，当前主包 567.59 kB）；③ 健身历史升级为通用 `WorkoutSet`（依赖步骤 11）；④ 补纯业务单测（健身汇总、饮水边界、学习统计、报告数据源、导入导出）；⑤ 可复用类型/纯函数迁 `shared/`；⑥ 评估无障碍、键盘导航与焦点管理。
 
 ### 13.6 已完成阶段留下的技术约束（改动前必读）
 
@@ -1458,7 +1456,7 @@ npm run visual:check
 
 - 健身历史详情仍为力量专用结构。
 - 主 JS 包超过 500 kB（`/plans` 可优先拆为懒加载路由）。
-- 3 条 lint 警告未清理。
+- ~~3 条 lint 警告未清理~~ ✅ 已于 2026-11-04 随 `f5a57f5` 清零（深链改为从 URL 派生弹层状态，未用 `eslint-disable`）。
 - 饮食照片没有真实存储。
 - 提醒没有系统通知能力。
 - 当前报告周期和统计口径仍有 Mock 成分：报告**文字**在 8c 后可来自真实模型，但「训练建议 / 学习观察」两类仍打开本地已有报告，只有「今日简报」走 `/api/report`。
@@ -1518,7 +1516,7 @@ Get-Content -Encoding utf8
 
 ### 15.3 Git 状态
 
-截至 2026-11-04（步骤 9 部署验收后）：
+截至 2026-11-04（lint 清理与第三次部署后）：
 
 - 当前分支：`main`（由 `master` 改名而来，已建跟踪关系）。
 - 远端：`origin` = `git@github.com:save626/Persist.git`（SSH，密钥已注册在 `save626` 账号下；HTTPS 侧也配置了 Git Credential Manager）。
@@ -1537,6 +1535,9 @@ Get-Content -Encoding utf8
   - `3b246d2` / `f616ba4` / `fccce42`（8c 文档同步、P4 设计定稿、备案口径同步）
   - 本次「文档整理」提交（删除 3 篇冗余文档、新增 `docs/工程约定.md`、压缩本文）
   - 本次「步骤 9 部署验收」提交（步骤 9 完成记录 + 部署文档同步，**未改 `app/` 与 `server/` 源码**）
+  - `9f9cc71`（今日页晨间简报接 `/api/report`）、`267146a`（晨间简报文档同步）、`27858da`（用户双端验收通过记录）
+  - `f5a57f5`（lint 清理：深链弹层状态改为 URL 派生 + 删 3 个残留 .txt，app 172/172）
+  - 本次「lint 清理文档同步 + 第三次部署记录」提交
 - **工作区当前干净**（`## main...origin/main`，无未提交改动）。
 - 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
 - 提交前审计命令（每次提交都用）：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
@@ -1611,6 +1612,7 @@ npm run visual:check
 - `D:\Persist\app\src\lib\report-types.ts`（步骤 8c：报告请求/响应类型，镜像 `server/src/contract.ts`）
 - `D:\Persist\app\src\lib\report-digest.ts`（2026-11-04：摘要构造唯一入口，报告页与晨间简报共用授权/来源规则）
 - `D:\Persist\app\src\lib\morning-brief.ts`（2026-11-04：晨间简报取数、会话缓存、失败分流与诚实文案）
+- `D:\Persist\app\src\lib\use-new-record-param.ts`（2026-11-04 lint 清理：`?new=1` 深链派生弹层状态 + `clear()` 清参数，替代 effect 里 setState 的副本状态）
 
 ### 16.4 页面
 
@@ -1718,6 +1720,7 @@ npm run visual:check
 | 11-04 | **规划 v2.0** | 随本次 `docs:` 提交 | `docs/Persist-项目开发规划.md` 原路径重写为 v2.0：项目介绍 + 长期规划（八大页面、五项导航、原生 IndexedDB、P0–P6 / 步骤 9–15、备案前置、AI 只写文字、九章附录验收），20 章骨架保留、内容全部现状化 | 纯文档，未跑测试；v1.2 原文取回 `git show fccce42:docs/Persist-项目开发规划.md` |
 | 11-04 | **步骤 9 部署** | 随本次 `chore(deploy):` 提交 | IP 直连部署：`/var/www/persist`（前端静态）+ `/opt/persist/server`（Fastify，`npm ci --omit=dev` 48 包）+ systemd `persist-server`（`User=persist`、`Restart=always`）+ `/etc/nginx/conf.d/persist.conf`（`default_server`、gzip、hashed 资源 immutable、`index.html` `no-cache`、`/api/` 反代 SSE + 300 s 超时）；新 DeepSeek Key 只写 `/etc/persist/server.env`（600） | 8 页深链 200、JS gzip 167325 B、SSE 188 事件 / 首包 0.118 s / 末包 4.215 s、`/api/report` 2.78 s、限流 429 + `Retry-After: 298`；`sk-` 扫描 0 命中（仅 env）；未改 `app/` 与 `server/` 源码，未跑单测/E2E |
 | 11-04 | **晨间简报接真实模型** | `9f9cc71` | 今日页 `MorningBriefSheet` 从纯本地规则改为打开时 `POST /api/report`（`今日简报` / 7 天）；摘要构造抽成 `lib/report-digest.ts` 与报告页共用；`lib/morning-brief.ts` 负责会话缓存（按天 + 摘要指纹）、授权校验与失败分流；**未改服务端、未改 IndexedDB/备份格式、未新增 CSS** | app **168/168**（12 文件，+19）、E2E 102/0（53.5 s）、`tsc -b` 0 错、oxlint 0 错 3 条既有警告、JS **567.71 kB / gzip 169.28 kB**（+3.01 kB / +1.27 kB）、CSS 未变；生产部署后 `/` 与 `/reports` 200、JS gzip 168582 B、真实 `/api/report` 200 / 2.701 s、旧资源 404 |
+| 11-04 | **lint 清理 + 再部署** | `f5a57f5` | 3 条 `react(set-state-in-effect)` 清零：新增 `lib/use-new-record-param.ts`，三个页面的 `?new=1` 深链改为「地址栏派生弹层状态 + 关闭时清参数」，所有关闭/保存/删除路径统一走 `closeXxx()`；同时删除误提交的 3 个 `app/src/pages/_write-test*.txt`；**未改服务端、未改 IndexedDB/备份格式、零样式改动** | app **172/172**（13 文件，+4）、E2E 102/0（52.9 s，深链用例扩到断言关闭后 URL 与重开）、`tsc -b` 0 错、oxlint **0 错 0 警告**、JS **567.59 kB / gzip 169.20 kB**（−0.12 kB）、CSS 未变；第三次部署后 8 页深链 200、JS gzip 168550 B、真实 `/api/report` 200 / 2.284 s、旧资源 404、sha256 三文件一致 |
 
 ### 18.2 关键披露
 
@@ -1730,7 +1733,7 @@ npm run visual:check
 7. 跨日期流程未自动化：数据不按日期分区，`waterLog` 等按日期字段自然累积（步骤 11 处理）。
 8. 训练历史是 `FitnessPage.tsx` 演示常量；饮食只有「今天」、饮水无日期、计划只存当天。
 9. 报告页仅「今日简报」走服务端，`训练建议` / `学习观察` 仍打开本地已有报告。
-10. 3 条 `set-state-in-effect` lint 警告长期存在（P6 未清）。
+10. ~~3 条 `set-state-in-effect` lint 警告长期存在~~ ✅ 已于 2026-11-04 清零（`f5a57f5`）。
 11. 契约类型暂放 `server/src/contract.ts` 而非 `shared/`（推迟到 P3 收尾或 P4）。
 12. 视觉基线易抖动：首页 1 s 实时时钟造成 ≤0.07% 像素差（最大色差 4/255），连跑两次可复现 ⇒ 归档还原、不提交；而 Prettier `{' '}` 造成的 47/255 差异是**真实回归**，须逐像素判定。
 
@@ -1756,7 +1759,7 @@ npm run visual:check
 
 ## 20. 交接结论
 
-Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（含长期计划，刷新不丢，有清空入口与 0.2.0 导出导入），单元测试 app 168 + server 58、E2E 102 次执行、视觉基线 91 张全绿，提交链已推送 GitHub，具备回滚基线。P4 终态架构已定稿但**未实施**；服务器环境就绪，且已于 2026-11-04 完成 IP 直连部署与晨间简报接入后的重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**）；域名已购、阿里云初审通过、**备案号未下发**。
+Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（含长期计划，刷新不丢，有清空入口与 0.2.0 导出导入），单元测试 app 172 + server 58、E2E 102 次执行、视觉基线 91 张全绿、oxlint 0 错 0 警告，提交链已推送 GitHub，具备回滚基线。P4 终态架构已定稿但**未实施**；服务器环境就绪，且已于 2026-11-04 完成 IP 直连部署、晨间简报接入与 lint 清理后的两次重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**）；域名已购、阿里云初审通过、**备案号未下发**。
 
 接手时最需要记住三件事：
 

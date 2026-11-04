@@ -38,7 +38,7 @@ npm run build        # 生产构建
 
 主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话在授权且服务端可用时调用真实 DeepSeek（标注「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock（标注「本地生成 · Mock 对话」）。`/reports` 的「今日简报」同理：授权 + 服务端可用时经 `/api/report` 生成文字（标注「DeepSeek 生成 · 经本站服务端代理」），否则本地 Mock（标注「本地生成 · Mock 报告」）。今日页「晨间简报」也已接通同一接口：打开面板时按「今日简报 / 7 天」请求，模型写标题与摘要，KPI 与建议节奏仍本地生成，失败/未授权时回退并明确标注。
 
-测试现状（2026-11-04 晨间简报接入真实 AI 后）：`npm test` **168 条**单元测试（12 个文件，含 `src/lib/report-digest.test.ts` 6 条、`src/lib/morning-brief.test.ts` 13 条），`npx playwright test` 51 用例 × 2 项目 = **102 次执行**（0 跳过、53.5 s），`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图（最近一次重跑未起后端：生成 91 张、`overflow/missing*` 全 0，`reports` 与 `plans-ai` 共 12 条 502 属前置条件未满足；`design/` 仅首页实时日期漂移，已还原未入库）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
+测试现状（2026-11-04 lint 清理后）：`npm test` **172 条**单元测试（13 个文件，含 `src/lib/use-new-record-param.test.tsx` 4 条、`src/lib/report-digest.test.ts` 6 条、`src/lib/morning-brief.test.ts` 13 条），`npx playwright test` 51 用例 × 2 项目 = **102 次执行**（0 跳过、52.9 s），`npm run lint` **0 错 0 警告**，`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图（最近一次重跑未起后端：生成 91 张、`overflow/missing*` 全 0，`reports` 与 `plans-ai` 共 12 条 502 属前置条件未满足；`design/` 仅首页实时日期漂移，已还原未入库）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
 
 > **`visual:check` 的前置条件**：脚本只连接已在运行的 4173，**自己不启动后端**。步骤 8b 之后 `/plans` 会先探测 `/api/health`，步骤 8c 之后 `/reports` 同样探测，所以跑之前要另开终端起本机后端 `cd ../server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，页面显示 Mock，与基线一致）。后端不在时 Vite 代理返回 502，浏览器把每个 `/plans`、`/reports` 状态记控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判失败（exit 1，截图像素本身没问题）。
 
@@ -49,6 +49,7 @@ npm run build        # 生产构建
 
 已完成（2026-11-04）：
 
+- lint 清理（`f5a57f5`）：新增 `src/lib/use-new-record-param.ts`（`?new=1` 深链直接从地址栏派生弹层展开状态，`clear()` 以 `replace` 去掉参数）+ 4 条单测；`FitnessPage` / `DietPage` / `StudyPage` 改为 `本地状态 || active` 并把关闭、遮罩、保存、删除统一走 `closeXxx()`，消除 3 条 `react(set-state-in-effect)` 警告；E2E 深链用例扩到断言「关闭后 URL 回 `/study`、再点按钮可重开」；同时删除误提交的 3 个 `src/pages/_write-test*.txt`。零样式改动、未改 IndexedDB/备份格式、未改服务端。
 - 今日页晨间简报接入真实 AI（`9f9cc71`）：新增 `src/lib/report-digest.ts`（摘要唯一入口，报告页同步改用它）+ `src/lib/morning-brief.ts`（授权校验、按天/摘要指纹缓存、失败分流、诚实文案）与 19 条单测；`MorningBriefSheet` 打开时请求 `/api/report`，模型只写标题与摘要，KPI 与建议节奏仍本地生成；未改样式类、未改 IndexedDB/备份格式、未改服务端。
 - 步骤 8c AI 报告接服务端：新增 `src/lib/ai-report-client.ts` + `src/lib/report-types.ts`（探活、POST `/api/report`、`ReportUnavailableError` / `ReportContractError` 分流、响应再校验）与 10 条单测；`ReportsPage.tsx` 只在 AI 可用时用模型文字覆盖报告散文、指标与依据仍本地生成，回退/报错/来源标注齐全，删除「模拟失败」按钮；`types.ts` 加 `ReportRecord.origin`；`reports.css` 一行回退提示颜色；E2E 补 Mock 徽标与详情说明断言。同日以真实 DeepSeek Key 完成端到端联调（200 / 2.7 s），并修复模型擅自做数值推算的问题（提示词禁止任何算术）。
 - 步骤 8b 前端接入 AI 对话：新增 `src/lib/ai-chat-client.ts`（SSE 增量解析、健康探测、真实/Mock 组合与回退语义）与 13 条单测；`PlanChatSheet` 按授权切换客户端并如实标注来源；`PlansPage` 文案同步；`vite.config.ts` 加 `/api` 开发代理；`playwright.config.ts` 用不可达端口隔离真实后端并新增回退 E2E。同日以真实 DeepSeek Key 完成端到端联调（200 / 3.5 s / 127 个 SSE 事件），并修复模型返回过去日期的问题（提示词注入当天日期 + 前端日期兜底）。
