@@ -1,9 +1,9 @@
-﻿import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { EvidenceSheet } from '../components/EvidenceSheet'
 import { Icon } from '../components/Icon'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
+import { useNewRecordParam } from '../lib/use-new-record-param'
 import type { FoodEntry, Meal, MealId } from '../types'
 
 interface ParsedNutrition {
@@ -509,19 +509,18 @@ function AiNutritionSheet({
 export function DietPage() {
   const { meals, setMeals, waterLiters, addWater, lastWaterMilliliters, undoWater } = useMockData()
   const { showToast } = useUI()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const newRecord = useNewRecordParam()
   const [editingMealId, setEditingMealId] = useState<MealId | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [customWater, setCustomWater] = useState('')
 
-  useEffect(() => {
-    if (searchParams.get('new') !== '1') return
-    setAiOpen(true)
-    const next = new URLSearchParams(searchParams)
-    next.delete('new')
-    setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams])
+  // 地址栏的 ?new=1 直接派生出「AI 热量登记」弹层，不再用 effect 复制状态。
+  const aiSheetOpen = aiOpen || newRecord.active
+  const closeAiSheet = () => {
+    setAiOpen(false)
+    newRecord.clear()
+  }
 
   const totals = useMemo(
     () =>
@@ -1054,10 +1053,10 @@ export function DietPage() {
         />
       )}
 
-      {aiOpen && (
+      {aiSheetOpen && (
         <AiNutritionSheet
           meals={meals}
-          onClose={() => setAiOpen(false)}
+          onClose={closeAiSheet}
           onRegister={registerAiFood}
         />
       )}

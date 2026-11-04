@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMemo, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
+import { useNewRecordParam } from '../lib/use-new-record-param'
 import type { StudyCategory, StudyRecord } from '../types'
 
 type Filter = 'all' | StudyCategory
@@ -328,19 +329,18 @@ export function StudyPage() {
   const { showToast } = useUI()
   const { studyRecords: records, setStudyRecords: setRecords } = useMockData()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const newRecord = useNewRecordParam()
   const [filter, setFilter] = useState<Filter>('all')
   const [editing, setEditing] = useState<StudyRecord | 'new' | null>(null)
   const [deleting, setDeleting] = useState<StudyRecord | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
 
-  useEffect(() => {
-    if (searchParams.get('new') !== '1') return
-    setEditing('new')
-    const next = new URLSearchParams(searchParams)
-    next.delete('new')
-    setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams])
+  // 地址栏的 ?new=1 直接派生出「新建」表单，不再用 effect 复制状态。
+  const sheetEditing: StudyRecord | 'new' | null = editing ?? (newRecord.active ? 'new' : null)
+  const closeEditor = () => {
+    setEditing(null)
+    newRecord.clear()
+  }
 
   const today = todayInputValue()
   const todayRecords = useMemo(
@@ -383,7 +383,7 @@ export function StudyPage() {
         : [record, ...current],
     )
     showToast(exists ? '学习记录已更新' : '学习记录已添加')
-    setEditing(null)
+    closeEditor()
   }
 
   return (
@@ -705,13 +705,13 @@ export function StudyPage() {
         </aside>
       </div>
 
-      {editing && (
+      {sheetEditing && (
         <StudyEditor
-          key={editing === 'new' ? 'new' : editing.id}
-          record={editing === 'new' ? null : editing}
-          onClose={() => setEditing(null)}
+          key={sheetEditing === 'new' ? 'new' : sheetEditing.id}
+          record={sheetEditing === 'new' ? null : sheetEditing}
+          onClose={closeEditor}
           onSave={saveRecord}
-          onDelete={editing === 'new' ? undefined : () => setDeleting(editing)}
+          onDelete={sheetEditing === 'new' ? undefined : () => setDeleting(sheetEditing)}
         />
       )}
 
@@ -725,7 +725,7 @@ export function StudyPage() {
           onConfirm={() => {
             setRecords((current) => current.filter((record) => record.id !== deleting.id))
             setDeleting(null)
-            setEditing(null)
+            closeEditor()
             showToast('学习记录已删除')
           }}
         />

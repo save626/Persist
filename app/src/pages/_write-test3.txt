@@ -1,2 +1,0 @@
-第一行
-const x = <div>中文</div>

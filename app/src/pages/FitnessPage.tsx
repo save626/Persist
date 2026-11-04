@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { EvidenceSheet } from '../components/EvidenceSheet'
 import { Icon } from '../components/Icon'
 import { PageSheet } from '../components/PageSheet'
@@ -15,6 +14,7 @@ import {
   summarizeFitness,
   type RecordedWorkout,
 } from '../lib/fitness'
+import { useNewRecordParam } from '../lib/use-new-record-param'
 import type {
   Exercise,
   ExerciseKind,
@@ -1349,7 +1349,7 @@ function HistoryDetailSheet({
 export function FitnessPage() {
   const { showToast } = useUI()
   const { setPlanItems, fitnessSession, setFitnessSession } = useMockData()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const newRecord = useNewRecordParam()
   const initialSession = useMemo(() => createFitnessSession(), [])
   const session = fitnessSession ?? initialSession
   const activeTemplate =
@@ -1368,13 +1368,12 @@ export function FitnessPage() {
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [selectedExerciseId, setSelectedExerciseId] = useState('')
 
-  useEffect(() => {
-    if (searchParams.get('new') !== '1') return
-    setRecordOpen(true)
-    const next = new URLSearchParams(searchParams)
-    next.delete('new')
-    setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams])
+  // 地址栏的 ?new=1 直接派生出「记录运动」弹层，不再用 effect 复制状态。
+  const recordSheetOpen = recordOpen || newRecord.active
+  const closeRecordSheet = () => {
+    setRecordOpen(false)
+    newRecord.clear()
+  }
 
   useEffect(() => {
     if (sessionStatus !== 'active') return
@@ -1523,7 +1522,7 @@ export function FitnessPage() {
         ],
       }
     })
-    setRecordOpen(false)
+    closeRecordSheet()
     showToast(`已记录 ${formatRecordedWorkout(workout.kind, workout.set)} · ${normalizedName}`)
   }
 
@@ -2004,11 +2003,11 @@ export function FitnessPage() {
         </aside>
       </div>
 
-      {recordOpen && (
+      {recordSheetOpen && (
         <RecordSetSheet
           exercises={exercises}
           initialExerciseId={selectedExerciseId}
-          onClose={() => setRecordOpen(false)}
+          onClose={closeRecordSheet}
           onSave={saveRecordedSet}
         />
       )}

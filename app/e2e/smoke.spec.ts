@@ -240,6 +240,16 @@ test('quick record URLs open the matching mock forms', async ({ page }) => {
 
   await page.goto('/diet?new=1')
   await expect(page.getByRole('dialog', { name: 'AI 热量登记' })).toBeVisible()
+
+  await page.goto('/study?new=1')
+  const editor = page.getByRole('dialog', { name: '新增学习记录' })
+  await expect(editor).toBeVisible()
+
+  // 关掉深链弹层后地址栏应回到 /study，再点「新增记录」仍能正常打开（状态不再是 effect 里复制的副本）
+  await editor.getByRole('button', { name: '关闭' }).click()
+  await expect(page).toHaveURL(/\/study$/)
+  await page.getByRole('button', { name: '新增记录' }).click()
+  await expect(editor).toBeVisible()
 })
 
 test('fitness template, evidence and history details are interactive', async ({ page }) => {
