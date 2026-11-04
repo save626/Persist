@@ -214,6 +214,8 @@ export function TodayPage() {
     studyRecords,
     fitnessSession,
     profile,
+    settings,
+    aiConsent,
     eveningReview,
     setEveningReview,
   } = useMockData()
@@ -736,6 +738,9 @@ export function TodayPage() {
           studyRecords={studyRecords}
           fitnessSession={fitnessSession}
           sleepHours={profile.sleepHours}
+          aiConsent={aiConsent}
+          settings={settings}
+          profile={profile}
           onClose={() => setBriefOpen(false)}
         />
       )}

@@ -15,6 +15,7 @@ import {
   probeAiReport,
   requestAiReport,
 } from '../lib/ai-report-client'
+import { buildReportDigest } from '../lib/report-digest'
 import type { ReportContent, ReportDigest, ReportRangeDays } from '../lib/report-types'
 import type { DataSource, PlanItem, ReportRecord } from '../types'
 
@@ -462,68 +463,20 @@ export function ReportsPage() {
    * 发给服务端的最小化摘要：只包含「已授权 + 来源开关打开」的模块，
    * 其余模块保持 null，绝不用 0 顶替（否则模型会把未授权误当成「没有记录」）。
    */
-  const reportDigest = useMemo<ReportDigest>(() => {
-    const digest: ReportDigest = { fitness: null, study: null, diet: null, profile: null }
-
-    if (fitnessSourceEnabled) {
-      const sessionExercises = fitnessSession?.exercises ?? []
-      const names = Array.from(new Set(sessionExercises.map((exercise) => exercise.name.trim())))
-        .filter((name) => name.length > 0)
-        .slice(0, 6)
-      digest.fitness = {
-        hasSession: Boolean(fitnessSession),
-        exerciseCount: sessionExercises.length,
-        doneSets,
-        totalSets: fitnessSummary.totalSets,
-        strengthVolumeKg: fitnessSummary.strengthVolume,
-        durationMinutes: fitnessSummary.durationMinutes,
-        distanceKm: fitnessSummary.distanceKm,
-        exerciseNames: names,
-      }
-    }
-
-    if (studySourceEnabled) {
-      digest.study = {
-        recordCount: studyCount,
-        englishCount,
-        mathCount,
-        totalMinutes: studyMinutes,
-      }
-    }
-
-    if (dietSourceEnabled) {
-      digest.diet = {
-        mealCount,
-        foodEntryCount,
+  const reportDigest = useMemo<ReportDigest>(
+    () =>
+      buildReportDigest({
+        aiConsent,
+        settings,
+        profile,
+        fitnessSession,
+        studyRecords,
+        meals,
         waterLiters,
-        waterEvents: waterCount,
-      }
-    }
-
-    if (profileSourceEnabled) digest.profile = { ...profile, aiConsent: true }
-
-    return digest
-  }, [
-    dietSourceEnabled,
-    doneSets,
-    englishCount,
-    fitnessSession,
-    fitnessSourceEnabled,
-    fitnessSummary.distanceKm,
-    fitnessSummary.durationMinutes,
-    fitnessSummary.strengthVolume,
-    fitnessSummary.totalSets,
-    foodEntryCount,
-    mathCount,
-    mealCount,
-    profile,
-    profileSourceEnabled,
-    studyCount,
-    studyMinutes,
-    studySourceEnabled,
-    waterCount,
-    waterLiters,
-  ])
+        waterLog,
+      }),
+    [aiConsent, settings, profile, fitnessSession, studyRecords, meals, waterLiters, waterLog],
+  )
 
   // 打开页面时检测服务端是否真的能调用模型：只有明确可用才展示 DeepSeek 标签。
   useEffect(() => {

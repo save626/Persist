@@ -1,12 +1,21 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type {
   EveningReviewPayload,
   FitnessSessionState,
   Meal,
+  MockSettings,
   PlanItem,
   PlanKind,
+  ProfileData,
   StudyRecord,
 } from '../types'
+import {
+  MORNING_BRIEF_LOADING_NOTE,
+  generateMorningBrief,
+  morningBriefNote,
+  type MorningBriefResult,
+} from '../lib/morning-brief'
+import { buildReportDigest } from '../lib/report-digest'
 import { Icon } from './Icon'
 import { PageSheet } from './PageSheet'
 
@@ -264,6 +273,9 @@ export function MorningBriefSheet({
   studyRecords,
   fitnessSession,
   sleepHours,
+  aiConsent,
+  settings,
+  profile,
   onClose,
 }: {
   planItems: PlanItem[]
@@ -273,9 +285,45 @@ export function MorningBriefSheet({
   studyRecords: StudyRecord[]
   fitnessSession: FitnessSessionState | null
   sleepHours: number
+  aiConsent: boolean
+  settings: MockSettings
+  profile: ProfileData
   onClose: () => void
 }) {
   const today = localDateValue()
+  const digest = useMemo(
+    () =>
+      buildReportDigest({
+        aiConsent,
+        settings,
+        profile,
+        fitnessSession,
+        studyRecords,
+        meals,
+        waterLiters,
+        waterLog,
+      }),
+    [aiConsent, settings, profile, fitnessSession, studyRecords, meals, waterLiters, waterLog],
+  )
+  const [brief, setBrief] = useState<MorningBriefResult | null>(null)
+
+  // 打开面板才请求：同会话内摘要没变化时复用缓存，数据变了旧文案自动失效。
+  useEffect(() => {
+    let active = true
+    const controller = new AbortController()
+    void generateMorningBrief({ digest, aiConsent, date: today, signal: controller.signal })
+      .then((result) => {
+        if (active) setBrief(result)
+      })
+      .catch(() => {
+        if (active) setBrief({ status: 'unavailable', content: null })
+      })
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [aiConsent, digest, today])
+
   const todayMeals = meals.filter((meal) => meal.entries.length > 0)
   const todayStudyRecords = studyRecords.filter((record) => record.date === today)
   const studyMinutes = todayStudyRecords.reduce((total, record) => total + record.duration, 0)
@@ -349,8 +397,8 @@ export function MorningBriefSheet({
         </span>
         <div>
           <span>今日优先级</span>
-          <h3>{priorityTitle}</h3>
-          <p>{priorityDetail}</p>
+          <h3>{brief?.content?.title ?? priorityTitle}</h3>
+          <p>{brief?.content?.summary ?? priorityDetail}</p>
         </div>
       </div>
       <div className="mock-kpi-grid">
@@ -410,8 +458,12 @@ export function MorningBriefSheet({
         </div>
       </div>
       <div className="surface-note">
-        <Icon name="lock" className="icon-sm" />
-        <span>这是前端 Mock 简报。接入 DeepSeek 后，仍会先展示摘要范围并遵循你的授权设置。</span>
+        <Icon name={brief?.content ? 'spark' : 'lock'} className="icon-sm" />
+        <span>
+          {brief
+            ? morningBriefNote(brief.status, digest)
+            : MORNING_BRIEF_LOADING_NOTE}
+        </span>
       </div>
     </PageSheet>
   )
