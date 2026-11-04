@@ -1,7 +1,7 @@
 # Persist 项目交接文档
 
-> 更新：2026-11-04 · 分支 `main` · 基线 `fccce42` + 本次「文档整理」提交（工作区干净、已推送）
-> 本文件是「**现在是什么 + 下一步做什么**」的唯一事实源。其他分工：部署与服务器 → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)；P4 终态设计 → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md)；工程/视觉/测试约定 → [`docs/工程约定.md`](docs/工程约定.md)。
+> 更新：2026-11-04 · 分支 `main` · 基线 `fccce42` + 本次「文档整理 / 规划 v2.0」提交（工作区干净、已推送）
+> 本文件是「**现在是什么 + 下一步做什么**」的唯一事实源。其他分工：项目介绍与长期规划 → [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)（v2.0）；部署与服务器 → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)；P4 终态设计 → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md)；工程/视觉/测试约定 → [`docs/工程约定.md`](docs/工程约定.md)。
 > 当前阶段：八个页面（含 `/plans`）与既有交互已完成并视觉验收，**前端已冻结**；服务端 P3（8a/8b/8c）代码完成并用真实 DeepSeek Key 两处联调通过，**剩步骤 9 部署验收**；P4 终态设计已定稿、未实施；ICP 备案阿里云初审已通过（2026-11-04），计划 2026-11-05 提交管局，**备案号未下发 ⇒ 仍属「备案中」**。
 > 本地验收地址：`http://127.0.0.1:4173/`（`cd app` 后 `npm run dev -- --port 4173`；手机访问加 `--host 0.0.0.0`）。
 > 本文档地位：**代码实现优先于任何文档**；如文档与代码冲突，以 `D:\Persist\app` 与 `D:\Persist\server` 为准。
@@ -59,11 +59,12 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 
 ### 0.6 必读顺序与文档地图
 
-新会话接手顺序：本文件 → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md) → [`docs/工程约定.md`](docs/工程约定.md) → [`README.md`](README.md) / [`app/README.md`](app/README.md) / [`server/README.md`](server/README.md) → 源码 `app/src/App.tsx` → `context/MockDataProvider.tsx` → `lib/persist-state.ts` → `lib/persist-storage.ts` → `types.ts` → `lib/chat-types.ts` / `lib/report-types.ts` / `lib/ai-chat-client.ts` / `lib/ai-report-client.ts` → `pages/PlansPage.tsx` / `pages/ReportsPage.tsx` → 视觉对照 `design/home-v3-countdown.html` 与 `design/*.png`。
+新会话接手顺序：本文件 → [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)（项目介绍 + 长期规划） → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md) → [`docs/工程约定.md`](docs/工程约定.md) → [`README.md`](README.md) / [`app/README.md`](app/README.md) / [`server/README.md`](server/README.md) → 源码 `app/src/App.tsx` → `context/MockDataProvider.tsx` → `lib/persist-state.ts` → `lib/persist-storage.ts` → `types.ts` → `lib/chat-types.ts` / `lib/report-types.ts` / `lib/ai-chat-client.ts` / `lib/ai-report-client.ts` → `pages/PlansPage.tsx` / `pages/ReportsPage.tsx` → 视觉对照 `design/home-v3-countdown.html` 与 `design/*.png`。
 
 | 文档 | 作用 |
 |---|---|
 | `HANDOFF.md`（本文） | 现状、契约、风险、执行计划、路线、历史（**唯一权威**） |
+| `docs/Persist-项目开发规划.md` | 项目介绍与长期规划（v2.0）：定位、边界、功能规划、数据与技术架构、P0–P6 / 步骤 9–15、风险、Backlog、验收清单 |
 | `docs/部署与服务器现状.md` | 部署侧唯一事实源：服务器规格、备案、七条硬规则、Nginx 草案、命令速查、待执行清单 |
 | `docs/P4-数据层与AI综合分析设计方案.md` | P4 终态设计（唯一）：SQLite 选型与 DDL、8d 历史化、同步协议、事实包 v2、隐私边界、步骤 11–14 验收、待确认项 |
 | `docs/工程约定.md` | 技术选型、视觉与响应式基线、可访问性、非功能要求、测试门禁、术语 |
@@ -1426,7 +1427,7 @@ npm run visual:check
 | 数据只在本机浏览器 IndexedDB | 清站点数据 / 换浏览器 / 换设备即丢失，无法跨设备恢复 | 已在界面文案说明（设置页、学习页、删除确认）；P4 做账号令牌 + 同步副本 + 备份恢复（方案见 `docs/P4-数据层与AI综合分析设计方案.md`） |
 | **历史数据缺口：只有学习记录是真实历史** | 训练历史是 `FitnessPage` 演示常量、饮食只有「今天」、饮水无日期、计划只存当天 ⇒ 就算接上 AI 也没有历史可综合分析 | P4 的第一步是步骤 11（8d）数据历史化：按日台账 + 真实训练历史 + `schemaVersion` v2 迁移；未完成前不得对外宣称「AI 能分析历史」 |
 | 持久化无跨标签页同步 | 两个标签页同时编辑会互相覆盖，最后写入为准 | P4 补 `BroadcastChannel` 同步或写入前版本比对；清空入口已在步骤 7 补齐 |
-| 旧文档已删除，勿凭记忆恢复 | 2026-11-04 已删 `docs/项目现状总览.md`、`HANDOFF-新会话指令.md`、`docs/Persist-项目开发规划.md`（有效内容并入本文与 `docs/工程约定.md`）；旧规划里的四项导航 / 16 条建议路由 / Dexie 方案都**不是现状** | 以本文档与代码为准；需要旧文时用 `git show fccce42:<path>` 取回，只作历史参考，不要照它实施 |
+| 旧文档已清理，勿凭记忆恢复 | 2026-11-04 已删 `docs/项目现状总览.md`、`HANDOFF-新会话指令.md`、`docs/工程初始化与前端约定.md`（内容并入本文与 `docs/工程约定.md`）；`docs/Persist-项目开发规划.md` 已重写为 **v2.0**（项目介绍 + 长期规划），其中四项导航 / 16 条建议路由 / Dexie 方案都**不是现状** | 以本文档与代码为准；需要 v1.2 原文时用 `git show fccce42:docs/Persist-项目开发规划.md` 取回，只作历史参考，不要照它实施 |
 | `PlansPage.tsx` 是等价重写而非原始源码 | 该页曾因写入事故丢失，当前由 dist 产物反解后重写，虽已通过全量验证，但不排除丢注释/丢少量细节 | 已包含在首个提交 `bd779eb` 中；后续该页改动请先读现状再改 |
 | ~~Prettier 插件会压平条件类名~~ | 风险已消除：`prettier-plugin-tailwindcss` 已于 2026-11-03 从配置和 `package.json` 移除，全仓格式化不再破坏条件类名 | 保留规则：条件类名仍统一用 `cn()` 或完整字符串三元；格式化前后仍建议 `Select-String` 抽查条件类名 |
 | “快照”容易被误解 | 用户可能以为可以恢复数据 | UI 和文档明确其只是元信息（但它会持久化保存） |
@@ -1627,6 +1628,7 @@ npm run visual:check
 ### 16.6 文档与占位
 
 - `D:\Persist\HANDOFF.md`（本文，唯一现状与计划来源）
+- `D:\Persist\docs\Persist-项目开发规划.md`（**项目介绍与长期规划唯一来源 v2.0**：定位与边界、八页功能规划、数据与技术架构、P0–P6 / 步骤 9–15、风险与 Backlog、发布验收清单；v1.2 原文仅存于 `fccce42`）
 - `D:\Persist\docs\P4-数据层与AI综合分析设计方案.md`（**P4 终态架构唯一设计来源**：本地优先 + 服务端 SQLite 副本、同步协议、事实包契约 v2、隐私边界、步骤 11–14 拆分与验收）
 - `D:\Persist\docs\部署与服务器现状.md`（部署侧唯一事实来源：服务器规格、5.1 七条硬规则、Nginx 草案、命令速查）
 - `D:\Persist\docs\工程约定.md`（技术选型、视觉与响应式基线、可访问性、非功能要求、测试门禁与术语）
@@ -1670,7 +1672,7 @@ npm run visual:check
 | 刷新 / 重开 | 数据从本机 IndexedDB 水合恢复；清站点数据、换浏览器或换设备才回到初始 Mock |
 | Android | 后续使用 Capacitor，当前未开始 |
 
-旧规划文档 `docs/Persist-项目开发规划.md` 已于 2026-11-04 删除：其中仍有效的工程与视觉规范已并入 `docs/工程约定.md`，其余内容被现状取代（「四项一级导航」「AI 报告为辅助页面」「16 条建议路由」「Dexie / Drizzle / Docker」都**不是现状**）。需要历史原文时用 `git show fccce42:docs/Persist-项目开发规划.md` 取回，只作参考；任何冲突以本文档与当前代码为准。
+规划文档 `docs/Persist-项目开发规划.md` 已于 2026-11-04 **重写为 v2.0**（项目介绍 + 长期规划）：四项导航 / AI 报告为辅助页 / 16 条建议路由 / 「Dexie、Drizzle、Docker」这些 v1.2 内容都**不是现状**；v2.0 里保留的规划口径与本文 §13 一致。需要 v1.2 原文（字段级功能规格等）用 `git show fccce42:docs/Persist-项目开发规划.md` 取回，只作参考；任何冲突以本文档与当前代码为准。
 
 ---
 
@@ -1694,7 +1696,8 @@ npm run visual:check
 | 11-04 | 视觉闭环 | `7625865` | `/reports` 6 张基线重跑，用户双端验收后入库 | 各项 0、exit 0 |
 | 11-04 | P4 设计定稿 | `f616ba4` | `docs/P4-数据层与AI综合分析设计方案.md`（SQLite 选型、8d、同步协议、事实包 v2、隐私边界、待确认项） | 纯文档，未跑测试 |
 | 11-04 | 备案口径更新 | `3b246d2` / `fccce42` | 全部文档同步「阿里云初审已通过（11-04）/ 计划 11-05 提交管局 / 备案号未下发 ⇒ 仍属备案中」 | 纯文档，未跑测试 |
-| 11-04 | **文档整理** | 随本次 `docs:` 提交 | 9 篇 → 6 篇：`docs/工程约定.md` 新建；`HANDOFF.md` 合并原「一页速览」「新会话指令」并压缩路线与变更史；删除 `HANDOFF-新会话指令.md`、`docs/项目现状总览.md`、`docs/Persist-项目开发规划.md` | 纯文档，未跑测试；旧文可取回 `git show fccce42:<path>` |
+| 11-04 | **文档整理** | `477cced` | 12 篇 → 8 篇：`docs/工程约定.md` 新建；`HANDOFF.md` 合并原「一页速览」「新会话指令」并压缩路线与变更史；删除 `HANDOFF-新会话指令.md`、`docs/项目现状总览.md`、`docs/Persist-项目开发规划.md`、`docs/工程初始化与前端约定.md` | 纯文档，未跑测试；旧文可取回 `git show fccce42:<path>` |
+| 11-04 | **规划 v2.0** | 随本次 `docs:` 提交 | `docs/Persist-项目开发规划.md` 原路径重写为 v2.0：项目介绍 + 长期规划（八大页面、五项导航、原生 IndexedDB、P0–P6 / 步骤 9–15、备案前置、AI 只写文字、九章附录验收），20 章骨架保留、内容全部现状化 | 纯文档，未跑测试；v1.2 原文取回 `git show fccce42:docs/Persist-项目开发规划.md` |
 
 ### 18.2 关键披露
 

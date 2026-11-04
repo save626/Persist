@@ -3,7 +3,7 @@
 > 版本：v1（2026-11-04）
 > 状态：**设计定稿待实施**（本文件只做设计，不含代码改动）
 > 决策来源：用户在「本地组装摘要上传（路线 1）」与「本地优先 + 服务端可检索副本（路线 2）」之间选定**路线 2 作为终态方向**，本文件即为该方向的落地方案。
-> 关系：本文件是 `HANDOFF.md` §13.4「P4」的展开，也是被它取代的旧规划（`docs/Persist-项目开发规划.md` §7、已于 2026-11-04 删除）在服务端与数据层的收敛稿；与 `HANDOFF.md` 冲突时以源码与 `HANDOFF.md` 为准，本文件负责「终态怎么走」。
+> 关系：本文件是 `HANDOFF.md` §13.4「P4」的展开，也是对 `docs/Persist-项目开发规划.md` 旧版（v1.2 §7，2026-11-04 已被重写为 v2.0）在服务端与数据层的收敛稿；与 `HANDOFF.md` 冲突时以源码与 `HANDOFF.md` 为准，本文件负责「终态怎么走」。
 > 读者：下一位接手的开发者（含 AI 会话）。读完本文件应能直接拆任务，不需要再做架构决策（§18 列出的少数待确认项除外）。
 
 ---
@@ -705,7 +705,7 @@ DAILY_REPORT_AT=21:00
 | 现有内容 | 本方案的处理 |
 |---|---|
 | `HANDOFF.md` §13.4 P4 四步拆分 | 本文件是其实施级展开（§15），备份恢复对应步骤 14 |
-| 旧规划（`docs/Persist-项目开发规划.md`）§7.1 Dexie / Drizzle / Docker Compose | 该文档已于 2026-11-04 删除；实际为原生 IndexedDB、无 Docker、无 ORM（SQLite 直写 SQL），本方案维持该偏离并写明原因 |
+| 旧规划（`docs/Persist-项目开发规划.md` **v1.2**，2026-11-04 已重写为 v2.0）§7.1 Dexie / Drizzle / Docker Compose | v1.2 的原方向已废弃；实际为原生 IndexedDB、无 Docker、无 ORM（SQLite 直写 SQL），本方案维持该偏离并写明原因 |
 | 旧规划 §7.5 同步预设计（UUID / `updatedAt` / `deletedAt` / `serverRevision` / Outbox） | 本方案落地并补齐：`rev` 游标、opId 幂等、bootstrap、墓碑保留期、LWW 细节 |
 | 旧规划 §7.6 `/api/v1/...` 建议 API | 本方案的 §10 是其收敛版（删除未采用的端点，补 devices/backups/export/account） |
 | 8c `/api/report` 契约（`ReportRecord`） | 保留为降级路径；v2 增加 `analysis` 与 `metrics`，前端兼容两种来源 |
