@@ -54,9 +54,23 @@ export function profileSummary(profile: ProfileData): string {
   return lines.join('\n')
 }
 
+/** 统一按北京时间判断「今天」，避免服务器时区不同导致日期偏移一天。 */
+export function todayInShanghai(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
+  return `${value('year')}-${value('month')}-${value('day')}`
+}
+
 function buildSystemPrompt(request: ChatRequest): string {
   return [
     CHAT_SYSTEM_PROMPT,
+    '',
+    `今天是 ${todayInShanghai()}（Asia/Shanghai）。涉及日期时以今天为基准，不得给出已经过去的日期。`,
     '',
     '当前档案（用户已在 App 里填写，可直接引用）：',
     profileSummary(request.profile),
@@ -104,6 +118,15 @@ JSON 形状（字段都可省略，但不能出现未列出的字段）：
 6. 不输出真实姓名、联系方式、身份证号等隐私；用户提到伤病或用药时，在 warnings 里建议就医。
 7. 所有文本用简体中文，单条不超过 60 字。`
 
+/** 抽取提示词额外带上今天日期：模型很容易按训练语料给出已经过去的年份。 */
+export function buildExtractionSystemPrompt(today: string = todayInShanghai()): string {
+  return [
+    EXTRACTION_SYSTEM_PROMPT,
+    '',
+    `今天是 ${today}。proposal.startDate 不得早于今天；endDate 与 milestones[].date 必须不早于 startDate。`,
+  ].join('\n')
+}
+
 export function buildExtractionMessages(request: ChatRequest): ChatMessage[] {
   const transcript = request.turns
     .map((turn) => `${turn.role === 'user' ? '用户' : '助手'}：${turn.content}`)
@@ -118,7 +141,7 @@ export function buildExtractionMessages(request: ChatRequest): ChatMessage[] {
     '请输出 JSON。',
   ].join('\n')
   return [
-    { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
+    { role: 'system', content: buildExtractionSystemPrompt() },
     { role: 'user', content: userContent },
   ]
 }

@@ -93,20 +93,24 @@ export function resolveProposalDates(
   proposal: ChatPlanProposal,
   now: Date = new Date(),
 ): ProposalDates {
-  const startDate =
-    proposal.startDate && isValidIsoDate(proposal.startDate) ? proposal.startDate : toIsoDate(now)
+  const today = toIsoDate(now)
+  const suggestedStart =
+    proposal.startDate && isValidIsoDate(proposal.startDate) ? proposal.startDate : today
+  // 模型偶尔给出已经过去的日期（训练语料里的年份），新建计划一律不早于今天。
+  const startDate = suggestedStart >= today ? suggestedStart : today
   const milestoneDates = proposal.milestones
     .map((milestone) => milestone.date)
-    .filter((date) => isValidIsoDate(date))
+    .filter((date) => isValidIsoDate(date) && date >= startDate)
     .sort()
-  const suggestedEnd =
-    proposal.endDate && isValidIsoDate(proposal.endDate)
-      ? proposal.endDate
-      : milestoneDates[milestoneDates.length - 1]
-  if (suggestedEnd && suggestedEnd >= startDate) return { startDate, endDate: suggestedEnd }
+  const endCandidates = [
+    proposal.endDate && isValidIsoDate(proposal.endDate) ? proposal.endDate : '',
+    milestoneDates[milestoneDates.length - 1] ?? '',
+  ].filter((date) => date && date >= startDate)
+  if (endCandidates.length > 0) return { startDate, endDate: endCandidates[0] }
   return { startDate }
 }
 
+/** 建议里已经过去的里程碑一并丢弃，避免草案里出现过去日期。 */
 export function proposalToDraft(
   proposal: ChatPlanProposal,
   now: Date = new Date(),
@@ -118,7 +122,9 @@ export function proposalToDraft(
     cadence: proposal.cadence,
     ...dates,
     weeklyTargets: proposal.weeklyTargets.map((target) => ({ ...target })),
-    milestones: proposal.milestones.map((milestone) => ({ ...milestone })),
+    milestones: proposal.milestones
+      .filter((milestone) => isValidIsoDate(milestone.date) && milestone.date >= dates.startDate)
+      .map((milestone) => ({ ...milestone })),
     source: 'ai-chat',
   }
 }

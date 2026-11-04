@@ -171,7 +171,7 @@ export function PlansPage() {
         <div className="head-actions plans-head-actions">
           <span className="plans-local-badge">
             <Icon name="lock" className="icon-sm" />
-            本地生成 · Mock 对话
+            {profile.aiConsent ? 'AI 对话 · Mock 兜底' : '本地生成 · Mock 对话'}
           </span>
           <button className="btn secondary" type="button" onClick={openManual}>
             <Icon name="plus" className="icon-sm" />
@@ -338,7 +338,10 @@ export function PlansPage() {
               <li>检查草案里的周目标、起止日期和档案改动。</li>
               <li>确认后计划才启用，档案改动也才写入。</li>
             </ol>
-            <p className="plans-hint">完全本地运行，不会调用真实模型，也不会自动改档案。</p>
+            <p className="plans-hint">
+              默认使用本地 Mock；在档案页开启 AI 数据授权且服务端可用时，才会经本站代理调用
+              DeepSeek。确认前不会改档案。
+            </p>
           </section>
 
           <section className="panel plans-list" aria-labelledby="plansArchivedTitle">

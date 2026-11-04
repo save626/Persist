@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Icon } from './Icon'
 import { PageSheet } from './PageSheet'
 import type {
-  ChatClient,
   ChatMessage,
   ChatPlanProposal,
   ChatQuestion,
   ChatTurn,
   ProfileFieldKey,
 } from '../lib/chat-types'
+import { AI_CHAT_LABEL, createAppChatClient } from '../lib/ai-chat-client'
 import { cadenceLabel } from '../lib/long-term-plan'
-import { MOCK_CHAT_LABEL, createMockChatClient } from '../lib/mock-chat-client'
+import { MOCK_CHAT_LABEL } from '../lib/mock-chat-client'
 import { mergeProfilePatch, profilePatchEntries } from '../lib/plan-draft'
 import type { ProfileData } from '../types'
 
@@ -19,9 +19,23 @@ import type { ProfileData } from '../types'
  *
  * 只负责「对话 + 收集待确认信息」：流式输出的档案补丁只在本地累积，
  * 真正的写入发生在用户点「去确认草案」之后的确认页，这里绝不落库。
+ *
+ * 来源标注是硬要求：
+ * - 开启 AI 数据处理授权且服务端健康时，走 `/api/chat` 的真实模型，标题标 DeepSeek；
+ * - 未授权 / 服务不可用 / 首块内容前失败时回退本地 Mock，标题标 Mock 并说明原因。
  */
 
-const chatClient: ChatClient = createMockChatClient()
+const PROBING_LABEL = '正在检测模型服务…'
+
+const INTRO_ID = 'assistant-intro'
+
+const MOCK_INTRO =
+  '我是本地 Mock 建档助手：只会按规则整理你说过的信息，不联网、也不调用真实模型。说说你的目标、每周能安排几次、有什么器械或时间限制，我先整理一版草案；档案和计划都要你确认后才会写入。'
+
+const AI_INTRO =
+  '我是 AI 建档助手：你的对话和档案摘要会经本站服务端发送给 DeepSeek 模型，用来整理建档草案；不会自动改档案，你确认后才会写入。说说你的目标、每周能安排几次、有什么器械或时间限制。'
+
+const FALLBACK_NOTE = '真实模型暂时不可用，本次已回退到本地 Mock（规则匹配）。'
 
 // 消息 id 用本地自增序号生成，避免在渲染期间调用 Date.now()。
 let messageSeq = 0
@@ -31,10 +45,9 @@ function nextMessageId(role: ChatMessage['role']) {
 }
 
 const INTRO_MESSAGE: ChatMessage = {
-  id: 'assistant-intro',
+  id: INTRO_ID,
   role: 'assistant',
-  content:
-    '我是本地 Mock 建档助手：只会按规则整理你说过的信息，不联网、也不调用真实模型。说说你的目标、每周能安排几次、有什么器械或时间限制，我先整理一版草案；档案和计划都要你确认后才会写入。',
+  content: MOCK_INTRO,
   createdAt: 0,
 }
 
@@ -62,10 +75,16 @@ function turnsOf(messages: ChatMessage[]): ChatTurn[] {
 }
 
 export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps) {
+  const chatClient = useMemo(
+    () => createAppChatClient({ consent: profile.aiConsent }),
+    [profile.aiConsent],
+  )
   const [messages, setMessages] = useState<ChatMessage[]>([INTRO_MESSAGE])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [subtitle, setSubtitle] = useState(profile.aiConsent ? PROBING_LABEL : MOCK_CHAT_LABEL)
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null)
   const [questions, setQuestions] = useState<ChatQuestion[]>([])
   const [patch, setPatch] = useState<Partial<ProfileData>>({})
   const [proposal, setProposal] = useState<ChatPlanProposal | null>(null)
@@ -73,6 +92,23 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
   const abortRef = useRef<AbortController | null>(null)
   const askedRef = useRef<string[]>([])
   const scrollRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!profile.aiConsent) return
+    let active = true
+    void chatClient.probe().then((source) => {
+      if (!active) return
+      setSubtitle(source === 'ai' ? AI_CHAT_LABEL : MOCK_CHAT_LABEL)
+      setMessages((prev) =>
+        prev.length === 1 && prev[0]?.id === INTRO_ID
+          ? [{ ...INTRO_MESSAGE, content: source === 'ai' ? AI_INTRO : MOCK_INTRO }]
+          : prev,
+      )
+    })
+    return () => {
+      active = false
+    }
+  }, [chatClient, profile.aiConsent])
 
   useEffect(() => {
     const node = scrollRef.current
@@ -84,6 +120,7 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
     abortRef.current = controller
     setStreaming(true)
     setError(null)
+    setFallbackNote(null)
     try {
       for await (const event of chatClient.send(
         { turns, profile, askedFields: askedRef.current },
@@ -109,8 +146,14 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
         }
       }
     } catch {
-      if (!controller.signal.aborted) setError('对话中断了，可以点「重试」再试一次。')
+      if (!controller.signal.aborted) {
+        setError('对话中断了，可以点「重试」再试一次。')
+      }
     } finally {
+      const status = chatClient.status()
+      if (status.source === 'ai') setSubtitle(AI_CHAT_LABEL)
+      else if (status.source === 'mock') setSubtitle(MOCK_CHAT_LABEL)
+      if (status.fallback) setFallbackNote(status.reason ?? FALLBACK_NOTE)
       setStreaming(false)
       abortRef.current = null
       setMessages((prev) =>
@@ -180,7 +223,7 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
   const hasUserMessage = messages.some((message) => message.role === 'user')
 
   return (
-    <PageSheet title="AI 建档对话" subtitle={MOCK_CHAT_LABEL} onClose={onClose}>
+    <PageSheet title="AI 建档对话" subtitle={subtitle} onClose={onClose}>
       <div className="plan-chat">
         <div className="plan-chat-scroll" ref={scrollRef} aria-label="对话记录">
           {messages.map((message) => (
@@ -312,6 +355,12 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
             </button>
           )}
         </div>
+
+        {fallbackNote && (
+          <p className="plan-chat-note" role="status">
+            {fallbackNote}
+          </p>
+        )}
 
         {error && (
           <div className="plan-chat-error" role="alert">

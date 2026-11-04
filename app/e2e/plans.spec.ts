@@ -38,6 +38,39 @@ test('AI 建档对话确认后启用长期计划并写回档案', async ({ page 
   await expect(page).toHaveURL(/\/plans$/)
 })
 
+test('真实模型不可用时回退本地 Mock 并明确标注', async ({ page }) => {
+  // 不依赖真实后端：探测接口假装服务健康，对话接口明确返回 503。
+  await page.route('**/api/health', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', service: 'persist-server', ai: 'deepseek' }),
+    }),
+  )
+  await page.route('**/api/chat', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'ai_failed', message: '模型服务暂时不可用，请稍后重试。' },
+      }),
+    }),
+  )
+
+  await page.goto('/plans?onboard=1')
+  const chat = page.getByRole('dialog', { name: 'AI 建档对话' })
+  await expect(chat).toBeVisible()
+  await expect(chat).toContainText('DeepSeek 生成 · 经本站服务端代理')
+
+  await page.getByLabel('对话输入').fill(ONBOARD_INPUT)
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+
+  // 回退必须同时体现在「来源标签」和「回退说明」上，不能把 Mock 说成模型输出。
+  await expect(chat.locator('[role="status"]')).toContainText('模型服务暂时不可用')
+  await expect(chat).toContainText('本地 Mock 对话')
+  await expect(page.getByRole('button', { name: '去确认草案' })).toBeVisible()
+})
+
 test('手工新建计划后归档并重新启用', async ({ page }) => {
   await openPlans(page)
 

@@ -1,4 +1,4 @@
-﻿import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
@@ -17,6 +17,11 @@ export default defineConfig({
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      // E2E 的 /api 永远指向一个必然连不上的端口：测试只验证「Mock」与「不可用→回退」，
+      // 既不依赖外部模型服务，也避免本地联调时误打真实 DeepSeek。
+      PERSIST_API_TARGET: 'http://127.0.0.1:9',
+    },
   },
   projects: [
     {

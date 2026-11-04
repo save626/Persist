@@ -72,10 +72,30 @@ describe('resolveProposalDates', () => {
     })
   })
 
-  it('结束日期早于开始日期时丢弃结束日期', () => {
+  it('结束日期早于开始日期时改用最后一个未来里程碑', () => {
     expect(resolveProposalDates(proposal({ endDate: '2026-10-01' }), NOW)).toEqual({
       startDate: '2026-11-02',
+      endDate: '2027-01-25',
     })
+  })
+
+  it('建议的开始日期早于今天时回退到今天，过期里程碑不再给出结束日期', () => {
+    expect(
+      resolveProposalDates(
+        proposal({
+          startDate: '2025-01-06',
+          endDate: '2025-03-02',
+          milestones: [{ date: '2025-02-02', label: '第 4 周复盘' }],
+        }),
+        NOW,
+      ),
+    ).toEqual({ startDate: '2026-11-02' })
+  })
+
+  it('显式结束日期过期时用最后一个未来里程碑兜底', () => {
+    expect(
+      resolveProposalDates(proposal({ startDate: '2025-01-06', endDate: '2025-03-02' }), NOW),
+    ).toEqual({ startDate: '2026-11-02', endDate: '2027-01-25' })
   })
 })
 
@@ -94,6 +114,21 @@ describe('proposalToDraft', () => {
       { label: '力量训练', unit: '次', perWeek: 4, module: 'fitness' },
     ])
     expect(draft.milestones).toHaveLength(2)
+  })
+
+  it('丢弃建议里已经过去的里程碑，开始日期回退到今天', () => {
+    const draft = proposalToDraft(
+      proposal({
+        startDate: '2025-01-06',
+        milestones: [
+          { date: '2025-02-02', label: '旧里程碑' },
+          { date: '2027-01-25', label: '第 12 周阶段检查' },
+        ],
+      }),
+      NOW,
+    )
+    expect(draft.startDate).toBe('2026-11-02')
+    expect(draft.milestones).toEqual([{ date: '2027-01-25', label: '第 12 周阶段检查' }])
   })
 
   it('生成的草案能直接创建计划', () => {
