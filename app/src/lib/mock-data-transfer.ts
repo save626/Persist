@@ -112,7 +112,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isString)
 }
 
-function isPlanItem(value: unknown): value is PlanItem {
+export function isPlanItem(value: unknown): value is PlanItem {
   return (
     hasStrings(value, ['id', 'name', 'time', 'detail', 'kind']) &&
     typeof value.done === 'boolean' &&
@@ -120,7 +120,7 @@ function isPlanItem(value: unknown): value is PlanItem {
   )
 }
 
-function isWaterLogEntry(value: unknown): value is WaterLogEntry {
+export function isWaterLogEntry(value: unknown): value is WaterLogEntry {
   return (
     hasStrings(value, ['id', 'time']) &&
     typeof value.milliliters === 'number' &&
@@ -137,7 +137,7 @@ function isDietDay(value: unknown): value is DietDay {
   return isRecord(value) && isValidIsoDateValue(value.date) && isMealList(value.meals)
 }
 
-function isFitnessSessionRecord(value: unknown): value is FitnessSessionRecord {
+export function isFitnessSessionRecord(value: unknown): value is FitnessSessionRecord {
   return (
     hasStrings(value, ['id', 'completedAt', 'templateId']) &&
     Boolean((value.id as string).trim()) &&
@@ -150,12 +150,38 @@ function isFitnessSessionRecord(value: unknown): value is FitnessSessionRecord {
   )
 }
 
-function isStudyRecord(value: unknown): value is StudyRecord {
+export function isStudyRecord(value: unknown): value is StudyRecord {
   return (
     hasStrings(value, ['id', 'category', 'source', 'date', 'startTime', 'note']) &&
     (value.category === 'english' || value.category === 'math') &&
     typeof value.duration === 'number' &&
     Number.isFinite(value.duration)
+  )
+}
+
+/**
+ * pull 合并前的形状校验（`sync-entities` 用）：服务端只按索引列校验（P4 §7.2），
+ * payload 正文原样回传；万一有不规范客户端推上残缺记录，本地要能跳过，
+ * 否则坏记录写进 IndexedDB 后会让下次启动整份存档被判为损坏。
+ */
+export function isGoalRecord(value: unknown): value is ImportableMockData['goals'][number] {
+  return (
+    hasStrings(value, ['id', 'title', 'date', 'time', 'tone']) &&
+    typeof value.enabled === 'boolean' &&
+    isValidIsoDateValue(value.date)
+  )
+}
+
+export function isDietEntryRecord(value: unknown): value is Meal['entries'][number] & {
+  date: string
+  meal: string
+} {
+  return (
+    hasStrings(value, ['id', 'name', 'portion', 'date', 'meal']) &&
+    ['calories', 'protein', 'carbs', 'fat'].every(
+      (key) => typeof (value as UnknownRecord)[key] === 'number',
+    ) &&
+    isValidIsoDateValue(value.date)
   )
 }
 
@@ -309,7 +335,7 @@ function planIssues(value: unknown, path: string): string[] {
   return issues
 }
 
-function isLongTermPlan(value: unknown): value is LongTermPlan {
+export function isLongTermPlan(value: unknown): value is LongTermPlan {
   return isRecord(value) && planIssues(value, '').length === 0
 }
 

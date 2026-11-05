@@ -1,6 +1,6 @@
 # Server
 
-Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**（步骤 12 的服务端部分 12a/12b 已完成）；前端同步层（12d/12e）与步骤 13 的 AI 综合分析尚未接入。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
+Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**：步骤 12 的 12a–12f（服务端数据层与接口、共享契约、前端同步层、设置页「数据同步」卡片）**已于 2026-11-05 在本机完成并验收，但未部署、未推送**；步骤 13 的 AI 综合分析、步骤 14 的备份/导出/删除账号尚未开始。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
 
 ## 约束（不要破坏）
 
@@ -319,7 +319,7 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 
 ## 当前状态与 TODO
 
-- ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（现共 58 条）。
+- ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（2026-11-03 时 58 条；步骤 12 后现共 **112 条 / 13 个文件**）。
 - ✅ 8b（`b99d3ad`）前端接入：`app/src/lib/ai-chat-client.ts` 用 `createAppChatClient({ consent })` 在真实/Mock 间切换，`probe()` 走 `/api/health`，只在首个内容事件前回退；`PlanChatSheet` / `PlansPage` 如实标注来源。**已用真实 Key 端到端联调**（`/api/chat` 200、3.5 s、127 事件）；真实调用暴露模型给出过去日期，已用「提示词注入 Asia/Shanghai 今天 + 前端日期兜底」修复并复验。
 - ✅ 8c（`bdd4265`，2026-11-04）报告接服务端：新增 `POST /api/report`（非流式 JSON）+ `ai/report.ts` 净化 + 报告提示词；前端 `app/src/lib/ai-report-client.ts` 先 `probeAiReport()` 探活，可用才走真实生成，不可用/失败自动回退本地 Mock 并如实标注。**已用真实 Key 验证**：完整摘要 2.7 s 返回、只授权学习时报告不出现训练/饮食字样；提示词原版允许「推算」，真实调用确实算出了「再补水约 0.5 L」这类未授权数字，已改为**禁止任何推算**并复验通过。
 - ✅ 步骤 9 部署（2026-11-04）：systemd `persist-server.service`（`User=persist`、`Restart=always`）+ `/etc/persist/server.env`（`600 root:root`，新轮换的 Key 只在这里）+ Nginx `/etc/nginx/conf.d/persist.conf`（`/api` 反代 + SSE `proxy_buffering off` + `proxy_read_timeout 300s`）。IP 直连实测：`/api/health` `ai:"deepseek"`；SSE 188 事件、首包 0.118 s、末包 4.215 s 增量到达；`/api/report` 200 / 2.78 s；限流第 2 次 `429` + `Retry-After: 298`。**仅内部调试，未对外宣称上线。**
@@ -327,7 +327,10 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 - ✅ lint 清理后第三次重部署（2026-11-04，`f5a57f5`）：**服务端与 Nginx 配置零改动**，仅替换 `/var/www/persist` 静态产物（`index-DVS7rlR_.js` 567592 B）；实测 8 页深链 200、`/api/health` `ai:"deepseek"`、真实 `/api/report` 200 / 2.284 s；旧 JS 资源 404。
 - ⬜ 下一阶段（步骤 10，等备案号）：域名解析 + 443 + 证书；**服务器 Node 升到 22 LTS**（步骤 12 起代码需要 `node:sqlite`）；SSH 改仅密钥登录、删 3389、装 `fail2ban`。
 - ✅ 步骤 12a（2026-11-05）：`src/db/*` 数据层——`driver.ts`（`Db` 抽象：`prepare/run/all/get/exec/transaction`，`BEGIN IMMEDIATE` + 嵌套 `SAVEPOINT`）、`migrations.ts`（schema v1，14 张表）、`entities.ts`（9 类实体的列映射与校验）、`repositories/*`（实体 upsert/拉取、rev 分配、sync_ops、设备/账号）、`index.ts`（`openPersistDatabase()`）。单测覆盖驱动、迁移、仓储三层。
-- ✅ 步骤 12b（2026-11-05）：账号 + 同步接口——`auth.ts`（令牌 / 恢复码生成与哈希，只存哈希）、`POST /api/v1/devices{,/restore,/revoke}`、`POST /api/v1/sync/{push,bootstrap}` + `GET /api/v1/sync/pull`（opId 幂等、LWW、墓碑、分页）、独立同步限流器、`/api/health` 增加 `db` / `version`。`engines` 提到 `>=22.5`。**本机验收**：tsc 0 错、单测 112/112、真实进程冒烟（重启后数据仍在、恢复码换设备拿到同一 userId）。**尚未部署到服务器**（等步骤 10 升 Node）；前端同步层与设置页开关是 12d/12e。
-- ⬜ P4 剩余（步骤 12d–14）：前端同步层（`sync-store`/`sync-queue`/`sync-client`/`sync-merge`）、设置页「数据同步」开关与恢复码交互、服务端 SQL 聚合 + `ANALYSIS_SYSTEM_PROMPT` + `/api/v1/analysis/*`（步骤 13）、备份 `VACUUM INTO` 与导出/删除账号（步骤 14）。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
+- ✅ 步骤 12b（2026-11-05）：账号 + 同步接口——`auth.ts`（令牌 / 恢复码生成与哈希，只存哈希）、`POST /api/v1/devices{,/restore,/revoke}`、`POST /api/v1/sync/{push,bootstrap}` + `GET /api/v1/sync/pull`（opId 幂等、LWW、墓碑、分页）、独立同步限流器、`/api/health` 增加 `db` / `version`。`engines` 提到 `>=22.5`。**本机验收**：tsc 0 错、单测 112/112、真实进程冒烟（重启后数据仍在、恢复码换设备拿到同一 userId）。**尚未部署到服务器**（等步骤 10 升 Node）；前端同步层与设置页开关见下面 12d/12e 条目。
+- ⬜ P4 剩余（步骤 13–14）：服务端 SQL 聚合 + `ANALYSIS_SYSTEM_PROMPT` + `/api/v1/analysis/*`（步骤 13）、备份 `VACUUM INTO` 与导出/删除账号（步骤 14）。步骤 12 的**部署**随步骤 10 一起做（服务器升 Node 22）。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
 - ✅ 步骤 12c（2026-11-05）：同步契约搬进 `shared/src/contract/`（`sync.ts` / `entities.ts` / `parse.ts`），以 `@persist/shared` 包（`file:../shared`）供 `app` 与 `server` 同源引用；服务端删掉 `src/sync/contract.ts`、`db/entities.ts` 只做转出，前端新增 `app/src/lib/sync-contract.ts` 作为唯一入口。`shared/dist` 由 `shared:build` 产出（已 gitignore）。验收：shared 编译 0 错、服务端 tsc 0 错 + 单测 112/112、前端 tsc 0 错 + 单测 230/230 + oxlint 0/0、`vite build` 产物 hash 与 12b 一致（说明共享层未意外改动前端行为）、真实进程冒烟通过（push 幂等回放 rev 不变、重启后 pull 得到数据、恢复码换设备同 userId）。
 - 结构说明：chat/report 的请求响应类型仍在 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），迁移 `shared/` 另排期；**同步契约已迁完**（`shared/src/contract/sync.ts`），前端 12d 直接经由 `app/src/lib/sync-contract.ts` 引用，不再另抄。
+- ✅ 步骤 12d（2026-11-05，`9abd8bb`）前端同步层：`app/src/lib/` 新增 `sync-client.ts`（`/api/v1/*` 客户端、错误分类、指数退避）、`sync-store.ts`（`persist-sync` IndexedDB：元数据 + outbox）、`sync-queue.ts`（opId 批次与合并）、`sync-entities.ts`（8 切片摊平 / 差分 / pull 合并 LWW + 墓碑）、`sync-engine.ts`（bootstrap、5 s 防抖增量、60 s 兜底、`online`/`visibility` 触发）。设置页开关默认关闭，关闭时不发任何同步请求。
+- ✅ 步骤 12e（2026-11-05，`f09c3da`）设置页「数据同步」卡片：开关（`aria-label="跨设备同步"`）、注册后展示 32 位恢复码（4×8 大写）、「用恢复码绑定已有账号」、本机设备与最近同步时间、立即同步、吊销本机（`alertdialog` 二次确认）。E2E 增加 2 条用例（mock `**/api/v1/**`）。
+- ✅ 步骤 12f（2026-11-05，本机未提交）收尾：pull 合并前的形状守卫 `matchesRecordShape`（形状不合规 / body id 与信封 id 不一致的实体计 `skipped`，不写本地存档）；**本机验收** P4 §7.4 六项 19/19、app 单测 292/292（21 文件）、server 112/112（13 文件）、E2E 110、`vite build` JS 606.08 kB / CSS 140.20 kB；13 张视觉基线 png 差异待用户验收。**未部署、未推送**（本地 6 个提交领先 `origin/main`，HEAD `f09c3da`）。

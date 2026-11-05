@@ -202,6 +202,48 @@ describe('applyPulledEntities', () => {
     expect(merged.data.planItems).toHaveLength(data.planItems.length)
   })
 
+  it('远端记录形状不完整时跳过，不把坏记录写进本地（否则下次启动整份存档会被判损坏）', () => {
+    const data = sampleData()
+    const merged = applyPulledEntities(
+      data,
+      [
+        // 服务端只校验索引列，这里模拟不规范客户端推上来的残缺学习记录。
+        pulled({
+          kind: 'study_record',
+          id: 'accept-conflict-1',
+          data: { date: '2026-11-05', category: 'english', duration: 30, title: '残缺' } as never,
+        }),
+        pulled({
+          kind: 'water_log',
+          id: 'water-broken-1',
+          data: { id: 'water-broken-1', time: '12:00', date: '2026-11-05' } as never,
+        }),
+      ],
+      {},
+      NOW_MS,
+    )
+
+    expect(merged.applied).toBe(0)
+    expect(merged.skipped).toBe(2)
+    expect(merged.data.studyRecords.map((record) => record.id)).not.toContain('accept-conflict-1')
+    expect(merged.data.waterLog.map((entry) => entry.id)).not.toContain('water-broken-1')
+  })
+
+  it('正文 id 与信封 id 不一致时跳过', () => {
+    const data = sampleData()
+    const goal = data.goals[0]!
+    const merged = applyPulledEntities(
+      data,
+      [pulled({ kind: 'goal', id: 'goal-1', data: { ...goal, id: 'goal-9' } })],
+      {},
+      NOW_MS,
+    )
+
+    expect(merged.applied).toBe(0)
+    expect(merged.skipped).toBe(1)
+    expect(merged.data.goals.map((item) => item.id)).not.toContain('goal-9')
+  })
+
   it('饮食条目合并进已有日期，未知餐次追加且四餐顺序不变', () => {
     const data = sampleData()
     const merged = applyPulledEntities(

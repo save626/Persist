@@ -9,6 +9,15 @@ import type {
 } from '../types'
 import { INITIAL_MEALS } from '../data/diet'
 import {
+  isDietEntryRecord,
+  isFitnessSessionRecord,
+  isGoalRecord,
+  isLongTermPlan,
+  isPlanItem,
+  isStudyRecord,
+  isWaterLogEntry,
+} from './mock-data-transfer'
+import {
   isEntityKind,
   type EntityCandidate,
   type EntityKind,
@@ -183,17 +192,31 @@ function removeById<T extends { id: string }>(list: T[], id: string): T[] {
   return list.filter((entry) => entry.id !== id)
 }
 
-function isPlanItem(data: Record<string, unknown>): boolean {
-  return typeof data.id === 'string' && typeof data.date === 'string'
-}
-
-function asDietEntry(data: Record<string, unknown>): boolean {
-  return (
-    typeof data.id === 'string' &&
-    typeof data.date === 'string' &&
-    typeof data.meal === 'string' &&
-    typeof data.name === 'string'
-  )
+/**
+ * pull 合并的兜底：服务端只保证索引列合法（P4 §7.2），payload 正文原样回传。
+ * 每条记录落地前还要过一遍「与备份导入同一套」的形状校验，
+ * 形状不对就计入 skipped —— 绝不能把通不过校验的记录写进本地存储，
+ * 否则下次启动整份存档会被判为损坏而回退到初始数据。
+ */
+function matchesRecordShape(kind: EntityKind, payload: Record<string, unknown>): boolean {
+  switch (kind) {
+    case 'goal':
+      return isGoalRecord(payload)
+    case 'plan_item':
+      return isPlanItem(payload)
+    case 'study_record':
+      return isStudyRecord(payload)
+    case 'water_log':
+      return isWaterLogEntry(payload)
+    case 'fitness_session':
+      return isFitnessSessionRecord(payload)
+    case 'diet_entry':
+      return isDietEntryRecord(payload)
+    case 'long_term_plan':
+      return isLongTermPlan(payload)
+    default:
+      return true
+  }
 }
 
 /** 用一条 `diet_entry` 更新按日台账；该日四餐固定存在，顺序稳定。 */
@@ -300,6 +323,18 @@ export function applyPulledEntities(
       skipped += 1
       continue
     }
+    if (!entity.deleted && payload) {
+      // 形状不对、或正文 id 与信封 id 不一致：跳过而不是把坏记录写进本地存储。
+      const singleRow = entity.kind === 'profile' || entity.kind === 'settings'
+      if (!matchesRecordShape(entity.kind, payload)) {
+        skipped += 1
+        continue
+      }
+      if (!singleRow && payload.id !== id) {
+        skipped += 1
+        continue
+      }
+    }
 
     switch (entity.kind) {
       case 'profile': {
@@ -342,11 +377,8 @@ export function applyPulledEntities(
       case 'study_record': {
         if (entity.deleted) {
           next = { ...next, studyRecords: removeById(next.studyRecords, id) }
-        } else if (payload && typeof payload.date === 'string') {
-          next = {
-            ...next,
-            studyRecords: upsertById(next.studyRecords, payload as never),
-          }
+        } else if (payload) {
+          next = { ...next, studyRecords: upsertById(next.studyRecords, payload as never) }
         } else {
           skipped += 1
           continue
@@ -369,7 +401,7 @@ export function applyPulledEntities(
       case 'fitness_session': {
         if (entity.deleted) {
           next = { ...next, fitnessHistory: removeById(next.fitnessHistory, id) }
-        } else if (payload && typeof payload.completedAt === 'string') {
+        } else if (payload) {
           const record = payload as unknown as FitnessSessionRecord
           next = {
             ...next,
@@ -387,7 +419,7 @@ export function applyPulledEntities(
       case 'diet_entry': {
         if (entity.deleted) {
           next = { ...next, dietDays: removeDietEntry(next.dietDays, id) }
-        } else if (payload && asDietEntry(payload)) {
+        } else if (payload && isDietEntryRecord(payload)) {
           next = { ...next, dietDays: upsertDietEntry(next.dietDays, payload) }
         } else {
           skipped += 1
