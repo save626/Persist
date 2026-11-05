@@ -1,4 +1,15 @@
 import type { DbParam } from './driver.js'
+import {
+  ENTITY_KINDS,
+  isEntityKind,
+  type EntityCandidate,
+  type EntityKind,
+} from '@persist/shared/contract/entities'
+
+// kind 列表与信封形状定义在 shared（前端 outbox 用同一份），这里只做转出，
+// 免得 12d 前端再抄一份慢慢跑偏。
+export { ENTITY_KINDS, isEntityKind }
+export type { EntityCandidate, EntityKind }
 
 /**
  * 同步实体的唯一描述：前端推上来的每一种记录，在这里定义落库时怎么拆列。
@@ -11,30 +22,7 @@ import type { DbParam } from './driver.js'
  * 免得脏数据靠 SQLite 的 NOT NULL 报一句看不懂的话。
  */
 
-export const ENTITY_KINDS = [
-  'profile',
-  'settings',
-  'plan_item',
-  'study_record',
-  'fitness_session',
-  'diet_entry',
-  'water_log',
-  'goal',
-  'long_term_plan',
-] as const
-
-export type EntityKind = (typeof ENTITY_KINDS)[number]
-
-const ENTITY_KIND_SET = new Set<string>(ENTITY_KINDS)
-
-export function isEntityKind(value: unknown): value is EntityKind {
-  return typeof value === 'string' && ENTITY_KIND_SET.has(value)
-}
-
-export const SINGLE_ROW_KINDS: ReadonlySet<EntityKind> = new Set<EntityKind>([
-  'profile',
-  'settings',
-])
+export { SINGLE_ROW_KINDS } from '@persist/shared/contract/entities'
 
 export type EntityPayload = Record<string, unknown>
 
@@ -45,14 +33,6 @@ export class EntityDataError extends Error {
     super(message)
     this.name = 'EntityDataError'
   }
-}
-
-export interface EntityCandidate {
-  kind: EntityKind
-  id?: string | null
-  updatedAt: number
-  deleted?: boolean
-  data?: unknown
 }
 
 export interface NormalizedEntity {

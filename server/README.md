@@ -30,7 +30,6 @@ server/
 │  ├─ routes/devices.ts POST /api/v1/devices{,/restore,/revoke}
 │  ├─ routes/sync.ts    POST /api/v1/sync/{push,bootstrap} + GET /api/v1/sync/pull
 │  ├─ sync/
-│  │  ├─ contract.ts    同步接口的类型与请求校验（步骤 12c 迁到 shared/）
 │  │  ├─ accounts.ts    注册 / 恢复 / 吊销的业务动作
 │  │  └─ service.ts     认证、push 幂等、bootstrap 事务、pull 响应整形
 │  ├─ db/
@@ -46,6 +45,8 @@ server/
 │     └─ report.ts      报告内容净化（字数/条数/重复项/代码块，拒绝就报契约错误）
 └─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / db-* / devices / sync
 ```
+
+> **`@persist/shared`（仓库根 `shared/`）**：同步契约（`contract/sync.ts`、`contract/entities.ts`、`contract/parse.ts`）只有这一份，服务端与前端同源引用。`shared/` 是独立 TS 项目，需先编译出 `shared/dist`：`npm run shared:build`（`prebuild` / `pretest` / `typecheck` 会自动先跑）。`npm install` 已按 `file:../shared` 建立链接；**部署时 `shared/` 必须一起上服务器**（见 `docs/部署与服务器现状.md`）。
 
 ## API
 
@@ -288,6 +289,7 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"   # 本机沙箱下必须带 workspace 内缓存
+npm run shared:build  # 先编译 ../shared → shared/dist（prebuild/pretest/typecheck 会自动跑）
 npm run typecheck    # tsc -p tsconfig.test.json（含 test）
 npm test             # vitest run，112 条（13 个文件）
 npm run build        # tsc -p tsconfig.json → dist/
@@ -327,4 +329,5 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 - ✅ 步骤 12a（2026-11-05）：`src/db/*` 数据层——`driver.ts`（`Db` 抽象：`prepare/run/all/get/exec/transaction`，`BEGIN IMMEDIATE` + 嵌套 `SAVEPOINT`）、`migrations.ts`（schema v1，14 张表）、`entities.ts`（9 类实体的列映射与校验）、`repositories/*`（实体 upsert/拉取、rev 分配、sync_ops、设备/账号）、`index.ts`（`openPersistDatabase()`）。单测覆盖驱动、迁移、仓储三层。
 - ✅ 步骤 12b（2026-11-05）：账号 + 同步接口——`auth.ts`（令牌 / 恢复码生成与哈希，只存哈希）、`POST /api/v1/devices{,/restore,/revoke}`、`POST /api/v1/sync/{push,bootstrap}` + `GET /api/v1/sync/pull`（opId 幂等、LWW、墓碑、分页）、独立同步限流器、`/api/health` 增加 `db` / `version`。`engines` 提到 `>=22.5`。**本机验收**：tsc 0 错、单测 112/112、真实进程冒烟（重启后数据仍在、恢复码换设备拿到同一 userId）。**尚未部署到服务器**（等步骤 10 升 Node）；前端同步层与设置页开关是 12d/12e。
 - ⬜ P4 剩余（步骤 12d–14）：前端同步层（`sync-store`/`sync-queue`/`sync-client`/`sync-merge`）、设置页「数据同步」开关与恢复码交互、服务端 SQL 聚合 + `ANALYSIS_SYSTEM_PROMPT` + `/api/v1/analysis/*`（步骤 13）、备份 `VACUUM INTO` 与导出/删除账号（步骤 14）。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
-- 结构说明：chat/report 的请求响应类型暂放 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），`shared/` 迁移**推迟**；同步契约先放在 `src/sync/contract.ts`，**步骤 12c 再迁到 `shared/src/contract/sync.ts`** 供前端复用。
+- ✅ 步骤 12c（2026-11-05）：同步契约搬进 `shared/src/contract/`（`sync.ts` / `entities.ts` / `parse.ts`），以 `@persist/shared` 包（`file:../shared`）供 `app` 与 `server` 同源引用；服务端删掉 `src/sync/contract.ts`、`db/entities.ts` 只做转出，前端新增 `app/src/lib/sync-contract.ts` 作为唯一入口。`shared/dist` 由 `shared:build` 产出（已 gitignore）。验收：shared 编译 0 错、服务端 tsc 0 错 + 单测 112/112、前端 tsc 0 错 + 单测 230/230 + oxlint 0/0、`vite build` 产物 hash 与 12b 一致（说明共享层未意外改动前端行为）、真实进程冒烟通过（push 幂等回放 rev 不变、重启后 pull 得到数据、恢复码换设备同 userId）。
+- 结构说明：chat/report 的请求响应类型仍在 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），迁移 `shared/` 另排期；**同步契约已迁完**（`shared/src/contract/sync.ts`），前端 12d 直接经由 `app/src/lib/sync-contract.ts` 引用，不再另抄。

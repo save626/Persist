@@ -12,7 +12,7 @@ import type {
   PushBody,
   PushResult,
   SkippedEntity,
-} from './contract.js'
+} from '@persist/shared/contract/sync'
 
 /**
  * 同步的业务逻辑：认证、一次 push / bootstrap 的落库、pull 的响应整形。

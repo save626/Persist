@@ -1,13 +1,20 @@
-import type { ParseResult } from '../contract.js'
-import { ENTITY_KINDS, isEntityKind, type EntityCandidate } from '../db/entities.js'
-
 /**
- * 同步接口的请求 / 响应契约（服务端版本）。
+ * 账号与增量同步的请求 / 响应契约（服务端与前端同源）。
  *
- * 步骤 12c 会把它搬到 `shared/src/contract/sync.ts`，届时这里的类型与校验函数
- * 移到 shared、服务端与前端同源引用。在那之前保持「只有这一份定义」，
- * 免得前端另抄一套又慢慢跑偏。
+ * 这里是**唯一**一份定义：服务端路由用它校验入参、组装响应；前端 12d 的
+ * sync-client 用同一套类型拼请求、读响应。字段名、上限、跳过原因都必须两边一致，
+ * 否则 idempotency / 分页游标 / LWW 就无从谈起。
+ *
+ * 只放纯 TS：不碰 DOM、不碰 Node API、不碰数据库。校验函数返回 ParseResult，
+ * 由调用方决定怎么转成 HTTP 状态码或 UI 提示。
  */
+
+import { ENTITY_KINDS, isEntityKind, type EntityCandidate } from './entities.js'
+import type { ParseResult } from './parse.js'
+
+export type { EntityCandidate, EntityKind } from './entities.js'
+export { ENTITY_KINDS, isEntityKind, SINGLE_ROW_KINDS } from './entities.js'
+export type { ParseResult } from './parse.js'
 
 /** 单次 push 的实体上限；够用又不会让一次请求写太久。 */
 export const MAX_PUSH_ENTITIES = 500
@@ -142,8 +149,8 @@ export function parseDeviceRevokeBody(raw: unknown): ParseResult<DeviceRevokeBod
 
 /**
  * 单个实体候选值只做「形状」校验：kind 合法、updatedAt 是正数、data 是对象。
- * 业务字段（日期、枚举、数值范围）在 `normalizeEntity` 里校验，失败记为 invalid 并跳过，
- * 不影响同一批里其他合法实体。
+ * 业务字段（日期、枚举、数值范围）在服务端 `normalizeEntity` 里校验，失败记为 invalid
+ * 并跳过，不影响同一批里其他合法实体。
  */
 export function parseEntityCandidate(raw: unknown): ParseResult<EntityCandidate> {
   if (!isRecord(raw)) return { ok: false, message: 'entities 的每一项必须是对象。' }

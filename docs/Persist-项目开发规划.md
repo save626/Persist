@@ -614,7 +614,7 @@ Persist 是一个安静、可信、可持续的个人数据面板：
 |---|---|---|
 | 前端应用 | `app/` | 8 个页面 + 组件 + 样式 + 单测 + E2E + 视觉脚本 |
 | 服务端 | `server/` | Fastify 代理、DeepSeek 客户端、契约、单测；`dist/` 为构建产物（不入库） |
-| 共享占位 | `shared/` | 暂只有 README，契约目前在 `server/src/contract.ts` |
+| 共享包 | `shared/` | `@persist/shared`：同步契约（`contract/sync.ts`、`entities.ts`、`parse.ts`），`app` / `server` 同源引用；`dist/` 为构建产物（不入库）；chat/report 契约仍暂在 `server/src/contract.ts` |
 | 视觉基线原型 | `design/home-v3-countdown.html` | 首页唯一保留的 HTML 原型 |
 | 基线截图 | `design/`（91 张） | `npm run visual:check` 生成，已经用户验收 |
 | 旧饮水工具 | `Water intake record/`（约 368 MB，gitignored） | 仅作行为参考，数据层与通知需重写 |

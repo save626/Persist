@@ -33,7 +33,7 @@
 ```text
 app/      React + Vite Web 客户端（主产物 app/dist）
 server/   Fastify + DeepSeek 代理：/api/health、SSE /api/chat、POST /api/report
-shared/   跨端共享类型与纯函数（仍为占位；契约类型暂在 server/src/contract.ts）
+shared/   跨端共享纯 TS 契约（`@persist/shared`）：同步实体与接口契约（步骤 12c 起前后端同源）
 design/   视觉基线与截图（15 状态 × 6 视口 = 91 张，由 visual:check 生成）
 docs/     工程约定、部署现状、P4 设计方案
 ```

@@ -14,7 +14,7 @@ import {
   findUserByRecoveryHash,
   revokeDevice as revokeDeviceRow,
 } from '../db/repositories/devices.js'
-import type { DeviceCredentials, DeviceRegisterResponse } from './contract.js'
+import type { DeviceCredentials, DeviceRegisterResponse } from '@persist/shared/contract/sync'
 
 /**
  * 账号相关的业务动作：注册、凭恢复码恢复、吊销设备。

@@ -6,7 +6,7 @@ import {
   parseDeviceRestoreBody,
   parseDeviceRevokeBody,
   type DeviceRevokeBody,
-} from '../sync/contract.js'
+} from '@persist/shared/contract/sync'
 import { registerAccount, restoreAccount, revokeDevice } from '../sync/accounts.js'
 import { enforceRateLimit, requireDevice } from './guards.js'
 import type { FastifyInstance } from 'fastify'

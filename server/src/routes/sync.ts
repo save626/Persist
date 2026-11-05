@@ -1,7 +1,7 @@
 import type { Db } from '../db/driver.js'
 import { errorBody } from '../contract.js'
 import type { RateLimiter } from '../rate-limit.js'
-import { parseBootstrapBody, parsePullQuery, parsePushBody } from '../sync/contract.js'
+import { parseBootstrapBody, parsePullQuery, parsePushBody } from '@persist/shared/contract/sync'
 import {
   SyncOpConflictError,
   applyBootstrap,

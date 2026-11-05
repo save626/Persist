@@ -1,0 +1,30 @@
+{
+  "name": "@persist/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Web / 服务端 / 移动端共用的纯 TypeScript 契约与校验",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./contract/sync": {
+      "types": "./dist/contract/sync.d.ts",
+      "default": "./dist/contract/sync.js"
+    },
+    "./contract/entities": {
+      "types": "./dist/contract/entities.d.ts",
+      "default": "./dist/contract/entities.js"
+    },
+    "./contract/parse": {
+      "types": "./dist/contract/parse.d.ts",
+      "default": "./dist/contract/parse.js"
+    }
+  },
+  "files": [
+    "dist"
+  ]
+}

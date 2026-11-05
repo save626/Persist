@@ -714,7 +714,7 @@ DAILY_REPORT_AT=21:00
 | 8c `/api/report` 契约（`ReportRecord`） | 保留为降级路径；v2 增加 `analysis` 与 `metrics`，前端兼容两种来源 |
 | 8a `/api/chat` SSE 契约 | 不变 |
 | 前端「数据只在本机」的既定文案（README / 设置页 / 隐私说明） | **必须同步改写**：开启同步后数据副本在自建服务器；默认仍是本地优先，需明确告知差异 |
-| `shared/` 占位 | P4 起把 `sync` / `analysis` 契约放 `shared/src/contract/`（`app` 与 `server` 共用，需 tsconfig/vite 路径调整）；`chat` 契约暂留 `server/src/contract.ts`，避免与前端冻结冲突 |
+| `shared/` 占位 | **已落地（步骤 12c，2026-11-05）**：`@persist/shared` 包（`file:../shared` + `exports` 子路径）承载 `sync` / `entities` / `parse` 契约，`app` / `server` 同源引用（前端入口 `app/src/lib/sync-contract.ts`，服务端直接 import 包）；`analysis` 契约在步骤 13 加进同一包。`chat` / `report` 契约仍留 `server/src/contract.ts`（另一笔债），迁移另排期 |
 
 ---
 

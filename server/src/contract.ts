@@ -6,6 +6,8 @@
  * 字段增减都要同步改，不允许服务端私自扩展 UI 不认识的事件。
  */
 
+import type { ParseResult as SharedParseResult } from '@persist/shared/contract/parse'
+
 export type ChatRole = 'user' | 'assistant'
 
 export interface ChatTurn {
@@ -123,7 +125,8 @@ export interface ChatLimits {
   maxPromptChars: number
 }
 
-export type ParseResult<T = ChatRequest> = { ok: true; value: T } | { ok: false; message: string }
+/** 定义在 shared（服务端 / 前端同一份）；这里只给 chat 契约保留原来的默认类型参数。 */
+export type ParseResult<T = ChatRequest> = SharedParseResult<T>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

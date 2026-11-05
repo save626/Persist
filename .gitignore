@@ -8,6 +8,7 @@ app/coverage/
 app/playwright-report/
 app/test-results/
 server/dist/
+shared/dist/
 server/.npm-cache/
 server/data/
 *.tsbuildinfo
