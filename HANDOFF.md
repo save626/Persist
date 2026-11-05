@@ -47,7 +47,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 |---|---|---|
 | ~~9~~ | ~~IP 直连首次部署~~ | ✅ **已完成（2026-11-04）**：`/var/www/persist` + `/opt/persist/server` + systemd `persist-server` + `/etc/nginx/conf.d/persist.conf`；8 个页面深链均 200、SSE 188 个事件 4.2 s 内增量到达、`/api/report` 2.78 s、限流 429 + `Retry-After` 实测通过；真实 Key 已轮换且只存 `/etc/persist/server.env`（`600`）。细节见 `docs/部署与服务器现状.md` §6 |
 | **10** | 域名 + HTTPS + 安全加固（解析、开 443、certbot、HTTP→HTTPS、SSH 密钥、删 3389、fail2ban） | **等备案号下发**。进度：提交备案 ✅ 2026-11-03 → 阿里云初审 ✅ 2026-11-04 → 提交管局 ⏳ 计划 2026-11-05 → 管局审核 ⏳ 20 工作日法定期限 → 下发备案号 ⏳ → 再做本步 |
-| **11**（8d） | 数据历史化：训练真实历史落库、饮食/饮水/计划按日台账、`schemaVersion` 1→2、备份 0.3.0 | ✅ **已完成（2026-11-04）**：11a 数据层 v2（`6d769a7`）→ 11b 健身真实历史（`bc4ee88`）→ 11c 报告窗口（`12de14b`）→ 报告页返回态修复（`8edb8ba`）；app 单测 230/230、E2E 104 全绿，P4 §6.3 前四项达标；**视觉基线待用户双端验收后提交**；8d 前端资源尚未部署 |
+| **11**（8d） | 数据历史化：训练真实历史落库、饮食/饮水/计划按日台账、`schemaVersion` 1→2、备份 0.3.0 | ✅ **已完成（2026-11-04）**：11a 数据层 v2（`6d769a7`）→ 11b 健身真实历史（`bc4ee88`）→ 11c 报告窗口（`12de14b`）→ 报告页返回态修复（`8edb8ba`）、学习来源随科目切换清空（`971e1b6`）；app 单测 230/230、E2E 106 全绿，P4 §6.3 前四项达标；**视觉基线待用户双端验收后提交**；8d 前端资源尚未部署 |
 | **12–14**（P4a/b/c） | 设备令牌 + 增量同步（SQLite）→ 服务端聚合 + AI 综合分析 → 备份 / 恢复 / 导出 / 删除账号 | 依赖步骤 11（已完成）；开工前先定 Node/驱动（P4 文档 §18-1） |
 | **15**（P5） | Capacitor Android 打包与真机验证 | 依赖部署与冻结后的前端 |
 
@@ -159,7 +159,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 收尾 | 死代码/历史制品清理 + 全仓格式化（移除 Tailwind Prettier 插件） | ✅ 已完成（2026-11-03，两个独立提交，验证全绿） |
 | 服务器 | 阿里云 ECS 环境准备（Node 20 + Nginx + 安全组 80） | ✅ 环境就绪（2026-11-03）；**代码已于 2026-11-04 部署**（见 `docs/部署与服务器现状.md`） |
 | 步骤 7 | P3-0：设置页「清空本机数据」入口 | ✅ 已完成（2026-11-03，`a544a38`，E2E 100 次全绿） |
-| 下一阶段 C | Fastify + DeepSeek 服务端代理（步骤 8） | ✅ 代码完成：8a 服务端骨架（`9138175`）、8b 前端接入 + 真实 Key 联调（`b99d3ad`）、8c AI 报告接服务端（`bdd4265`）；app 单测 230/230、server 58/58、E2E 104 全绿；**步骤 9 部署验收已完成（2026-11-04）**；此后今日页晨间简报也接入 `/api/report`（`9f9cc71`），清理 3 条 lint 警告（`f5a57f5`），并完成步骤 11（8d）数据历史化（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba`） |
+| 下一阶段 C | Fastify + DeepSeek 服务端代理（步骤 8） | ✅ 代码完成：8a 服务端骨架（`9138175`）、8b 前端接入 + 真实 Key 联调（`b99d3ad`）、8c AI 报告接服务端（`bdd4265`）；app 单测 230/230、server 58/58、E2E 106 全绿；**步骤 9 部署验收已完成（2026-11-04）**；此后今日页晨间简报也接入 `/api/report`（`9f9cc71`），清理 3 条 lint 警告（`f5a57f5`），并完成步骤 11（8d）数据历史化（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba`），修复学习来源不随科目切换（`971e1b6`） |
 | 部署 | 步骤 9 IP 直连部署 → 步骤 10 备案后域名 + HTTPS | ✅ 步骤 9 完成（2026-11-04，仅 IP 直连内部调试，**未宣称上线**）；步骤 10 待备案号（阿里云初审 2026-11-04 通过，2026-11-05 提交管局） |
 | 下一阶段 D | 服务端备份、校验与恢复 | 未开始 |
 | 下一阶段 E | Capacitor / Android 发布 | 未开始 |
@@ -1027,13 +1027,13 @@ D:\Persist\app\src\lib\mock-data-transfer.ts
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 类型检查 | `npm run typecheck` | 通过，0 错误（2026-11-05 报告页返回态修复 `8edb8ba` 后复跑） |
-| 单元测试 | `npm test` | **230/230 通过，16 个测试文件**（2026-11-04 步骤 11 后复跑；8d 新增 `history.test.ts` 25 / `fitness-history.test.ts` 10 / `report-window.test.ts` 6，并扩充 `persist-state.test.ts` 11→18、`mock-data-transfer.test.ts` 26→32、`report-digest.test.ts` 6→10；2026-11-05 返回态修复未动数据层，复跑仍 230/230） |
-| 端到端测试 | `npx playwright test` | **104 通过 / 0 跳过 / 0 失败**，52 个用例 × 2 个项目 = 104 次执行，50.4 s（2026-11-05 报告页返回态修复后复跑；E2E 把 `/api` 指向不可达端口，故实际走的是「回退本机规则」路径；新增 1 条跨页 + 刷新用例：「生成简报 → 跳今日页 → 回报告页 → 整页刷新」后顶部仍是「今日简报已生成」且「查看简报」可打开） |
+| 类型检查 | `npm run typecheck` | 通过，0 错误（2026-11-05 学习来源修复 `971e1b6` 后复跑） |
+| 单元测试 | `npm test` | **230/230 通过，16 个测试文件**（2026-11-04 步骤 11 后复跑；8d 新增 `history.test.ts` 25 / `fitness-history.test.ts` 10 / `report-window.test.ts` 6，并扩充 `persist-state.test.ts` 11→18、`mock-data-transfer.test.ts` 26→32、`report-digest.test.ts` 6→10；2026-11-05 返回态修复与学习来源修复均未动数据层，复跑仍 230/230） |
+| 端到端测试 | `npx playwright test` | **106 通过 / 0 跳过 / 0 失败**，53 个用例 × 2 个项目 = 106 次执行，44.7 s（2026-11-05 学习来源修复 `971e1b6` 后复跑；E2E 把 `/api` 指向不可达端口，故实际走的是「回退本机规则」路径；新增 1 条跨页 + 刷新用例：「生成简报 → 跳今日页 → 回报告页 → 整页刷新」后顶部仍是「今日简报已生成」且「查看简报」可打开；另一条新增用例：英语填「百词斩」→ 切高数后来源清空、占位符变「例如：高数练习」→ 切回英语再次清空） |
 | Lint | `npm run lint` | **0 错误 0 警告**（2026-11-04 清理后；3 条 `react(set-state-in-effect)` 已随 `f5a57f5` 消除） |
 | 格式检查 | `npx prettier --check .`（在 `app` 内执行） | 通过：`All matched files use Prettier code style!`（2026-11-05 报告页修复后复跑；8d 新文件初次检查有 6 个未格式化，`--write` 后复验通过） |
-| 生产构建 | `npm run build` | 通过（`index-Bx1R0rsd.js` 574.64 kB / gzip 171.38 kB，`index-CrJgYfMj.css` 137.70 kB / gzip 23.83 kB，2026-11-05 报告页返回态修复后复跑；主 JS 仍超 500 kB 提示线） |
-| 视觉检查 | `npm run visual:check`（**前提：同源 `/api` 可达**，先起无 Key 后端，否则 502 会判 `consoleErrors > 0`） | 最近一次全量重跑为 2026-11-04 步骤 8b 后全绿：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（exit 0），77 张 png 更新并经用户双端验收通过后入库。**8c 改动 `/reports` 后，reports 相关基线已单独重跑（6 张 png 更新，各项 0、exit 0）并经用户双端验收通过，随 `7625865` 提交推送**。**晨间简报接入后再次重跑（未起后端）：91 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`reports` 与 `plans-ai` 各 6 视口报 `Failed to load resource: 502`（同源 `/api` 不可达，属运行前提未满足，非本次改动）；`design/` 仅首页实时日期文字导致 7 张像素漂移（0.035%），已还原未入库**。**步骤 11（8d）后与 2026-11-05 报告页返回态修复后各重跑一次（未起后端，preview 4173）：两次均为 90 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`failures 12`（`reports` 6 + `plans-ai` 6 的 502 控制台错误，非像素回归），exit 1；`design/` 累计 65 张 png 更新（18 张真实改动：`fitness-*` 6 / `fitness-new-*` 6 / `reports-*` 6；6 张首页为日期文字 11/4→11/5；其余 41 张单张变化 ≤ 400 B，属 1 s 实时时钟/倒计时漂移），**待用户双端验收后入库** |
+| 生产构建 | `npm run build` | 通过（`index-BM4N278W.js` 574.67 kB / gzip 171.41 kB，`index-CrJgYfMj.css` 137.70 kB / gzip 23.83 kB，2026-11-05 学习来源修复后复跑；主 JS 仍超 500 kB 提示线） |
+| 视觉检查 | `npm run visual:check`（**前提：同源 `/api` 可达**，先起无 Key 后端，否则 502 会判 `consoleErrors > 0`） | 最近一次全量重跑为 2026-11-04 步骤 8b 后全绿：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（exit 0），77 张 png 更新并经用户双端验收通过后入库。**8c 改动 `/reports` 后，reports 相关基线已单独重跑（6 张 png 更新，各项 0、exit 0）并经用户双端验收通过，随 `7625865` 提交推送**。**晨间简报接入后再次重跑（未起后端）：91 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`reports` 与 `plans-ai` 各 6 视口报 `Failed to load resource: 502`（同源 `/api` 不可达，属运行前提未满足，非本次改动）；`design/` 仅首页实时日期文字导致 7 张像素漂移（0.035%），已还原未入库**。**步骤 11（8d）后与 2026-11-05 报告页返回态修复后各重跑一次（未起后端，preview 4173）：两次均为 90 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`failures 12`（`reports` 6 + `plans-ai` 6 的 502 控制台错误，非像素回归），exit 1；`design/` 累计 65 张 png 更新（18 张真实改动：`fitness-*` 6 / `fitness-new-*` 6 / `reports-*` 6；6 张首页为日期文字 11/4→11/5；其余 41 张单张变化 ≤ 400 B，属 1 s 实时时钟/倒计时漂移），**待用户双端验收后入库**；2026-11-05 学习来源修复只改分类按钮的处理逻辑并加一条用例，无静态样式变化，故未重跑视觉基线 |
 | 服务端类型/单测 | `npm run typecheck` + `npm test`（`server/`） | 0 错；**58/58**（8 个文件：config / contract / rate-limit / extract / deepseek / chat / prompts / report），Node 20 兼容，`format:check` 通过（2026-11-04 步骤 8c 后复跑） |
 | 服务端冒烟 | `node dist/index.js` + HTTP 调用 | 无 Key：`/api/health` 200（`ai: "disabled"`）、`/api/chat` 503、`/api/report` 503；真实 Key（本机临时进程，PORT=3001）：`/api/health` 200（`ai: "deepseek"`）、`POST /api/report` 200 + 中文简报（2.7 s）、只授权学习时无训练/饮食字样 |
 
@@ -1042,7 +1042,7 @@ Playwright 配置为两个项目：
 - `desktop-chrome`
 - `mobile-chrome`（Pixel 7，`isMobile: true`）
 
-共 52 个用例 × 2 个项目 = 104 次执行，**0 跳过 0 失败**。原先 `plans.spec.ts` 中「档案页 AI 建档入口」在移动端被 `test.skip(isMobile)` 跳过，原因是该按钮在 ≤900px 被全局隐藏规则一并向隐藏；现已给按钮加 `profile-onboard-action` 并从隐藏规则豁免，移动端同样真实点击验证，测试不再跳过。
+共 53 个用例 × 2 个项目 = 106 次执行，**0 跳过 0 失败**。原先 `plans.spec.ts` 中「档案页 AI 建档入口」在移动端被 `test.skip(isMobile)` 跳过，原因是该按钮在 ≤900px 被全局隐藏规则一并向隐藏；现已给按钮加 `profile-onboard-action` 并从隐藏规则豁免，移动端同样真实点击验证，测试不再跳过。
 
 步骤 6 新增 `e2e/persistence.spec.ts` 3 条（饮水记录 / 长期计划 / 提醒设置）在桌面与移动两个项目都真实刷新页面验证，覆盖「刷新后仍在」与「重复刷新不累加」。步骤 7 在同一文件补第 4 条「清空本机数据后刷新回到初始示例数据」：先造出与基线不同的状态（饮水 1.2 L → 1.5 L、关掉饮水提醒）→ 进入设置页二次确认清空 → 断言界面立刻回到基线（提醒开关重新勾选、快照区显示「尚未生成快照」）→ 刷新后仍为基线（断言 1.2 L 且不含 1.5 L、提醒开关已勾选），用来抓「200 ms 防抖把旧数据写回」这类顺序错误。
 
@@ -1051,7 +1051,7 @@ Playwright 配置为两个项目：
 | 文件 | 用例数 | 覆盖内容 |
 |---|---:|---|
 | `app\e2e\smoke.spec.ts` | 21 | 导航、今日、健身、饮食、学习、档案、设置、报告、移动溢出 |
-| `app\e2e\mock-flows.spec.ts` | 8 | 学习/餐食/健身/档案/授权/复盘跨页保持，报告数据源联动 |
+| `app\e2e\mock-flows.spec.ts` | 9 | 学习/餐食/健身/档案/授权/复盘跨页保持，报告数据源联动；学习科目切换时来源清空 |
 | `app\e2e\mock-data-flows.spec.ts` | 9 | 简报历史、周期、饮水 KPI、快照、JSON 导出/导入、CSV、非法导入、生成简报后跳页返回状态保持 |
 | `app\e2e\plans.spec.ts` | 5 | 档案页 AI 建档入口深链（桌面 + 移动）、AI 建档对话→确认启用→写回档案、手工新建→归档→重新启用、360px 无横向溢出、**真实模型不可用时回退本地 Mock 并明确标注** |
 | `app\e2e\complete-mock-data.spec.ts` | 3 | 完整演示数据覆盖全部主模块、报告数据源和建议应用 |
@@ -1082,7 +1082,7 @@ dist/index.html                  0.61 kB（611 B）
 dist/favicon.svg                9,522 B
 dist/icons.svg                  5,031 B
 dist/assets/index-CrJgYfMj.css  137,705 B（137.70 kB，gzip 23.83 kB）
-dist/assets/index-Bx1R0rsd.js   574,641 B（574.64 kB，gzip 171.38 kB）
+dist/assets/index-BM4N278W.js   574,679 B（574.67 kB，gzip 171.41 kB）
 ```
 
 产物演进（便于识别“哈希变了是否正常”）：
@@ -1097,6 +1097,7 @@ dist/assets/index-Bx1R0rsd.js   574,641 B（574.64 kB，gzip 171.38 kB）
 8. lint 清理（`f5a57f5`）后：主 JS 略降到 **567.59 kB**（`index-DVS7rlR_.js`，−0.12 kB；gzip 169.28 → 169.20 kB），CSS 哈希仍为 `index-CrJgYfMj.css` 且体积未变（只改了状态派生方式与删掉 3 个残留 .txt，**零样式改动**）。看到 `index-DVS7rlR_.js` 即代表构建产物已含深链派生改造与 lint 清零。
 9. 步骤 11（8d）三次提交后：主 JS 涨到 **574.40 kB**（`index-DgFeE4P3.js`，+6.81 kB；gzip 169.20 → 171.26 kB，+2.06 kB）：11a 数据层 v2 与迁移、11b 健身真实历史（删 `HISTORY` 演示常量、新增 `fitness-history.ts`）、11c 报告窗口（`history.ts` 窗口工具 + `report-window.ts`）。**CSS 哈希与体积完全未变**（`index-CrJgYfMj.css` 137.70 kB）——8d 全部复用既有样式类，零 CSS 改动。看到 `index-DgFeE4P3.js` + `index-CrJgYfMj.css` 即代表构建产物已含数据历史化；该产物**尚未部署到服务器**（服务器仍是步骤 9 的旧包）。
 10. 报告页返回态修复（`8edb8ba`）后：主 JS **574.64 kB**（`index-Bx1R0rsd.js`，+0.24 kB；gzip 171.26 → 171.38 kB，+0.12 kB），CSS 哈希与体积仍为 `index-CrJgYfMj.css` 137.70 kB——修复只改派生状态，**零样式改动**。看到 `index-Bx1R0rsd.js` 即代表报告页修复已包含在产物里；该产物**仍未部署**（服务器仍是步骤 9 的旧包）。
+11. 学习来源随科目切换清空（`971e1b6`）后：主 JS **574.67 kB**（`index-BM4N278W.js`，574,679 B，+0.04 kB；gzip 171.38 → 171.41 kB），CSS 哈希与体积仍为 `index-CrJgYfMj.css` 137.70 kB——只改了分类按钮的处理函数并加了一条 E2E 用例，**零样式改动**。看到 `index-BM4N278W.js` 即代表构建产物已含该修复；该产物**仍未部署**。
 
 > 更正：清理后的 CSS 体积实测为 137.64 kB（早期摘要曾误记为 134.42 kB，以 §18.1 变更史为准）。
 
@@ -1412,12 +1413,12 @@ npm run visual:check
 
 设计细节唯一来源是 P4 文档（本文件不复述）。**前置 1（步骤 11 数据历史化）已于 2026-11-04 完成**；剩余前置：
 
-1.（已解决）~~步骤 11（8d）数据历史化~~——✅ `6d769a7` / `bc4ee88` / `12de14b`：训练真实历史、饮食 / 饮水 / 计划按日台账、`schemaVersion` 2、备份 0.3.0；app 单测 230/230、E2E 104 全绿（含 `8edb8ba` 返回态修复）。
+1.（已解决）~~步骤 11（8d）数据历史化~~——✅ `6d769a7` / `bc4ee88` / `12de14b`：训练真实历史、饮食 / 饮水 / 计划按日台账、`schemaVersion` 2、备份 0.3.0；app 单测 230/230、E2E 106 全绿（含 `8edb8ba` 返回态修复与 `971e1b6` 学习来源修复）。
 2. **SQLite 驱动选型（未决）**——Node 20 无 `node:sqlite`：升 Node 22 LTS 用内置模块（推荐）或留 Node 20 用 `better-sqlite3`（需编译链），统一封装在 `server/src/db/driver.ts`。
 
 | 步骤 | 内容 | 依赖 |
 |---|---|---|
-| **11**（8d） | 数据历史化：按日台账、真实训练历史、`schemaVersion` 1→2、备份 0.3.0 | ✅ **已完成 2026-11-04**（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba`；视觉基线待双端验收） |
+| **11**（8d） | 数据历史化：按日台账、真实训练历史、`schemaVersion` 1→2、备份 0.3.0 | ✅ **已完成 2026-11-04**（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba` / `971e1b6`；视觉基线待双端验收） |
 | **12**（P4a） | SQLite 表 + migration + repository、`/api/v1/devices*`、`/api/v1/sync/{bootstrap,push,pull}`（`opId` 幂等 / LWW / 30 天墓碑 / `rev` 游标）、客户端 outbox、设置页同步区块 | ← 11 |
 | **13**（P4b） | facts builder、`ANALYSIS_SYSTEM_PROMPT`（禁止算术）、`/api/v1/analysis/{facts,reports}`、`dataRev` 缓存 + 定时简报 + 规则降级 | ← 11 + 12 |
 | **14**（P4c） | `/api/v1/backups*`（`VACUUM INTO` + sha256 + 恢复预览 + 二次确认 + 恢复前自动备份）、`/api/v1/export`（0.3.0 同构）、`DELETE /api/v1/account`、备份保留策略 | ← 12 |
@@ -1549,7 +1550,7 @@ Get-Content -Encoding utf8
   - `bc4ee88`（步骤 11b 健身真实历史：删除 `HISTORY` 演示常量，历史读 `fitnessHistory`）
   - `12de14b`（步骤 11c 报告窗口：`history.ts` + `report-window.ts`，近 7 / 30 / 90 天按窗口汇总）
   - `8edb8ba`（报告页返回态修复：顶部成功态改为按最新报告派生，离开/刷新后不再误显示「尚未生成」）
-- **当前本地 HEAD = `bcfb38d`**（本次文档同步）；`6d769a7`（11a）已推送到 `origin/main`，`bc4ee88`（11b）、`12de14b`（11c）、`8edb8ba`（返回态修复）与 `bcfb38d`（文档同步）**尚未推送**（本地领先 4 个提交），需要在用户确认后 `git push` 并核对远端哈希。
+- **本地 HEAD 见 `git log -1 --oneline`**（学习来源修复文档同步）；`6d769a7`（11a）已推送到 `origin/main`，`bc4ee88`（11b）、`12de14b`（11c）、`8edb8ba`（返回态修复）、`cabc72b`（8d 文档同步）、`971e1b6`（学习来源修复）与本次文档同步提交**尚未推送**（本地领先 6 个提交），需要在用户确认后 `git push` 并核对远端哈希。
 - **工作区当前不干净**：文档同步（本文件等）是未提交改动，另有 65 张 `design/*.png` 为 8d 与返回态修复后重跑的视觉基线（18 张真实改动、6 张日期文字、41 张时钟漂移）——**待用户桌面端 + 移动端验收后**再入库。
 - 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
 - 提交前审计命令（每次提交都用）：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
@@ -1737,6 +1738,7 @@ npm run visual:check
 | 11-04 | **步骤 11b 健身真实历史** | `bc4ee88` | 删除 `FitnessPage.tsx` 的 `HISTORY` 演示常量与力量专用 `HistoryExercise`；完成训练归档进 `fitnessHistory`；最近训练列表/详情读真实记录并按动作类型展示；新增 `lib/fitness-history.ts` 与 10 条单测 | `fitness-history.test.ts` 10/10；E2E 迁移断言 |
 | 11-04 | **步骤 11c 报告窗口** | `12de14b` | 新增 `lib/history.ts`（`DateWindow`）与 `lib/report-window.ts`（窗口事实包）；报告页/摘要按近 7 / 30 / 90 天窗口汇总真实历史（饮食 `dietDays`、饮水真实累加、计划按日、训练归档 + 进行中会话）；今日页晨间简报保持「今天」口径不变；`/api/report` 请求体形状未变 | app **230/230**（16 文件）、E2E **102/0**（52.9 s；报告相关 22 条单跑 23.8 s）、`tsc -b` 0 错、oxlint 0 错 0 警告、JS **574.40 kB / gzip 171.26 kB**（+6.81 kB）、CSS 未变；`visual:check` 90 张生成、failures 12（全部 502 噪声）、25 张 png 待验收 |
 | 11-05 | **报告页返回态修复** | `8edb8ba` | 报告页顶部「AI REPORT ENGINE」成功态原本只存在页面级 `useState`，跳转其他页面再回来或整页刷新会重置为「尚未生成」，用户误以为报告丢失；改为按「`reports[0]` 是今天生成的今日简报」派生 `generationDisplay` / `displayReport`（报告实体仍随 `reports` 走 IndexedDB，未丢失） | app **230/230**（16 文件，未动数据层）、E2E **104/0**（50.4 s；新增跨页 + 刷新用例）、`tsc -b` 0 错、oxlint 0 错 0 警告、JS **574.64 kB / gzip 171.38 kB**（+0.24 kB）、CSS 未变；`visual:check` 90 张、failures 12（502 噪声） |
+| 11-05 | **学习来源随科目切换清空** | `971e1b6` | 用户反馈：新增/编辑学习记录时英语→高数，「学习来源」仍停在「百词斩」这类英语来源（候选列表和占位符已按科目换、输入框的值没换）。改为 `chooseCategory()` 在科目变化时一并把 `source` 置空，同科重复点击不清空，时长 / 日期 / 开始时间不动 | app **230/230**（16 文件，未动数据层）、E2E **106/0**（44.7 s；新增科目切换用例）、`tsc -b` 0 错、oxlint 0 错 0 警告、JS **574.67 kB / gzip 171.41 kB**（+0.04 kB）、CSS 未变 |
 
 ### 18.2 关键披露
 
@@ -1775,7 +1777,7 @@ npm run visual:check
 
 ## 20. 交接结论
 
-Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（**训练 / 饮食 / 饮水 / 计划已按日台账落历史**，`schemaVersion` 2，刷新不丢，有清空入口与 0.3.0 导出导入），单元测试 app **230**（16 文件）+ server 58、E2E 104 次执行、视觉基线 90 张（8d 与报告页修复后 65 张 png 已重跑、待双端验收）、oxlint 0 错 0 警告，提交链已推送 GitHub，具备回滚基线。P4 的**前置步骤 11（8d 数据历史化）已完成**，P4 终态架构已定稿但步骤 12–14 **未实施**；服务器环境就绪，且已于 2026-11-04 完成 IP 直连部署与两次重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**），**8d 前端产物尚未部署到服务器**；域名已购、阿里云初审通过、**备案号未下发**。
+Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（**训练 / 饮食 / 饮水 / 计划已按日台账落历史**，`schemaVersion` 2，刷新不丢，有清空入口与 0.3.0 导出导入），单元测试 app **230**（16 文件）+ server 58、E2E 106 次执行、视觉基线 90 张（8d 与报告页修复后 65 张 png 已重跑、待双端验收）、oxlint 0 错 0 警告，提交链已推送 GitHub，具备回滚基线。P4 的**前置步骤 11（8d 数据历史化）已完成**，P4 终态架构已定稿但步骤 12–14 **未实施**；服务器环境就绪，且已于 2026-11-04 完成 IP 直连部署与两次重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**），**8d 前端产物尚未部署到服务器**；域名已购、阿里云初审通过、**备案号未下发**。
 
 接手时最需要记住三件事：
 
