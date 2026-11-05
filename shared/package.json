@@ -22,6 +22,10 @@
     "./contract/parse": {
       "types": "./dist/contract/parse.d.ts",
       "default": "./dist/contract/parse.js"
+    },
+    "./contract/analysis": {
+      "types": "./dist/contract/analysis.d.ts",
+      "default": "./dist/contract/analysis.js"
     }
   },
   "files": [
