@@ -117,9 +117,7 @@ describe('饮食按日读写', () => {
 })
 
 describe('dayMeals（跨日后的可写骨架）', () => {
-  const dietDays: DietDay[] = [
-    { date: '2026-11-04', meals: [MEAL('早餐'), MEAL('午餐', 'lunch')] },
-  ]
+  const dietDays: DietDay[] = [{ date: '2026-11-04', meals: [MEAL('早餐'), MEAL('午餐', 'lunch')] }]
 
   it('当天没有记录时给出四个空餐次，让「记录下一餐」与 AI 登记有落点', () => {
     const meals = dayMeals(dietDays, '2026-11-05')

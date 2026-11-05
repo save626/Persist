@@ -977,9 +977,7 @@ export function SettingsPage() {
             </div>
             <div className="info-sheet-block">
               <h3>备注按最小范围处理</h3>
-              <p>
-                原始备注默认排除，除非你在未来版本中单独授权。饮食餐次只记录文字与营养数据。
-              </p>
+              <p>原始备注默认排除，除非你在未来版本中单独授权。饮食餐次只记录文字与营养数据。</p>
             </div>
           </div>
           <div className="surface-form-actions">

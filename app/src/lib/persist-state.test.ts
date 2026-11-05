@@ -184,10 +184,7 @@ describe('v1 → v2 迁移（8d 数据历史化）', () => {
 
   it('迁移日期取保存当天（本地自然日），而不是迁移时刻', () => {
     // 迁移时刻故意给次日：补日期仍应落在 savedAt 的本地自然日上。
-    const migrated = migratePersistedStateRecord(
-      legacyV1Record(),
-      new Date(2026, 10, 3, 9, 0, 0),
-    )
+    const migrated = migratePersistedStateRecord(legacyV1Record(), new Date(2026, 10, 3, 9, 0, 0))
     const backup = migrated?.backup as unknown as { data: ImportableMockData }
 
     expect(LOCAL_SAVE_DAY).toBe('2026-11-02')
@@ -199,9 +196,7 @@ describe('v1 → v2 迁移（8d 数据历史化）', () => {
 
     expect(state?.data.dietDays).toHaveLength(1)
     expect(state?.data.fitnessHistory).toEqual([])
-    expect(
-      (state?.data.planItems ?? []).every((item) => item.date === LOCAL_SAVE_DAY),
-    ).toBe(true)
+    expect((state?.data.planItems ?? []).every((item) => item.date === LOCAL_SAVE_DAY)).toBe(true)
     // 迁移前不归档：演示数据里的会话本来就是进行中，不属于「已完成但没进历史」。
     expect(state?.data.fitnessSession?.sessionStatus).toBe('active')
   })
@@ -219,7 +214,9 @@ describe('v1 → v2 迁移（8d 数据历史化）', () => {
     expect(state?.data.fitnessSession).toBeNull()
     expect(state?.data.fitnessHistory).toHaveLength(1)
     expect(state?.data.fitnessHistory[0].date).toBe(LOCAL_SAVE_DAY)
-    expect(state?.data.fitnessHistory[0].id).toBe(`workout-legacy-${Date.parse(SAVED_AT.toISOString())}`)
+    expect(state?.data.fitnessHistory[0].id).toBe(
+      `workout-legacy-${Date.parse(SAVED_AT.toISOString())}`,
+    )
   })
 
   it('已经是 v2 形状的 v1 记录迁移后数据不变，不会重复补日期', () => {

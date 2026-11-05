@@ -113,7 +113,8 @@ export function morningBriefNote(status: MorningBriefStatus, digest: ReportDiges
   }
 }
 
-export const MORNING_BRIEF_LOADING_NOTE = '正在请求 DeepSeek 生成文字结论，数字与引用依据始终由本机计算。'
+export const MORNING_BRIEF_LOADING_NOTE =
+  '正在请求 DeepSeek 生成文字结论，数字与引用依据始终由本机计算。'
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'

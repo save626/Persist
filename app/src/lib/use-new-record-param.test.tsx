@@ -5,13 +5,10 @@ import { describe, expect, it } from 'vitest'
 import { useNewRecordParam } from './use-new-record-param'
 
 function renderAt(path: string) {
-  return renderHook(
-    () => ({ param: useNewRecordParam(), location: useLocation() }),
-    {
-      wrapper: ({ children }: { children: ReactNode }) =>
-        createElement(MemoryRouter, { initialEntries: [path] }, children),
-    },
-  )
+  return renderHook(() => ({ param: useNewRecordParam(), location: useLocation() }), {
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(MemoryRouter, { initialEntries: [path] }, children),
+  })
 }
 
 describe('useNewRecordParam', () => {

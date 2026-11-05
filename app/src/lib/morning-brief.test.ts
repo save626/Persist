@@ -116,7 +116,10 @@ describe('generateMorningBrief', () => {
   it('没有任何打开的数据来源时不请求模型', async () => {
     const emptyDigest = buildReportDigest({
       aiConsent: true,
-      settings: { ...settings, sources: { fitness: false, diet: false, study: false, profile: false } },
+      settings: {
+        ...settings,
+        sources: { fitness: false, diet: false, study: false, profile: false },
+      },
       profile,
       fitnessSession: null,
       studyRecords: [],

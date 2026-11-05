@@ -61,9 +61,7 @@ test('跨日后饮食页仍有四个餐次，记录与 AI 登记都能落库', a
   await expect(page.locator('.diet-meal')).toHaveCount(4)
 
   // 等首次水合后的防抖写盘落进 IndexedDB，再把饮食整体挪到昨天。
-  await expect
-    .poll(() => moveDietDaysTo(page, localDateKey(-1)), { timeout: 10_000 })
-    .toBe('ok')
+  await expect.poll(() => moveDietDaysTo(page, localDateKey(-1)), { timeout: 10_000 }).toBe('ok')
 
   await page.reload()
   await expect(nextMealButton).toBeVisible()
@@ -87,7 +85,9 @@ test('跨日后饮食页仍有四个餐次，记录与 AI 登记都能落库', a
   await page.getByRole('button', { name: '确认登记' }).click()
 
   await expect(page.getByText('已核对并登记 清蒸鲈鱼')).toBeVisible()
-  await expect(page.locator('.diet-entry-copy strong').filter({ hasText: '清蒸鲈鱼' })).toBeVisible()
+  await expect(
+    page.locator('.diet-entry-copy strong').filter({ hasText: '清蒸鲈鱼' }),
+  ).toBeVisible()
   await expect(page.getByText('0 / 4')).toBeHidden()
 
   expect(pageErrors).toEqual([])

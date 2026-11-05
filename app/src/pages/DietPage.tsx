@@ -1021,11 +1021,7 @@ export function DietPage() {
       )}
 
       {aiSheetOpen && (
-        <AiNutritionSheet
-          meals={meals}
-          onClose={closeAiSheet}
-          onRegister={registerAiFood}
-        />
+        <AiNutritionSheet meals={meals} onClose={closeAiSheet} onRegister={registerAiFood} />
       )}
 
       {evidenceOpen && (

@@ -463,11 +463,7 @@ export function MorningBriefSheet({
       </div>
       <div className="surface-note">
         <Icon name={brief?.content ? 'spark' : 'lock'} className="icon-sm" />
-        <span>
-          {brief
-            ? morningBriefNote(brief.status, digest)
-            : MORNING_BRIEF_LOADING_NOTE}
-        </span>
+        <span>{brief ? morningBriefNote(brief.status, digest) : MORNING_BRIEF_LOADING_NOTE}</span>
       </div>
     </PageSheet>
   )
