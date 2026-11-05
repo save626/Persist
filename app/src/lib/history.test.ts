@@ -6,6 +6,7 @@ import {
   createFitnessSessionRecord,
   dateKeyLabel,
   dateKeysBetween,
+  dayMeals,
   isDateKeyInWindow,
   mealsForDate,
   patchMealsForDate,
@@ -112,6 +113,39 @@ describe('饮食按日读写', () => {
 
     expect(next).toHaveLength(1)
     expect(next.some((day) => day.date === '2026-11-03')).toBe(false)
+  })
+})
+
+describe('dayMeals（跨日后的可写骨架）', () => {
+  const dietDays: DietDay[] = [
+    { date: '2026-11-04', meals: [MEAL('早餐'), MEAL('午餐', 'lunch')] },
+  ]
+
+  it('当天没有记录时给出四个空餐次，让「记录下一餐」与 AI 登记有落点', () => {
+    const meals = dayMeals(dietDays, '2026-11-05')
+
+    expect(meals.map((meal) => meal.id)).toEqual(['breakfast', 'lunch', 'dinner', 'snack'])
+    expect(meals.map((meal) => meal.label)).toEqual(['早餐', '午餐', '晚餐', '加餐'])
+    expect(meals.every((meal) => meal.entries.length === 0)).toBe(true)
+  })
+
+  it('当天有记录时原样返回，不额外注入骨架', () => {
+    expect(dayMeals(dietDays, '2026-11-04').map((meal) => meal.id)).toEqual(['breakfast', 'lunch'])
+  })
+
+  it('每次调用返回独立对象，改一个餐次不会污染下一次读取', () => {
+    const first = dayMeals([], '2026-11-05')
+    first[0]?.entries.push({
+      id: 'x',
+      name: '测试',
+      portion: '1 份',
+      calories: 100,
+      protein: 1,
+      carbs: 1,
+      fat: 1,
+    })
+
+    expect(dayMeals([], '2026-11-05')[0]?.entries).toHaveLength(0)
   })
 })
 

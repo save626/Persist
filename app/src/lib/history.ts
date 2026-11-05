@@ -1,3 +1,4 @@
+import { createEmptyMeals } from '../data/diet'
 import type {
   DietDay,
   FitnessSessionRecord,
@@ -92,6 +93,19 @@ export function isDateKeyInWindow(dateKey: string, window: DateWindow): boolean 
 /** 取某一天的饮食台账；没有记录时返回空数组（而不是四个空餐次）。 */
 export function mealsForDate(dietDays: DietDay[], date: string): Meal[] {
   return dietDays.find((day) => day.date === date)?.meals ?? []
+}
+
+/**
+ * 页面用的「某天饮食」：当天还没有记录时给出四个空餐次骨架。
+ *
+ * 跨日后的第一次打开（本地只留着昨天的 `dietDays`）、或从只含旧日期的备份恢复时，
+ * `mealsForDate` 会返回空数组；页面若直接拿 `meals[0]` 或 `meals.map()` 就会
+ * 「记录下一餐」点不动、AI 登记的餐次下拉为空。空骨架让这一天从零开始可写，
+ * 但只要用户没真写入食物，就不会产生当天的 `dietDays` 记录。
+ */
+export function dayMeals(dietDays: DietDay[], date: string): Meal[] {
+  const meals = mealsForDate(dietDays, date)
+  return meals.length > 0 ? meals : createEmptyMeals()
 }
 
 /**

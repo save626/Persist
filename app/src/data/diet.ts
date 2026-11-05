@@ -65,3 +65,17 @@ export const INITIAL_MEALS: Meal[] = [
     ],
   },
 ]
+
+/**
+ * 四个餐次的空骨架：只有 id / label / time，没有任何食物。
+ * 某一天还没有任何记录时（例如跨日后的第一次打开），用它撑起可写的餐次列表；
+ * 每次调用都返回新对象，避免页面里的增删改污染模块级常量。
+ */
+export function createEmptyMeals(): Meal[] {
+  return INITIAL_MEALS.map((meal) => ({
+    id: meal.id,
+    label: meal.label,
+    time: meal.time,
+    entries: [],
+  }))
+}

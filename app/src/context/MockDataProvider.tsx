@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { INITIAL_MEALS } from '../data/diet'
+import { createEmptyMeals, INITIAL_MEALS } from '../data/diet'
 import { INITIAL_PROFILE } from '../data/profile'
 import { INITIAL_REPORTS } from '../data/reports'
 import { INITIAL_SETTINGS } from '../data/settings'
 import { INITIAL_STUDY_RECORDS } from '../data/study'
 import {
   createFitnessSessionRecord,
-  mealsForDate,
+  dayMeals,
   patchMealsForDate,
   patchPlanItemsForDate,
   planItemsForDate,
@@ -209,7 +209,8 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   /** 「今天」的切片：页面读到的 `planItems` / `waterLog` / `meals` 语义不变，只表示今天。 */
   const todayPlanItems = useMemo(() => planItemsForDate(planItems, today), [planItems, today])
   const todayWaterLog = useMemo(() => waterForDate(waterLog, today), [waterLog, today])
-  const meals = useMemo(() => mealsForDate(dietDays, today), [dietDays, today])
+  /** 跨日后的第一次打开还没有今天的 `dietDays`，这里给页面四个空餐次骨架。 */
+  const meals = useMemo(() => dayMeals(dietDays, today), [dietDays, today])
 
   /** 兼容旧调用点：写「今日计划」时只替换今天这一块，其他日期原样保留。 */
   const setPlanItems = useCallback(
@@ -223,13 +224,17 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     [today],
   )
 
-  /** 兼容旧调用点：写「今日饮食」时只替换今天这一块，其他日期原样保留。 */
+  /**
+   * 兼容旧调用点：写「今日饮食」时只替换今天这一块，其他日期原样保留。
+   * 今天还没有记录时以四个空餐次为起点（否则 `map` 一个空数组会把写入吞掉）。
+   */
   const setMeals = useCallback(
     (action: React.SetStateAction<Meal[]>) => {
       setDietDaysState((current) =>
-        patchMealsForDate(current, today, (items) =>
-          typeof action === 'function' ? action(items) : action,
-        ),
+        patchMealsForDate(current, today, (items) => {
+          const base = items.length > 0 ? items : createEmptyMeals()
+          return typeof action === 'function' ? action(base) : action
+        }),
       )
     },
     [today],
