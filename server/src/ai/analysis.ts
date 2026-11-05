@@ -167,6 +167,8 @@ export interface GenerateAnalysisOptions {
   maxTokens?: number
   timeoutMs?: number
   signal?: AbortSignal
+  /** 重试时带上的纠正说明：上一次为什么被判不合规。 */
+  retryNote?: string
 }
 
 /**
@@ -179,7 +181,7 @@ export async function generateAnalysisContent(
   facts: ReportFactsV2,
   options: GenerateAnalysisOptions,
 ): Promise<ReportContentV2> {
-  const raw = await ai.completeJson(buildAnalysisMessages(facts), {
+  const raw = await ai.completeJson(buildAnalysisMessages(facts, options.retryNote), {
     maxTokens: options.maxTokens ?? 2_600,
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),

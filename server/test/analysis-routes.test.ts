@@ -323,7 +323,7 @@ describe('POST /api/v1/analysis/reports：降级与契约违规', () => {
     }
   })
 
-  it('模型写了事实包以外的数字：502 invalid_response，且不落库', async () => {
+  it('模型首次写了事实包以外的数字、重试后合规：200 + origin ai，不落半份报告', async () => {
     const env = await setup({
       replies: [
         contentJson({ ...validContent(), summary: `${validContent().summary} 折合 1234 千卡。` }),
@@ -331,10 +331,39 @@ describe('POST /api/v1/analysis/reports：降级与契约违规', () => {
       ],
     })
     try {
+      const response = await postAnalysis(env)
+      expect(response.statusCode).toBe(200)
+      const report = response.json<AnalysisReportResponse>()
+      expect(report.origin).toBe('ai')
+      expect(report.model).toBe('deepseek-chat')
+      expect(report.cached).toBe(false)
+      // 第一次被判不合规，第二次带纠正说明重试成功。
+      expect(env.ai.calls).toBe(2)
+
+      const listed = await env.app.inject({
+        method: 'GET',
+        url: '/api/v1/reports',
+        headers: authHeader(env.token),
+      })
+      expect(listed.json<AnalysisReportsListResponse>().reports).toHaveLength(1)
+    } finally {
+      await close(env)
+    }
+  })
+
+  it('两次都不合规：502 invalid_response，且不落库', async () => {
+    const env = await setup({
+      replies: [
+        contentJson({ ...validContent(), summary: `${validContent().summary} 折合 1234 千卡。` }),
+        contentJson({ ...validContent(), summary: `${validContent().summary} 折合 5678 千卡。` }),
+      ],
+    })
+    try {
       const rejected = await postAnalysis(env)
       expect(rejected.statusCode).toBe(502)
       expect(rejected.json()).toMatchObject({ error: { code: 'invalid_response' } })
       expect(rejected.headers['cache-control']).toBe('no-store')
+      expect(env.ai.calls).toBe(2)
 
       const listed = await env.app.inject({
         method: 'GET',
@@ -342,12 +371,6 @@ describe('POST /api/v1/analysis/reports：降级与契约违规', () => {
         headers: authHeader(env.token),
       })
       expect(listed.json<AnalysisReportsListResponse>().reports).toEqual([])
-
-      // 失败不缓存：重试一次就能拿到合规报告。
-      const retried = await postAnalysis(env)
-      expect(retried.statusCode).toBe(200)
-      expect(retried.json<AnalysisReportResponse>().origin).toBe('ai')
-      expect(env.ai.calls).toBe(2)
     } finally {
       await close(env)
     }

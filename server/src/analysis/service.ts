@@ -84,6 +84,16 @@ function withWarnings(content: ReportContentV2, warnings: string[]): ReportConte
 const RULES_FALLBACK_WARNING = 'AI 服务暂时不可用，本报告由规则模板生成，只复述已聚合的数据。'
 const NO_KEY_WARNING = '当前未配置 AI 服务，本报告由规则模板生成，只复述已聚合的数据。'
 
+/**
+ * 结构/数字不合规时给模型一次改写机会。
+ *
+ * 真实模型偶发多写或少写一段 analysis、或顺手写个未出现的数字；这类失败是「随机手滑」，
+ * 直接 502 会让「重新分析」随机失败。重试只加一次，且上一次已经跑掉 30 秒就不再重试
+ * （总耗时仍在客户端 90 秒超时之内）；两次都不合规才按契约违规返回 502。
+ */
+const MAX_CONTENT_ATTEMPTS = 2
+const RETRY_BUDGET_MS = 30_000
+
 interface GeneratedContent {
   content: ReportContentV2
   origin: 'ai' | 'rules'
@@ -103,34 +113,49 @@ async function generateContent(
     }
   }
 
-  try {
-    const content = await generateAnalysisContent(deps.ai, facts, {
-      model: deps.config.deepseekModel,
-      maxTokens: deps.config.analysisMaxTokens,
-      timeoutMs: deps.config.analysisTimeoutMs,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    })
-    return { content, origin: 'ai', model: deps.config.deepseekModel }
-  } catch (error) {
-    if (error instanceof AnalysisContentError) {
-      deps.logger?.warn({ reasons: error.reasons }, 'analysis content rejected')
-      throw new AnalysisFailure('invalid_response', '模型返回的分析内容不合规，请重试。')
-    }
-    if (error instanceof AiError && (error.code === 'timeout' || error.code === 'upstream')) {
-      // 数据已经聚合好了，只是模型不可用：降级规则模板，不让用户等到 502。
-      deps.logger?.warn({ code: error.code }, 'analysis ai unavailable, falling back to rules')
-      return {
-        content: withWarnings(buildRulesContent(facts), [RULES_FALLBACK_WARNING]),
-        origin: 'rules',
-        model: null,
+  let retryNote: string | undefined
+  for (let attempt = 1; attempt <= MAX_CONTENT_ATTEMPTS; attempt += 1) {
+    const startedAt = Date.now()
+    try {
+      const content = await generateAnalysisContent(deps.ai, facts, {
+        model: deps.config.deepseekModel,
+        maxTokens: deps.config.analysisMaxTokens,
+        timeoutMs: deps.config.analysisTimeoutMs,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+        ...(retryNote === undefined ? {} : { retryNote }),
+      })
+      return { content, origin: 'ai', model: deps.config.deepseekModel }
+    } catch (error) {
+      if (error instanceof AnalysisContentError) {
+        deps.logger?.warn({ attempt, reasons: error.reasons }, 'analysis content rejected')
+        if (attempt >= MAX_CONTENT_ATTEMPTS) {
+          throw new AnalysisFailure('invalid_response', '模型返回的分析内容不合规，请重试。')
+        }
+        const elapsedMs = Date.now() - startedAt
+        if (elapsedMs >= RETRY_BUDGET_MS || options.signal?.aborted === true) {
+          throw new AnalysisFailure('invalid_response', '模型返回的分析内容不合规，请重试。')
+        }
+        retryNote = error.reasons.join('；')
+        continue
       }
+      if (error instanceof AiError && (error.code === 'timeout' || error.code === 'upstream')) {
+        // 数据已经聚合好了，只是模型不可用：降级规则模板，不让用户等到 502。
+        deps.logger?.warn({ code: error.code }, 'analysis ai unavailable, falling back to rules')
+        return {
+          content: withWarnings(buildRulesContent(facts), [RULES_FALLBACK_WARNING]),
+          origin: 'rules',
+          model: null,
+        }
+      }
+      if (error instanceof AiError) {
+        deps.logger?.warn({ code: error.code }, 'analysis ai returned invalid response')
+        throw new AnalysisFailure('invalid_response', '模型返回的分析内容不合规，请重试。')
+      }
+      throw error
     }
-    if (error instanceof AiError) {
-      deps.logger?.warn({ code: error.code }, 'analysis ai returned invalid response')
-      throw new AnalysisFailure('invalid_response', '模型返回的分析内容不合规，请重试。')
-    }
-    throw error
   }
+
+  throw new AnalysisFailure('invalid_response', '模型返回的分析内容不合规，请重试。')
 }
 
 export async function generateAnalysisReport(

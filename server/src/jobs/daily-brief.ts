@@ -17,7 +17,9 @@ import {
  * - 进程内 60 s 定时器（`unref`），不引入队列/依赖；单用户自建场景够用；
  * - 到点（默认 21:00 Asia/Shanghai）才跑，重启后当天到点仍会补跑一次；
  * - 用 job_runs 的 `(name, run_key)` 唯一约束去重，run_key 是本地日期，同一天只生成一次；
- * - 失败的任务允许当天再试：每日任务失败后下一个 tick 会重新抢锁；
+ * - 失败的任务允许当天再试：失败的任务由下一个 tick 重新抢锁（见 claimJobRun）。
+ * - 模型输出不合规已在 generateAnalysisReport 内部重试一次，这里不再叠一层，
+ *   避免同一次简报最多打 4 次模型；两次都不合规才记 failed，等下一个 tick 再试。
  * - 「零记录」不算失败重试风暴——它会记为 failed，但因为没有模型调用，代价可忽略，
  *   等用户当天补了记录，下一个 tick 就能成功生成。
  * - 日志只记范围、报告 id、来源，绝不写报告正文（用户数据不落 journal）。
@@ -25,7 +27,6 @@ import {
 
 export const DAILY_BRIEF_JOB = 'daily_brief'
 const SCHEDULER_INTERVAL_MS = 60_000
-const MAX_ATTEMPTS = 2
 
 export interface DailyBriefDeps {
   db: Db
@@ -119,45 +120,42 @@ export async function runDailyBrief(deps: DailyBriefDeps): Promise<DailyBriefOut
   if (!claim) return { status: 'skipped', reason: 'already-ran' }
 
   let lastError: unknown = null
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-    try {
-      const report = await generateAnalysisReport(
-        {
-          db: deps.db,
-          ai: deps.ai,
-          config: deps.config,
-          ...(deps.logger ? { logger: deps.logger } : {}),
-        },
-        { userId, rangeDays: 7, now: nowMs },
-      )
-      finishJobRun(deps.db, {
-        id: claim.id,
-        status: 'ok',
-        finishedAt: Math.trunc(deps.now()),
-        reportId: report.reportId,
-      })
-      deps.logger?.info(
-        {
-          reportId: report.reportId,
-          origin: report.origin,
-          cached: report.cached,
-          rangeDays: report.range.days,
-          runKey,
-        },
-        'daily brief generated',
-      )
-      pruneReports(deps.db, Math.trunc(nowMs) - DATA_RETENTION.reportDays * 86_400_000)
-      return {
-        status: 'generated',
+  try {
+    const report = await generateAnalysisReport(
+      {
+        db: deps.db,
+        ai: deps.ai,
+        config: deps.config,
+        ...(deps.logger ? { logger: deps.logger } : {}),
+      },
+      { userId, rangeDays: 7, now: nowMs },
+    )
+    finishJobRun(deps.db, {
+      id: claim.id,
+      status: 'ok',
+      finishedAt: Math.trunc(deps.now()),
+      reportId: report.reportId,
+    })
+    deps.logger?.info(
+      {
         reportId: report.reportId,
         origin: report.origin,
         cached: report.cached,
-      }
-    } catch (error) {
-      lastError = error
-      // 「窗口内零记录」重试也没有意义，直接落 failed，等用户补记录后下一个 tick 再试。
-      if (error instanceof AnalysisFailure && error.code === 'insufficient_data') break
+        rangeDays: report.range.days,
+        runKey,
+      },
+      'daily brief generated',
+    )
+    pruneReports(deps.db, Math.trunc(nowMs) - DATA_RETENTION.reportDays * 86_400_000)
+    return {
+      status: 'generated',
+      reportId: report.reportId,
+      origin: report.origin,
+      cached: report.cached,
     }
+  } catch (error) {
+    // 失败原因（含「窗口内零记录」）落 failed 即可；下一次 tick 会重新抢锁。
+    lastError = error
   }
 
   const message =
