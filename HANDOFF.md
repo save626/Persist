@@ -1442,7 +1442,7 @@ npm run visual:check
 | **13**（P4b） | facts builder、`ANALYSIS_SYSTEM_PROMPT`（禁止算术）、`/api/v1/analysis/{facts,reports}`、`dataRev` 缓存 + 定时简报 + 规则降级 | ← 11 + 12 |
 | **14**（P4c） | `/api/v1/backups*`（`VACUUM INTO` + sha256 + 恢复预览 + 二次确认 + 恢复前自动备份）、`/api/v1/export`（0.3.0 同构）、`DELETE /api/v1/account`、备份保留策略 | ← 12 |
 
-每步独立验收与提交，门禁：typecheck 0 错 + 单测 / E2E / 构建全绿 + 视觉有变化则重跑基线并请用户双端验收 + 文档同步 + 独立提交推送。**步骤 12 已按此走完 12a–12f，但停在「本机提交、未推送」**（`origin/main` 之后 6 个提交），推送时机留待用户决定。
+每步独立验收与提交，门禁：typecheck 0 错 + 单测 / E2E / 构建全绿 + 视觉有变化则重跑基线并请用户双端验收 + 文档同步 + 独立提交推送。**步骤 12 已按此走完 12a–12f，但停在「本机提交、未推送」**（`origin/main` 之后 8 个提交，含 12f `e9c29a0` 与其后一次文档修正），推送时机留待用户决定。
 
 ### 13.5 P5 / P6
 
@@ -1551,7 +1551,7 @@ Get-Content -Encoding utf8
 
 - 当前分支：`main`（由 `master` 改名而来，已建跟踪关系）。
 - 远端：`origin` = `git@github.com:save626/Persist.git`（SSH，密钥已注册在 `save626` 账号下；HTTPS 侧也配置了 Git Credential Manager）。
-- **注意：步骤 12 的 6 个提交尚未推送**——远端 `refs/heads/main` 停在 `5ee8d85`，本地 HEAD 为 `f09c3da`。已推送的提交链（到 `5ee8d85` 为止）如下：
+- **注意：步骤 12 相关提交尚未推送**——远端 `refs/heads/main` 停在 `5ee8d85`，本地 `main` 领先 8 个提交（12a–12f 与 12f 提交后的文档修正；具体 HEAD 见 `git log -1`）。已推送的提交链（到 `5ee8d85` 为止）如下：
   - `bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）
   - `da787c4`（步骤 5 的文档同步）
   - `128d6a2`（步骤 6 本机 IndexedDB 持久化 + 文档同步，41 个文件：4 新增 / 14 修改 / 23 张截图）
@@ -1579,9 +1579,11 @@ Get-Content -Encoding utf8
   - `6fe6b3d`（12b 账号与同步接口：`/api/v1/devices*`、`/api/v1/sync/*`）与 `d555cb0`（12b 文档同步）
   - `c6a65fd`（12c 同步契约搬 `shared/`）
   - `9abd8bb`（12d 客户端同步层：outbox / 引擎 / 设置页开关接线）
-  - `f09c3da`（12e 设置页「数据同步」卡片）——当前 HEAD
-- **推送状态（2026-11-05，步骤 12f）**：`origin/main` = `5ee8d85`（2026-11-05 已把 `bc4ee88`、`12de14b`、`8edb8ba`、`cabc72b`、`971e1b6`、`33616fb`、`5ee8d85` 共 7 个提交推送并核对远端哈希一致）；本地 `main` = `f09c3da`，**领先 6 个提交且均未推送**，另有 12f 收尾改动与 13 张视觉基线 png 未提交。**推送时机由用户决定**：`git push` / `git ls-remote` 在受限沙箱下会失败（见下），需要一次性提升访问权限；文档里不得写成「已推送」。
-- **工作区未干净（步骤 12f，属预期）**：未提交改动 = 12f 的 pull 形状守卫（`app/src/lib/mock-data-transfer.ts` +36 / `sync-entities.ts` +68 / `sync-entities.test.ts` +42）与 **13 张 `design/*.png`**（步骤 12 视觉重跑差异，待用户桌面端 + 移动端验收后入库）；`server/` 的 `dist/`、`data/`、`.env` 由 `.gitignore` 排除。此前的 65 张基线改动已随 `5ee8d85` 入库。
+  - `f09c3da`（12e 设置页「数据同步」卡片）
+  - `e9c29a0`（12f pull 形状守卫 + 步骤 12 本机验收记录 + 文档同步）
+  - 12f 提交后的文档修正（提交后状态同步，HEAD 见 `git log -1`）
+- **推送状态（2026-11-05，步骤 12f）**：`origin/main` = `5ee8d85`（2026-11-05 已把 `bc4ee88`、`12de14b`、`8edb8ba`、`cabc72b`、`971e1b6`、`33616fb`、`5ee8d85` 共 7 个提交推送并核对远端哈希一致）；本地 `main` **领先 8 个提交且均未推送**（12a–12f + 文档修正），另有 13 张视觉基线 png 未提交（待用户双端验收）。**推送时机由用户决定**：`git push` / `git ls-remote` 在受限沙箱下会失败（见下），需要一次性提升访问权限；文档里不得写成「已推送」。
+- **工作区（步骤 12f，属预期）**：12f 的 pull 形状守卫（`app/src/lib/mock-data-transfer.ts` +36 / `sync-entities.ts` +68 / `sync-entities.test.ts` +42）与文档同步已随 `e9c29a0` 提交；工作区仅剩 **13 张 `design/*.png`**（步骤 12 视觉重跑差异，待用户桌面端 + 移动端验收后入库）；`server/` 的 `dist/`、`data/`、`.env` 由 `.gitignore` 排除。此前的 65 张基线改动已随 `5ee8d85` 入库。
 - **工作区已干净**：65 张 `design/*.png`（18 张真实改动、6 张日期文字、41 张时钟漂移）已随 `5ee8d85` 入库，`git status` 无未提交改动（`server/` 的 `dist/` 与 `.env` 由 `.gitignore` 排除）。
 - 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`shared/dist/`、`server/dist/`、`server/data/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
 - 提交前审计命令（每次提交都用）：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
@@ -1787,7 +1789,7 @@ npm run visual:check
 | 11-05 | **步骤 12c 同步契约搬 `shared/`** | `c6a65fd` | 新建 `@persist/shared`：`contract/{sync,entities,parse}.ts`；`app` / `server` 以 `file:../shared` 同源引用；新增 `npm run shared:build`（`shared/dist` 已 gitignore） | `shared` 独立 `tsc` 0 错；app / server 类型对齐、无重复定义 |
 | 11-05 | **步骤 12d 客户端同步层** | `9abd8bb` | 新增 `sync-contract` / `sync-client` / `sync-store` / `sync-queue` / `sync-entities` / `sync-engine`；`persist-sync` IndexedDB（元数据 + outbox）；5 s 防抖增量、60 s 兜底轮询、`online` / `visibility` 触发；设置页开关接线 | 配套单测最终 62 条（store 13 / queue 7 / client 12 / engine 14 / entities 16，12e/12f 补齐） |
 | 11-05 | **步骤 12e 设置页「数据同步」** | `f09c3da` | 设置页新增「数据同步」卡片：`aria-label="跨设备同步"` 开关（默认关，关闭时不发任何请求）、恢复码 4×8 大写、本机设备 / 最近同步 / 立即同步 / 吊销本机（二次确认）、「用恢复码绑定已有账号」与格式校验 | E2E 106→110（新增 2 条 × 2 项目）；`visual:check` 13 张 png 差异待验收 |
-| 11-05 | **步骤 12f 收尾 + 文档同步** | 本机未提交（勿写哈希） | pull 形状守卫 `matchesRecordShape`（形状不完整 / body id 与信封 id 不一致的实体计 `skipped`，不写坏本地存档）、本机同步验收 P4 §7.4 19/19、视觉重跑、本次 7 篇文档同步 | app **292/292**（21 文件）、server **112/112**（13 文件）、E2E **110**、构建 JS 606.08 kB / CSS 140.20 kB；**未部署、未推送** |
+| 11-05 | **步骤 12f 收尾 + 文档同步** | `e9c29a0`（本地，未推送） | pull 形状守卫 `matchesRecordShape`（形状不完整 / body id 与信封 id 不一致的实体计 `skipped`，不写坏本地存档）、本机同步验收 P4 §7.4 19/19、视觉重跑、8 篇文档同步 | app **292/292**（21 文件）、server **112/112**（13 文件）、E2E **110**、构建 JS 606.08 kB / CSS 140.20 kB；**未部署、未推送** |
 
 ### 18.2 关键披露
 
@@ -1803,7 +1805,7 @@ npm run visual:check
 10. ~~3 条 `set-state-in-effect` lint 警告长期存在~~ ✅ 已于 2026-11-04 清零（`f5a57f5`）。
 11. ~~契约类型暂放 `server/src/contract.ts` 而非 `shared/`~~ → 步骤 12c 已建 `@persist/shared` 承载**同步**契约；**chat / report 契约仍在 `server/src/contract.ts`**（镜像 `app/src/lib/chat-types.ts`、`report-types.ts`），迁移另排期。
 12. 视觉基线易抖动：首页 1 s 实时时钟造成 ≤0.07% 像素差（最大色差 4/255），连跑两次可复现 ⇒ 归档还原、不提交；而 Prettier `{' '}` 造成的 47/255 差异是**真实回归**，须逐像素判定。
-13. **步骤 12 只在本机**：6 个提交未推送、13 张视觉基线 png 待验收、服务端未部署（Node 20.20.2 缺 `node:sqlite`）。同步副本**不是备份**（无历史版本 / 无恢复），墓碑 30 天保留与定期清理是设计口径、**尚未实现**；pull 形状守卫会丢弃旧版本写下的不合规实体（计 `skipped`，不修复迁移）。
+13. **步骤 12 只在本机**：8 个提交未推送（含 12f 与文档修正）、13 张视觉基线 png 待验收、服务端未部署（Node 20.20.2 缺 `node:sqlite`）。同步副本**不是备份**（无历史版本 / 无恢复），墓碑 30 天保留与定期清理是设计口径、**尚未实现**；pull 形状守卫会丢弃旧版本写下的不合规实体（计 `skipped`，不修复迁移）。
 
 ### 18.3 不可丢失的历史教训
 
@@ -1819,7 +1821,7 @@ npm run visual:check
 2. 复跑一遍基线（`typecheck` / `test` / 全量 E2E / `build`，受限沙箱下需一次性提权，见 §15.4），确认环境与 §10 数字一致再动手。
 3. 与用户确认这一段要推进的步骤（步骤 9、11 已于 2026-11-04 完成、步骤 12 于 2026-11-05 本机完成但**未部署未推送**；通常下一步是等备案号做步骤 10（域名 + HTTPS + Node 22 升级 + 部署步骤 12），或先在本地做步骤 13（服务端聚合 + AI 综合分析））。
 4. 一次只做一步：先说明计划与影响面 → 实施 → 跑验证 → 写 §0.5 的 8 段报告 → **停下等确认**。
-5. 守纪律：视觉冻结不碰样式；改契约同步 `server/src/contract.ts`（chat/report）或 `shared/src/contract/*`（同步）与前端对应类型；文档与代码同提交；每阶段独立提交并核对远端 hash（步骤 12 的 6 个提交**未推送**，不要写成已推送）。
+5. 守纪律：视觉冻结不碰样式；改契约同步 `server/src/contract.ts`（chat/report）或 `shared/src/contract/*`（同步）与前端对应类型；文档与代码同提交；每阶段独立提交并核对远端 hash（步骤 12 的 8 个提交**未推送**，不要写成已推送）。
 6. 拿到备案号之前不做步骤 10，也不对外宣称「已上线 / 域名可用」；**步骤 12 未部署前，任何「已有跨设备同步 / 已上服务器」的说法都是错的**。
 7. P4 的 Node 版本与 SQLite 驱动已拍板（Node ≥ 22.5 + `node:sqlite`，2026-11-05），开工步骤 13 前只需逐条确认 P4 文档 §18 的剩余待确认项。
 
@@ -1827,7 +1829,7 @@ npm run visual:check
 
 ## 20. 交接结论
 
-Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端 + 本机跑通的同步能力**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（**训练 / 饮食 / 饮水 / 计划已按日台账落历史**，`schemaVersion` 2，刷新不丢，有清空入口与 0.3.0 导出导入），单元测试 app **292**（21 文件）+ server **112**（13 文件）、E2E **110** 次执行、视觉基线 91 张（步骤 12 的 13 张 png 差异待用户双端验收后入库）、oxlint 0 错 0 警告。**P4 的前置步骤 11（8d 数据历史化）与步骤 12（P4a 账号 + 增量同步，12a–12f）均已在本机完成并验收**：服务端 SQLite 数据层、设备令牌 / 恢复码、`/api/v1/*`、`shared/` 同步契约、客户端同步层、设置页「数据同步」卡片全部落地，P4 §7.4 验收 19/19。**但步骤 12 未部署、未推送**——本地 6 个提交领先 `origin/main`，服务器 Node 20.20.2 跑不了 `node:sqlite`。服务器环境就绪，已于 2026-11-04 完成 IP 直连部署与两次重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**），**线上仍是步骤 9 的版本**；域名已购、阿里云初审通过、**备案号未下发**。步骤 13–14 仍是设计。
+Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端 + 本机跑通的同步能力**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（**训练 / 饮食 / 饮水 / 计划已按日台账落历史**，`schemaVersion` 2，刷新不丢，有清空入口与 0.3.0 导出导入），单元测试 app **292**（21 文件）+ server **112**（13 文件）、E2E **110** 次执行、视觉基线 91 张（步骤 12 的 13 张 png 差异待用户双端验收后入库）、oxlint 0 错 0 警告。**P4 的前置步骤 11（8d 数据历史化）与步骤 12（P4a 账号 + 增量同步，12a–12f）均已在本机完成并验收**：服务端 SQLite 数据层、设备令牌 / 恢复码、`/api/v1/*`、`shared/` 同步契约、客户端同步层、设置页「数据同步」卡片全部落地，P4 §7.4 验收 19/19。**但步骤 12 未部署、未推送**——本地 8 个提交领先 `origin/main`，服务器 Node 20.20.2 跑不了 `node:sqlite`。服务器环境就绪，已于 2026-11-04 完成 IP 直连部署与两次重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**），**线上仍是步骤 9 的版本**；域名已购、阿里云初审通过、**备案号未下发**。步骤 13–14 仍是设计。
 
 接手时最需要记住三件事：
 
