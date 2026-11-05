@@ -71,6 +71,12 @@ function StudyEditor({
 
   const patch = (values: Partial<StudyRecord>) => setDraft((current) => ({ ...current, ...values }))
 
+  /** 来源是科目相关的（英语是单词书、高数是练习/错题），换科后旧来源留着会张冠李戴。 */
+  const chooseCategory = (category: StudyCategory) => {
+    if (category === draft.category) return
+    patch({ category, source: '' })
+  }
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!draft.source.trim()) {
@@ -122,7 +128,7 @@ function StudyEditor({
               }
               type="button"
               key={category}
-              onClick={() => patch({ category })}
+              onClick={() => chooseCategory(category)}
             >
               <span className="study-category-mark">
                 <Icon name={category === 'english' ? 'study' : 'spark'} />

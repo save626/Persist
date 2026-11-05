@@ -55,6 +55,25 @@ test('new study record survives navigation and updates today', async ({ page }) 
   await expect(page.getByText('25 min', { exact: true })).toBeVisible()
 })
 
+test('switching study category clears the subject-specific source', async ({ page }) => {
+  await page.goto('/study')
+  await page.getByRole('button', { name: '新增记录' }).click()
+
+  const dialog = page.getByRole('dialog', { name: '新增学习记录' })
+  const source = dialog.getByLabel('学习来源')
+
+  await source.fill('百词斩')
+  await dialog.getByRole('button', { name: /高数/ }).click()
+  // 换科后旧来源不能留在输入框里，占位符与候选列表要同步换成该科的。
+  await expect(source).toHaveValue('')
+  await expect(source).toHaveAttribute('placeholder', '例如：高数练习')
+
+  await source.fill('高数练习')
+  await dialog.getByRole('button', { name: /英语/ }).click()
+  await expect(source).toHaveValue('')
+  await expect(source).toHaveAttribute('placeholder', '例如：百词斩')
+})
+
 test('meal food survives navigation and updates the daily calorie total', async ({ page }) => {
   await page.goto('/diet')
   await page.getByRole('button', { name: '编辑早餐' }).click()
