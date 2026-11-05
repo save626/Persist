@@ -135,11 +135,10 @@
 
 - 单文件 **SQLite**，路径 `/var/lib/persist/persist.sqlite`，`journal_mode=WAL`、`foreign_keys=ON`、`busy_timeout=5000`、`synchronous=NORMAL`。
 - 明确不用 MySQL / MariaDB / PostgreSQL / Redis：单用户、单进程、数据量（十年逐日记录 ≈ 数十万行）远未到 SQLite 上限；2C2G 上少一个守护进程、少一套备份与调优。
-- 驱动只有两个候选，**二选一，部署前一次性定死**（§18 待确认）：
-  - **A. 升级服务器 Node 到 22 LTS，用内置 `node:sqlite`**（推荐）：零 native 依赖，2C2G 上没有编译工具链也能装；代价是服务器 Node 版本升级（Fastify 5 支持 Node ≥20，升级风险低，但要在步骤 9 前实测 `server/` 全套单测 + 真机启动）。
-  - **B. 保留 Node 20，用 `better-sqlite3`**：需要预编译二进制（受 GitHub 下载可达性影响）或 `dnf install gcc-c++ make python3` 本地编译；`engines` 保持 `>=20.19`。
-- 本机 Node v22.19.0 已可用 `node:sqlite` 做原型（Node 22 中该模块为实验性，会打印 ExperimentalWarning；服务端启动脚本需允许该警告，或在 Node 24 LTS 上再确认稳定性）。**无论选哪个，repository 层必须只使用一小撮公共 API（`prepare/run/all/get/exec/transaction`），把驱动差异收敛在一个文件里**（`server/src/db/driver.ts`），便于换驱动。
-- 结论落到契约：`server/package.json` 的 `engines` 与部署文档必须在 8d/P4a 完成前定稿，不允许一边写代码一边改 Node 版本。
+- 驱动已拍板：**A. 升级服务器 Node 到 22 LTS，用内置 `node:sqlite`**（2026-11-05 决策，见 §18-1）。零 native 依赖，2C2G 上没有编译工具链也能装；`engines` 定为 `>=22.5`（`node:sqlite` 自该版本起可用）；代价是服务器 Node 版本升级——**已放到步骤 10 与域名/HTTPS 一起做**，在升级完成前步骤 12 的代码不部署，线上继续跑步骤 9 的 Node 20 版本。
+- 备选 B（Node 20 + `better-sqlite3`）**已放弃**：需要预编译二进制或 `gcc-c++/make/python3` 本地编译，2C2G 上不划算。
+- 本机 Node v22.19.0 已实测可用 `node:sqlite`（会打印 `ExperimentalWarning: SQLite is an experimental feature`，属预期，启动脚本不拦截）。**repository 层只使用一小撮公共 API（`prepare/run/all/get/exec/transaction`），驱动差异收敛在 `server/src/db/driver.ts` 一个文件**，将来若需换驱动只改这里。
+- 结论已落到契约：`server/package.json` 的 `engines` 已是 `>=22.5`，`server/package-lock.json` 同步；部署文档已注明升级步骤（`docs/部署与服务器现状.md` §5 规则 6、§6 待办）。
 
 ### 4.2 容量与运维预估
 
@@ -187,12 +186,14 @@ CREATE TABLE devices (
   id           TEXT PRIMARY KEY,   -- dev_<uuid>
   user_id      TEXT NOT NULL REFERENCES users(id),
   token_hash   TEXT NOT NULL UNIQUE,   -- sha256(device token)，不存明文
-  recovery_hash TEXT UNIQUE,           -- sha256(恢复码)，用后即失效/轮换
   label        TEXT,
   created_at   INTEGER NOT NULL,
   last_seen_at INTEGER,
   revoked_at   INTEGER
 );
+
+-- 恢复码属于账号（实施时从 devices 上移）：一个账号一个恢复码，固定不变
+-- users 表另有 recovery_hash TEXT UNIQUE（sha256(32 hex 恢复码)）
 
 -- 档案 / 设置（单行）
 CREATE TABLE profiles (
@@ -347,7 +348,7 @@ CREATE INDEX idx_sync_rev          ON study_records (rev); -- 各实体都有 (u
 ### 7.1 账号模型（单用户、设备令牌 + 恢复码）
 
 - 首次开启同步：`POST /api/v1/devices` → 返回 `{ userId, deviceId, token, recoveryCode }`；**token 与恢复码只在这一次响应里出现**，服务端只存 `sha256` 哈希。客户端把 token 存 IndexedDB（单独库/单独列），恢复码提示用户抄下（可复制），设置页可再次查看（本地保存的副本，不是从服务端取回）。
-- 第二台设备 / 重装：`POST /api/v1/devices/restore { recoveryCode }` → 签发新 token（旧 recovery 不变或轮换，实施时定：**建议轮换**并在设置页重新展示）。
+- 第二台设备 / 重装：`POST /api/v1/devices/restore { recoveryCode }` → 签发新 token（**已定：恢复码固定不变，不轮换**——用户只需抄一次，若响应丢失也不会让已抄下的码作废；换设备只轮换 token）。
 - 吊销：`POST /api/v1/devices/revoke`（吊销当前或指定设备），服务端写 `revoked_at`；吊销后该 token 一律 401。
 - 说明：不做邮箱/手机号注册（避免短信、实名、密码找回全套复杂度）；这是**个人自用工具的账号**，不是互联网账号体系。风险与替代见 §17。
 
@@ -602,9 +603,11 @@ DAILY_REPORT_AT=21:00
 
 ### 11.4 数据库驱动带来的部署差异
 
+**已选 A**（2026-11-05）：步骤 10 把服务器升到 Node 22 LTS，用内置 `node:sqlite`；B/C 仅作记录。
+
 | 选项 | 部署动作 | 风险 |
 |---|---|---|
-| A. Node 22 + `node:sqlite` | 升级服务器 Node（dnf 安装或二进制替换），重跑 8a–8c 单测与真机启动 | Node 升级影响现有 P3 代理；`node:sqlite` 实验性警告；（本地 Node 22.19 可先验证） |
+| A. Node 22 + `node:sqlite` **← 已选** | 升级服务器 Node（NodeSource 换 22 源），`npm ci` 重装生产依赖，`systemctl restart persist-server`，重跑既有单测与真机启动，复验 `/api/health` 的 `db` / `version` | Node 升级影响现有 P3 代理；`node:sqlite` 实验性警告（预期）；本地 Node 22.19 已验证 |
 | B. Node 20 + `better-sqlite3` | `npm ci` 拉预编译二进制；失败则 `dnf install gcc-c++ make python3` 后编译 | 2C2G 编译慢（数分钟）、内存紧张；GitHub 下载可达性 |
 | C. 升级 Node 24 再确认 `node:sqlite` | 同 A，稳定性更好 | 偏离服务器既有 20.20.2 基线；需重测全部 |
 
@@ -717,12 +720,12 @@ DAILY_REPORT_AT=21:00
 
 ## 18. 待用户确认（实施前逐条拍板，未确认不写代码）
 
-1. **服务器 Node 版本策略**：升级 Node 22 LTS 用内置 `node:sqlite`（推荐，无编译依赖）／保留 Node 20 + `better-sqlite3`（需编译工具链）／升级 Node 24 后再确认。→ 影响步骤 9 的部署准备。
-2. **同步默认值**：安装后是否弹一次「开启云端同步」引导（推荐：弹，可关，关闭后纯本地）；还是完全手动开启（默认关闭）。
+1. **服务器 Node 版本策略**：~~升级 Node 22 LTS 用内置 `node:sqlite`／保留 Node 20 + `better-sqlite3`／升级 Node 24 后再确认~~ → **已定（2026-11-05）：Node 22 LTS + 内置 `node:sqlite`**（`engines >= 22.5`）。服务器升级放在步骤 10；在那之前步骤 12 的服务端代码不部署。
+2. **同步默认值**：~~安装后是否弹一次「开启云端同步」引导；还是完全手动开启~~ → **已定（2026-11-05）：默认关闭**，不弹引导；首次进入设置页可一键开启（开启时展示「数据副本会存到自建服务器」的说明再确认）。
 3. **历史数据改造的 UI 变化**：健身历史列表改为真实记录（演示数据消失）、饮食/饮水/计划按日归档 —— 是否接受这次视觉基线重跑与验收。
 4. **每日简报定时生成**：是否要（推荐默认关闭，设置页开关，时间 21:00）。
 5. **报告保留期**：默认 365 天是否合适；墓碑 30 天、日志 30 天是否接受。
-6. **恢复码形态**：一长串码（32 hex）抄写/复制即可（推荐，简单）；还是要更友好的分组码（如 4×8 位）。
+6. **恢复码形态**：~~一长串码（32 hex）抄写/复制即可；还是要更友好的分组码~~ → **已定（2026-11-05）：32 位十六进制**（展示时按 4×8 分组便于抄写，输入时忽略空格/短横线/大小写）。
 7. **是否接受「未授权模块 AI 不可见」的硬边界**（推荐：接受，这是合规与诚实的基础）。
 
 ---

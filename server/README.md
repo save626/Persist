@@ -1,36 +1,50 @@
 # Server
 
-Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 再加 SQLite 数据副本、增量同步与**服务端聚合的事实包 + AI 综合分析**（设计见 `docs/P4-数据层与AI综合分析设计方案.md`，**尚未实施**）。
+Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**（步骤 12 的服务端部分 12a/12b 已完成）；前端同步层（12d/12e）与步骤 13 的 AI 综合分析尚未接入。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
 
 ## 约束（不要破坏）
 
 - 监听 `127.0.0.1:3000`，**不直接对外**；生产由 Nginx 反代 `/api/*`（见 `docs/部署与服务器现状.md`）。
-- 服务器运行时是 **Node.js v20.20.2**（本机 v22.19.0），代码与依赖必须兼容 Node 20；`engines` 写 `>=20.19`，**当前用不了内置 `node:sqlite`**。P4 开发前必须先拍板：把服务器升到 Node 22/24（用内置 `node:sqlite`，无 native 依赖，推荐）或保留 Node 20 用 `better-sqlite3`（需 gcc-c++/make/python3 编译）。二选一与影响见 `docs/P4-数据层与AI综合分析设计方案.md` §4/§18-1。
+- 服务器运行时是 **Node.js v20.20.2**（本机 v22.19.0）——**步骤 12 起代码要求 Node ≥ 22.5**：SQLite 用内置 `node:sqlite`（`engines` 已写 `>=22.5`，无 native 编译依赖；启动时会打印 `ExperimentalWarning: SQLite is an experimental feature`，属预期）。设计选型见 `docs/P4-数据层与AI综合分析设计方案.md` §4/§18-1：**已定 node:sqlite，服务器在步骤 10 一并升级 Node 22**。在那之前，**步骤 12 的代码不部署到现有服务器**，现有线上进程仍是步骤 9 的版本。
 - 任何 API Key 只能保存在服务器 `/etc/persist/server.env`（权限 `600`）；仓库只提交 `.env.example`，禁止 Key 进入 Web 构建产物或 Android 安装包。日志里也不打印 Key。
-- P3 阶段**不引入数据库**（代理是无状态转发）。P4 用 **SQLite 单文件库**（`/var/lib/persist/persist.sqlite` + 备份目录 `/var/lib/persist/backups`），**不装 MySQL/MariaDB**；不用 ORM，直接 SQL（`server/src/db/*` 隔离驱动）。
+- 步骤 12 起引入 **SQLite 单文件库**（生产 `/var/lib/persist/persist.sqlite`，本机默认 `server/data/persist.sqlite`，可用 `DB_PATH` 覆盖；WAL + `synchronous=NORMAL` + `foreign_keys=ON` + `busy_timeout=5000`）。**不装 MySQL/MariaDB**；不用 ORM，直接 SQL，驱动差异全部隔离在 `src/db/driver.ts`。
 - 前端只请求相对路径 `/api/*`；Mock 是「无 Key / 服务不可用」时的降级路径，降级时界面必须如实标注。
 - 流式接口是 SSE；Nginx 侧必须 `proxy_buffering off`，否则整段回答会一次性吐出。`/api/report` 是**非流式 JSON**（一次调用等 10–25 s 才返回），Nginx 侧 `proxy_read_timeout` 要 ≥60 s。
-- `/api/chat` 与 `/api/report` **共用同一个按 IP 限流器**（默认 20 次 / 5 分钟），这是有意的：两个接口都消耗同一个 DeepSeek 额度。
+- `/api/chat` 与 `/api/report` **共用同一个按 IP 限流器**（默认 20 次 / 5 分钟），这是有意的：两个接口都消耗同一个 DeepSeek 额度。`/api/v1/*`（账号 + 同步）用**另一个独立的限流器**（默认 240 次 / 5 分钟，`SYNC_RATE_LIMIT_MAX`），因为客户端会定时轮询同步，不能吃掉 AI 额度。
 
 ## 目录
 
 ```text
 server/
 ├─ src/
-│  ├─ index.ts          入口：读环境变量 → listen → SIGINT/SIGTERM 优雅关闭
-│  ├─ app.ts            组装 Fastify（logger/脱敏、error/notFound、注册路由；依赖可注入）
+│  ├─ index.ts          入口：读环境变量 → 开库跑迁移 → listen → SIGINT/SIGTERM 优雅关闭
+│  ├─ app.ts            组装 Fastify（logger/脱敏、error/notFound、注册路由、开/关库；依赖可注入）
 │  ├─ config.ts         环境变量解析与钳制，describeConfig() 绝不回显 Key
-│  ├─ contract.ts       请求校验（对应 app/src/lib/chat-types.ts 与 app/src/lib/report-types.ts）+ 错误体
-│  ├─ rate-limit.ts     按 IP 的滑动窗口限流（内存实现，单进程够用；chat 与 report 共用）
+│  ├─ contract.ts       chat/report 请求校验（镜像 app/src/lib/*-types.ts）+ 错误体
+│  ├─ auth.ts           设备令牌与恢复码的生成 / 规范化 / 哈希（只存哈希）
+│  ├─ rate-limit.ts     按 IP 的滑动窗口限流（内存实现，单进程够用）
 │  ├─ routes/health.ts  GET /api/health
 │  ├─ routes/chat.ts    POST /api/chat（SSE 编排）
 │  ├─ routes/report.ts  POST /api/report（非流式 JSON，一次调用出一个报告）
+│  ├─ routes/guards.ts  /api/v1 的限流与设备鉴权前置
+│  ├─ routes/devices.ts POST /api/v1/devices{,/restore,/revoke}
+│  ├─ routes/sync.ts    POST /api/v1/sync/{push,bootstrap} + GET /api/v1/sync/pull
+│  ├─ sync/
+│  │  ├─ contract.ts    同步接口的类型与请求校验（步骤 12c 迁到 shared/）
+│  │  ├─ accounts.ts    注册 / 恢复 / 吊销的业务动作
+│  │  └─ service.ts     认证、push 幂等、bootstrap 事务、pull 响应整形
+│  ├─ db/
+│  │  ├─ driver.ts      Db 抽象（prepare/run/all/get/exec/transaction），过渡期换驱动只改这里
+│  │  ├─ migrations.ts  schema v1（14 张表：实体 9 类 + users/devices + sync_meta/sync_ops…）
+│  │  ├─ entities.ts    实体 kind → 表/列映射、字段校验、训练容量统计
+│  │  ├─ repositories/  entities / sync-seq / sync-ops / devices 的 SQL
+│  │  └─ index.ts       openPersistDatabase()：建目录、开库、迁移
 │  └─ ai/
 │     ├─ deepseek.ts    DeepSeek 客户端：SSE 解析、超时、取消、有限重试
-│     ├─ prompts.ts     中文 system prompt 与档案摘要（含报告提示词；不含敏感原文以外内容）
+│     ├─ prompts.ts     中文 system prompt 与档案摘要（含报告提示词）
 │     ├─ extract.ts     结构化结果净化（问题/档案增量/计划草案/warnings）
 │     └─ report.ts      报告内容净化（字数/条数/重复项/代码块，拒绝就报契约错误）
-└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report
+└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / db-* / devices / sync
 ```
 
 ## API
@@ -43,11 +57,13 @@ server/
   "service": "persist-server",
   "ai": "deepseek",
   "model": "deepseek-chat",
-  "time": "..."
+  "time": "...",
+  "db": "ok",
+  "version": 1
 }
 ```
 
-`ai` 为 `disabled` 表示没配 Key（此时 `/api/chat` 返回 503，前端应回退 Mock）。只暴露「有没有配模型」，绝不回显 Key。
+`ai` 为 `disabled` 表示没配 Key（此时 `/api/chat` 返回 503，前端应回退 Mock）。只暴露「有没有配模型」，绝不回显 Key。`db` 为 `ok` / `error`（读一次 `SELECT 1` 探活），`error` 时 `status` 变 `degraded`；`version` 是当前 schema 版本（迁移跑到第几版）。这两个字段是步骤 12 新增的向后兼容扩展，旧调用方忽略即可。
 
 ### `POST /api/chat`
 
@@ -131,15 +147,15 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 
 失败路径：
 
-| 情况                    | 结果                                                                |
-| ----------------------- | ------------------------------------------------------------------- |
-| 请求不合契约            | `400 { error: { code: 'invalid_request', message } }`               |
-| 没配 `DEEPSEEK_API_KEY` | `503 ai_not_configured`                                             |
-| 触发限流                | `429 rate_limited` + `Retry-After`（与 `/api/chat` 共享额度）       |
-| 上游超时                | `504 ai_timeout`                                                    |
-| 上游其它失败            | `502 ai_failed`                                                     |
-| 模型返回不合净化规则    | `502 ai_failed`（宁可报错，也不给前端一份编造的报告）               |
-| 客户端提前断开          | `499 client_closed`（不写日志噪音，不再浪费额度）                   |
+| 情况                    | 结果                                                          |
+| ----------------------- | ------------------------------------------------------------- |
+| 请求不合契约            | `400 { error: { code: 'invalid_request', message } }`         |
+| 没配 `DEEPSEEK_API_KEY` | `503 ai_not_configured`                                       |
+| 触发限流                | `429 rate_limited` + `Retry-After`（与 `/api/chat` 共享额度） |
+| 上游超时                | `504 ai_timeout`                                              |
+| 上游其它失败            | `502 ai_failed`                                               |
+| 模型返回不合净化规则    | `502 ai_failed`（宁可报错，也不给前端一份编造的报告）         |
+| 客户端提前断开          | `499 client_closed`（不写日志噪音，不再浪费额度）             |
 
 实现要点：
 
@@ -149,23 +165,146 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 - **取消与超时**：`reply.raw.on('close')` 绑定 `AbortController`，客户端关页面即中止上游；单次 25 s 超时，超时映射 504。
 - **不落库、不缓存**：响应带 `cache-control: no-store`；服务端不记录请求体、档案或报告正文。
 
+## 账号与同步 API（`/api/v1`，步骤 12）
+
+公共约定：
+
+- 只接受 JSON；错误体统一 `{ "error": { "code", "message" } }`。
+- 账号 / 同步接口共用独立限流器（默认 **240 次 / 5 分钟**，`SYNC_RATE_LIMIT_MAX`），按 IP 计数；超限 `429 rate_limited` + `Retry-After`。
+- 除注册 / 恢复外都要 `Authorization: Bearer <token>`；令牌无效、被吊销、格式错统一 `401 unauthorized`，**不区分原因**。
+- **服务端只存哈希**：设备令牌（`pst_` 前缀）与恢复码（32 位十六进制）都不落库明文；令牌与恢复码只在响应里出现一次，响应带 `cache-control: no-store`。
+- 账号模型：一个账号 = 一个 `users` 行 + 多台 `devices`；**恢复码属于账号、固定不变**，换设备只轮换令牌（设计文档 §7.1 原写「恢复时轮换恢复码」，实现改为固定——用户只抄一次，轮换一旦响应丢失用户的码就作废）。
+
+### `POST /api/v1/devices`
+
+首次开启同步时调用，建账号 + 第一台设备。
+
+```json
+{ "label": "本机 Chrome" }
+```
+
+`label` 可选（≤40 字符，首尾空白会被压掉）。响应 `201`：
+
+```json
+{
+  "userId": "usr_...",
+  "deviceId": "dev_...",
+  "token": "pst_...",
+  "recoveryCode": "0123456789abcdef0123456789abcdef"
+}
+```
+
+### `POST /api/v1/devices/restore`
+
+拿恢复码在新设备上换一个新令牌（同一账号，旧设备不受影响）。
+
+```json
+{ "recoveryCode": "0123 4567 89ab cdef 0123 4567 89ab cdef", "label": "新手机" }
+```
+
+恢复码大小写、空格、短横线都会被规范化。响应 `200 { userId, deviceId, token }`；恢复码格式错或不存在一律 `400 invalid_recovery_code`（不透露账号是否存在）。
+
+### `POST /api/v1/devices/revoke`
+
+吊销本机（不带 `deviceId`）或同账号的指定设备：
+
+```json
+{ "deviceId": "dev_..." }
+```
+
+响应 `200 { "revoked": true, "deviceId": "dev_..." }`；设备不存在或不属于本账号 `404 device_not_found`。
+
+### 实体格式
+
+同步的所有实体共用一个信封，`kind` 取 9 种之一：`profile`、`settings`、`plan_item`、`study_record`、`fitness_session`、`diet_entry`、`water_log`、`goal`、`long_term_plan`。
+
+```json
+{
+  "kind": "goal",
+  "id": "g_1",
+  "updatedAt": 1793847000000,
+  "deleted": false,
+  "data": { "id": "g_1", "date": "2026-11-05", "title": "每周三练", "enabled": true }
+}
+```
+
+- `id` 可放在信封上，也可只放在 `data.id`；`profile` / `settings` 是单行实体，不需要 id。
+- `updatedAt` 是客户端毫秒时间戳，用于 LWW 裁决（服务端只认这个，不认本地时钟顺序）；`deleted: true` 写墓碑（30 天后可清理）。
+- `data` 原样存进 `payload_json`，同时把日期 / 科目 / 热量 / 训练容量等高频字段拆成列（步骤 13 的服务端聚合只读列）。
+
+### `POST /api/v1/sync/push`
+
+增量推送，一次 1–500 个实体：
+
+```json
+{ "opId": "c0ffee00-...", "entities": [/* 实体数组 */] }
+```
+
+响应：
+
+```json
+{
+  "applied": 3,
+  "skipped": [{ "kind": "plan_item", "id": "pi_9", "reason": "stale" }],
+  "serverRev": 42
+}
+```
+
+- **幂等**：同一 `opId` 重试直接回放上次结果（结果存在 `sync_ops`），不会重复写；`opId` 已被别的账号用过 → `400 invalid_request`。
+- `skipped[].reason`：`stale`（服务端已有更新的 `updatedAt`，LWW 判负）、`missing`（删除一个服务端从未见过的实体）、`invalid`（业务字段不合法，带 `message`；**只跳过这一条**，同批其他实体照常写入）。
+- 请求形状不对（缺 `opId`、实体超过上限、`kind` 未知名、`updatedAt` 不是正数等）**整批 400**——这类是客户端 bug，不该带病写入。
+
+### `POST /api/v1/sync/bootstrap`
+
+首次全量上传，一次 1–2000 个实体，**一个事务写完**（要么全成、要么不留半套数据）；请求体上限放宽到 8 MB（其余接口仍是 256 KB）。响应结构与 push 相同（无 `opId`，本身按 LWW 幂等：重复上传全部返回 `stale`）。
+
+### `GET /api/v1/sync/pull?since=<rev>&limit=<n>`
+
+增量拉取，按全局 `rev` 升序：
+
+```json
+{
+  "entities": [
+    {
+      "kind": "goal",
+      "id": "g_1",
+      "data": { "id": "g_1", "title": "每周三练" },
+      "updatedAt": 1793847000000,
+      "deleted": false,
+      "rev": 12
+    }
+  ],
+  "nextSince": 12,
+  "hasMore": false
+}
+```
+
+- `since` 传上次的 `nextSince`（首次 0）；`limit` 1–1000，默认 200，越界夹紧而不是报错。
+- 墓碑也会返回（`deleted: true`、`data: null`），客户端据此删除本地副本。
+- 响应带 `cache-control: no-store`。
+
 ## 开发与验证
 
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"   # 本机沙箱下必须带 workspace 内缓存
 npm run typecheck    # tsc -p tsconfig.test.json（含 test）
-npm test             # vitest run，58 条
+npm test             # vitest run，112 条（13 个文件）
 npm run build        # tsc -p tsconfig.json → dist/
 npm run format:check # prettier
 ```
+
+> **Node ≥ 22.5 必需**：`node:sqlite` 是内置模块，Node 20 跑不起来（`Cannot find module 'node:sqlite'`）。本机 v22.19.0 可用，启动时报一条 `ExperimentalWarning` 属预期。`tests` 用 `DB_PATH=':memory:'` 起库，不会在磁盘留文件。
 
 跑真实服务做冒烟（无 Key 时 `/api/chat` 应为 503）：
 
 ```powershell
 $env:PORT='3101'; node dist/index.js
 curl http://127.0.0.1:3101/api/health
+# health 里应出现 "db": "ok" 与 "version": 1；默认库文件在 server/data/persist.sqlite
 ```
+
+持久化冒烟（验证「重启后数据还在」）：注册 → push 一条 → 杀进程 → 重启 → 同一 token 再 pull，实体应原样返回；顺带用 `recoveryCode` 调 restore 能拿到同一 `userId` 的新 token。注意：**已经拉起的库文件会留在 `server/data/`**（已被 `.gitignore` 忽略），冒烟完可直接删。
 
 需要真实联调时，只在**临时进程**里注入 Key、用完即杀，禁止写入任何文件：
 
@@ -184,6 +323,8 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 - ✅ 步骤 9 部署（2026-11-04）：systemd `persist-server.service`（`User=persist`、`Restart=always`）+ `/etc/persist/server.env`（`600 root:root`，新轮换的 Key 只在这里）+ Nginx `/etc/nginx/conf.d/persist.conf`（`/api` 反代 + SSE `proxy_buffering off` + `proxy_read_timeout 300s`）。IP 直连实测：`/api/health` `ai:"deepseek"`；SSE 188 事件、首包 0.118 s、末包 4.215 s 增量到达；`/api/report` 200 / 2.78 s；限流第 2 次 `429` + `Retry-After: 298`。**仅内部调试，未对外宣称上线。**
 - ✅ 晨间简报接入后重部署（2026-11-04，`9f9cc71`）：**服务端代码零改动**（前端复用同一 `/api/report`），仅替换 `/var/www/persist` 静态产物；实测 `/api/health` `ai:"deepseek"`、真实 `/api/report` 200 / 2.701 s；旧 JS 资源 404。
 - ✅ lint 清理后第三次重部署（2026-11-04，`f5a57f5`）：**服务端与 Nginx 配置零改动**，仅替换 `/var/www/persist` 静态产物（`index-DVS7rlR_.js` 567592 B）；实测 8 页深链 200、`/api/health` `ai:"deepseek"`、真实 `/api/report` 200 / 2.284 s；旧 JS 资源 404。
-- ⬜ 下一阶段（步骤 10，等备案号）：域名解析 + 443 + 证书；SSH 改仅密钥登录、删 3389、装 `fail2ban`。
-- ⬜ P4（步骤 12–14，设计已定稿未实施）：`src/db/*`（driver/repo/migrate）、设备令牌（`token_hash` + 恢复码）、`/api/v1/sync/{bootstrap,push,pull}`、服务端 SQL 聚合 + `ANALYSIS_SYSTEM_PROMPT` + `/api/v1/analysis/*`、报告归档/缓存/可选定时、备份 `VACUUM INTO` 与导出/删除账号。**前置是步骤 11（8d 数据历史化）**——当前只有学习记录有真实历史，训练历史是前端演示常量，服务端即使有库也分析不出趋势。见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
-- 结构说明：请求/响应类型暂放 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），`shared/` 迁移**推迟**——前端已冻结，现在挪动会同时改 app 的 tsconfig/构建，收益不抵风险；P3 收尾或 P4 再统一（P4 方案 §17 已把这一步记为技术债，建议在步骤 12 前完成）。
+- ⬜ 下一阶段（步骤 10，等备案号）：域名解析 + 443 + 证书；**服务器 Node 升到 22 LTS**（步骤 12 起代码需要 `node:sqlite`）；SSH 改仅密钥登录、删 3389、装 `fail2ban`。
+- ✅ 步骤 12a（2026-11-05）：`src/db/*` 数据层——`driver.ts`（`Db` 抽象：`prepare/run/all/get/exec/transaction`，`BEGIN IMMEDIATE` + 嵌套 `SAVEPOINT`）、`migrations.ts`（schema v1，14 张表）、`entities.ts`（9 类实体的列映射与校验）、`repositories/*`（实体 upsert/拉取、rev 分配、sync_ops、设备/账号）、`index.ts`（`openPersistDatabase()`）。单测覆盖驱动、迁移、仓储三层。
+- ✅ 步骤 12b（2026-11-05）：账号 + 同步接口——`auth.ts`（令牌 / 恢复码生成与哈希，只存哈希）、`POST /api/v1/devices{,/restore,/revoke}`、`POST /api/v1/sync/{push,bootstrap}` + `GET /api/v1/sync/pull`（opId 幂等、LWW、墓碑、分页）、独立同步限流器、`/api/health` 增加 `db` / `version`。`engines` 提到 `>=22.5`。**本机验收**：tsc 0 错、单测 112/112、真实进程冒烟（重启后数据仍在、恢复码换设备拿到同一 userId）。**尚未部署到服务器**（等步骤 10 升 Node）；前端同步层与设置页开关是 12d/12e。
+- ⬜ P4 剩余（步骤 12d–14）：前端同步层（`sync-store`/`sync-queue`/`sync-client`/`sync-merge`）、设置页「数据同步」开关与恢复码交互、服务端 SQL 聚合 + `ANALYSIS_SYSTEM_PROMPT` + `/api/v1/analysis/*`（步骤 13）、备份 `VACUUM INTO` 与导出/删除账号（步骤 14）。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
+- 结构说明：chat/report 的请求响应类型暂放 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），`shared/` 迁移**推迟**；同步契约先放在 `src/sync/contract.ts`，**步骤 12c 再迁到 `shared/src/contract/sync.ts`** 供前端复用。
