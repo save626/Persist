@@ -40,7 +40,7 @@ server/
 │  │  ├─ metrics.ts     指标卡（AnalysisMetric）与前后对比
 │  │  ├─ rules.ts       规则降级内容（无 Key / 上游超时时用）
 │  │  └─ service.ts     缓存判定（dataRev）、生成编排、白名单校验、归档落库
-│  ├─ jobs/daily-brief.ts  每日简报 job：进程内 60 s tick、按本地日期每天一次、失败最多 2 次
+│  ├─ jobs/daily-brief.ts  每日简报 job：进程内 60 s tick、按本地日期每天一次、失败的 run 下一 tick 可重新抢锁
 │  ├─ db/
 │  │  ├─ driver.ts      Db 抽象（prepare/run/all/get/exec/transaction），过渡期换驱动只改这里
 │  │  ├─ migrations.ts  schema v2（v1 的 14 张表 + analysis_reports / job_runs）
@@ -53,7 +53,7 @@ server/
 │     ├─ analysis.ts    综合分析提示词与响应解析、数字白名单校验
 │     ├─ extract.ts     结构化结果净化（问题/档案增量/计划草案/warnings）
 │     └─ report.ts      报告内容净化（字数/条数/重复项/代码块，拒绝就报契约错误）
-└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / analysis-* / jobs / db-* / devices / sync（18 个文件 / 174 条）
+└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / analysis-* / jobs / db-* / devices / sync（18 个文件 / 175 条）
 ```
 
 > **`@persist/shared`（仓库根 `shared/`）**：同步契约（`contract/sync.ts`、`contract/entities.ts`、`contract/parse.ts`）与**综合分析契约**（`contract/analysis.ts`：事实包 v2 / 报告内容 / 错误码 / 保留期 / 每日简报时间）只有这一份，服务端与前端同源引用。`shared/` 是独立 TS 项目，需先编译出 `shared/dist`：`npm run shared:build`（`prebuild` / `pretest` / `typecheck` 会自动先跑）。`npm install` 已按 `file:../shared` 建立链接；**部署时 `shared/` 必须一起上服务器**（见 `docs/部署与服务器现状.md`）。
@@ -309,31 +309,44 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 
 ```json
 {
-  "id": "ar_1",
+  "reportId": "ar_1",
   "type": "综合分析",
   "rangeDays": 30,
-  "origin": "model",
+  "range": { "start": "2026-10-07", "end": "2026-11-05", "days": 30 },
+  "origin": "ai",
   "cached": false,
   "model": "deepseek-chat",
+  "dataRev": 42,
   "createdAt": "2026-11-05T13:20:00.000Z",
-  "content": { "title": "...", "summary": "...", "sections": [], "actions": [], "warnings": [] },
+  "content": {
+    "title": "...",
+    "status": "...",
+    "summary": "...",
+    "analysis": ["...", "...", "..."],
+    "conclusions": [],
+    "actions": [],
+    "warnings": []
+  },
   "metrics": []
 }
 ```
 
-- **缓存键是 `dataRev`**（= 服务端 `sync_seq.value`，即该账号数据版本）：同一数据版本重复请求直接返回 `cached: true` 且不再调用模型；`force: true` 先删该缓存再重新生成。
+- **主键字段叫 `reportId`**（不是 `id`）；归档列表项才叫 `id`。
+- **缓存键是 `dataRev`**（= 服务端 `sync_seq.value`，即该账号数据版本）：同一数据版本重复请求直接返回 `cached: true` 且不再调用模型；`force: true` 会重新生成，**只有新报告生成成功后才删旧缓存**（生成失败旧报告仍在）。
+- **内容重试**：模型输出先过净化与数字白名单，段落数不在 2–5 段、正文出现事实包以外的数字、或正文夹带 `daysWithAnyRecord` / `weekly` 这类内部标识符时，服务端带失败原因**重试一次**（总预算 30 s）；仍不合规才 502 `invalid_response`，不落半份报告。
+
 - **降级语义**（无 Key / 上游超时 / 上游 5xx）：仍是 **200**，`origin: "rules"`、`model: null`，内容走规则生成——分析失败不让用户白等，但要如实标来源。
 - 错误码：
 
-| HTTP | `error.code` | 触发条件 |
-|---|---|---|
-| 403 | `ai_consent_off` | 同步上来的 `settings.aiConsent === false` |
-| 409 | `insufficient_data` | 窗口内没有任何记录 |
-| 422 | `invalid_request` | 请求体形状 / `rangeDays` 不合法 |
-| 429 | `rate_limited` | 触发独立分析限流（默认 6 次 / 5 分钟） |
-| 502 | `invalid_response` | 模型返回不可解析、或正文数字不在事实包白名单里 |
+| HTTP | `error.code`        | 触发条件                                                 |
+| ---- | ------------------- | -------------------------------------------------------- |
+| 403  | `ai_consent_off`    | 同步上来的 `settings.aiConsent === false`                |
+| 409  | `insufficient_data` | 窗口内没有任何记录                                       |
+| 422  | `invalid_request`   | 请求体形状 / `rangeDays` 不合法                          |
+| 429  | `rate_limited`      | 触发独立分析限流（默认 6 次 / 5 分钟）                   |
+| 502  | `invalid_response`  | 重试一次后仍不合契约（不可解析 / 数字越界 / 段落数不对） |
 
-- **数字白名单**：模型正文里出现的每个数字都必须能在 `JSON.stringify(facts)` 里找到，否则按 `invalid_response` 拒绝、不归档。这条和前端共用 `ANALYSIS_CONTENT_LIMITS` / 校验口径。
+- **数字白名单**：模型正文里出现的每个数字都必须能在 `JSON.stringify(facts)` 里找到，否则按 `invalid_response` 拒绝（先重试一次）、不归档。这条和前端共用 `ANALYSIS_CONTENT_LIMITS` / 校验口径。
 
 ### `GET /api/v1/analysis/facts?rangeDays=30`
 
@@ -352,7 +365,7 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 ### 每日简报 job（`src/jobs/daily-brief.ts`）
 
 - 进程内 **60 s tick**（`unref`，不阻止退出），**不需要额外 systemd timer**；`DAILY_BRIEF_ENABLED` **默认关闭**。
-- `runKey` = 当天本地日期（`job_runs` 表 `UNIQUE(name, run_key)` 保证同一天只跑一次），失败最多 **2 次**尝试。
+- `runKey` = 当天本地日期（`job_runs` 表 `UNIQUE(name, run_key)` 保证同一天只跑一次）；生成失败记 `failed`，**下一个 tick（60 s 后）会重新抢锁再试**，成功后不再重跑。模型输出不合规的重试已由分析服务内部处理（见上），job 自己不再套一层重试，避免同一次简报打 4 次模型。
 - 到点判断读的是**同步上来的** `settings.payload_json.dailyBrief`（`enabled` / `at`，`DAILY_BRIEF_AT` 默认 `21:00`）；**服务端环境变量只在完全没有 settings 时作兜底**——所以这个功能隐含「先开跨设备同步并把设置同步上来」。
 - 日志只记 `{ reportId, origin, cached, rangeDays, runKey }` 或 `{ error, runKey }`，**绝不打印报告正文**。
 
@@ -363,37 +376,42 @@ cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"   # 本机沙箱下必须带 workspace 内缓存
 npm run shared:build  # 先编译 ../shared → shared/dist（prebuild/pretest/typecheck 会自动跑）
 npm run typecheck    # tsc -p tsconfig.test.json（含 test）
-npm test             # vitest run，174 条（18 个文件）
+npm test             # vitest run，175 条（18 个文件）
 npm run build        # tsc -p tsconfig.json → dist/
 npm run format:check # prettier
 ```
 
 > **Node ≥ 22.5 必需**：`node:sqlite` 是内置模块，Node 20 跑不起来（`Cannot find module 'node:sqlite'`）。本机 v22.19.0 可用，启动时报一条 `ExperimentalWarning` 属预期。`tests` 用 `DB_PATH=':memory:'` 起库，不会在磁盘留文件。
 
-跑真实服务做冒烟（无 Key 时 `/api/chat` 应为 503）：
+跑真实服务做冒烟（无 Key 时 `/api/chat`、`/api/report` 应为 503，综合分析走规则降级）：
 
 ```powershell
 $env:PORT='3101'; node dist/index.js
 curl http://127.0.0.1:3101/api/health
 # health 里应出现 "db": "ok" 与 "version": 2；默认库文件在 server/data/persist.sqlite
+# "ai" 字段：没有 Key 时是 "disabled"，配了 Key 才是 "deepseek"
 ```
 
-综合分析冒烟（无 Key 也能跑，走规则降级）：注册设备拿 token → `bootstrap` 推几条记录 → `POST /api/v1/analysis/reports`（期望 200、`origin: "rules"`、`model: null`）→ 再请求一次（期望 `cached: true`）→ `GET /api/v1/reports` 能看到归档。想验真实模型分支，只能临时注入假客户端（本机没有真实 Key）。
+> **脚本不会自动读 `server/.env`**：`dev` / `start` / `node dist/index.js` 只读 `process.env`，本机写了 `.env` 也照样是 `ai: "disabled"`。要带真实 Key 启动，用 Node 的 `--env-file`（本机 Node v22.19.0 支持）：
+>
+> ```powershell
+> cd D:\Persist\server
+> node --env-file=.env dist/index.js    # 启动日志应出现 "ai":"deepseek"
+> ```
+>
+> `--env-file-if-exists` 需要 Node ≥ 22.9，所以没写进 npm 脚本——服务器 Node 版本还没到，脚本保持 `node dist/index.js`，靠部署侧注入环境变量（systemd `EnvironmentFile`）。
+
+综合分析冒烟：注册设备拿 token → `bootstrap` 推几条记录（**实体 id 用随机后缀或 uuid**，服务端实体表主键是全局 `id`，不同账号复用同一个 id 会撞主键报 500）→ `POST /api/v1/analysis/reports`（无 Key 时 200、`origin: "rules"`、`model: null`；有真实 Key 时 `origin: "ai"`、`model: "deepseek-chat"`）→ 再请求一次（同 `dataRev` 应 `cached: true` 且 `reportId` 相同）→ `GET /api/v1/reports` 与 `/:id` 能看到归档。
 
 持久化冒烟（验证「重启后数据还在」）：注册 → push 一条 → 杀进程 → 重启 → 同一 token 再 pull，实体应原样返回；顺带用 `recoveryCode` 调 restore 能拿到同一 `userId` 的新 token。注意：**已经拉起的库文件会留在 `server/data/`**（已被 `.gitignore` 忽略），冒烟完可直接删。
 
-需要真实联调时，只在**临时进程**里注入 Key、用完即杀，禁止写入任何文件：
-
-```powershell
-$env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
-# 另开一个终端：POST /api/chat，确认 HTTP 200 + SSE 事件序列，随后停进程并清环境变量
-```
+本机真实 Key 联调：`server/.env`（gitignored）填 `DEEPSEEK_API_KEY`，用上面的 `--env-file` 方式启动，另开终端打 `/api/chat`（SSE）、`/api/report`、`/api/v1/analysis/reports` 三条链路。**别把 Key 写进任何脚本、文档或提交**；临时验证可在进程内注入环境变量，用完即杀。
 
 > 本机受限沙箱下 `vitest` 会因 Vite 的 `windowsSafeRealPathSync` 启动子进程报 `spawn EPERM`，需要一次性完整访问权限执行。
 
 ## 当前状态与 TODO
 
-- ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（2026-11-03 时 58 条；步骤 13 后现共 **174 条 / 18 个文件**）。
+- ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（2026-11-03 时 58 条；步骤 13 后现共 **175 条 / 18 个文件**）。
 - ✅ 8b（`b99d3ad`）前端接入：`app/src/lib/ai-chat-client.ts` 用 `createAppChatClient({ consent })` 在真实/Mock 间切换，`probe()` 走 `/api/health`，只在首个内容事件前回退；`PlanChatSheet` / `PlansPage` 如实标注来源。**已用真实 Key 端到端联调**（`/api/chat` 200、3.5 s、127 事件）；真实调用暴露模型给出过去日期，已用「提示词注入 Asia/Shanghai 今天 + 前端日期兜底」修复并复验。
 - ✅ 8c（`bdd4265`，2026-11-04）报告接服务端：新增 `POST /api/report`（非流式 JSON）+ `ai/report.ts` 净化 + 报告提示词；前端 `app/src/lib/ai-report-client.ts` 先 `probeAiReport()` 探活，可用才走真实生成，不可用/失败自动回退本地 Mock 并如实标注。**已用真实 Key 验证**：完整摘要 2.7 s 返回、只授权学习时报告不出现训练/饮食字样；提示词原版允许「推算」，真实调用确实算出了「再补水约 0.5 L」这类未授权数字，已改为**禁止任何推算**并复验通过。
 - ✅ 步骤 9 部署（2026-11-04）：systemd `persist-server.service`（`User=persist`、`Restart=always`）+ `/etc/persist/server.env`（`600 root:root`，新轮换的 Key 只在这里）+ Nginx `/etc/nginx/conf.d/persist.conf`（`/api` 反代 + SSE `proxy_buffering off` + `proxy_read_timeout 300s`）。IP 直连实测：`/api/health` `ai:"deepseek"`；SSE 188 事件、首包 0.118 s、末包 4.215 s 增量到达；`/api/report` 200 / 2.78 s；限流第 2 次 `429` + `Retry-After: 298`。**仅内部调试，未对外宣称上线。**
@@ -409,6 +427,7 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 - ✅ 步骤 12e（2026-11-05，`f09c3da`）设置页「数据同步」卡片：开关（`aria-label="跨设备同步"`）、注册后展示 32 位恢复码（4×8 大写）、「用恢复码绑定已有账号」、本机设备与最近同步时间、立即同步、吊销本机（`alertdialog` 二次确认）。E2E 增加 2 条用例（mock `**/api/v1/**`）。
 - ✅ 步骤 12f（2026-11-05，`e9c29a0`）收尾：pull 合并前的形状守卫 `matchesRecordShape`（形状不合规 / body id 与信封 id 不一致的实体计 `skipped`，不写本地存档）；**本机验收** P4 §7.4 六项 19/19、app 单测 292/292（21 文件）、server 112/112（13 文件）、E2E 110、`vite build` JS 606.08 kB / CSS 140.20 kB；13 张视觉基线 png 差异已随 `4d3edcf` 入库。**已推送、未部署**（视觉基线 13 张已随 `4d3edcf` 入库）。
 - ✅ 步骤 13a（2026-11-05，`41ed92f`）契约与数据层：`shared/src/contract/analysis.ts`（`ANALYSIS_REPORT_TYPE` / `ANALYSIS_RANGE_DAYS` / `ReportFactsV2` / `ANALYSIS_CONTENT_LIMITS` / `AnalysisReportResponse` / `ANALYSIS_ERROR_CODES` / `DATA_RETENTION` / `DEFAULT_DAILY_BRIEF_AT` + `parseDailyBriefAt` / `normalizeDailyBriefSettings`），`package.json` 加 `./contract/analysis` 子路径；schema **v2** 迁移新增 `analysis_reports`（`UNIQUE(user_id, type, range_days, data_rev)`）与 `job_runs`（`UNIQUE(name, run_key)`）；`db/repositories/reports.ts` 与 jobs 仓储。
-- ✅ 步骤 13b（2026-11-05，`82ed773`）聚合与接口：`src/analysis/{time,facts,metrics,rules,service}.ts` + `src/ai/analysis.ts`，四个接口（`POST /api/v1/analysis/reports`、`GET /api/v1/analysis/facts`、`GET /api/v1/reports`、`GET /api/v1/reports/:id`）全部 `no-store`；缓存键 `dataRev`、`force` 先删缓存；降级 200 / `invalid_response` 502 / `ai_consent_off` 403 / `insufficient_data` 409 / 独立限流 429 / 入参 422；数字白名单校验；`ANALYSIS_RATE_LIMIT_MAX` 等 5 个新环境变量进入 `.env.example`。
-- ✅ 步骤 13c（2026-11-05，`40d2bf4`）每日简报 job：`src/jobs/daily-brief.ts`，进程内 60 s tick（`unref`）、`runKey` = 本地日期、失败最多 2 次、默认关闭、读同步上来的 `settings.dailyBrief`（env 仅兜底）、生成时 `pruneReports(now - 365d)`；日志只记元信息不记正文。
-- ✅ 步骤 13 **本机验收**（2026-11-05，已推送 `41ed92f` / `82ed773` / `40d2bf4` + 文档 `7f13727`，**未部署**）：server `tsc -b` 0 错、`npm test` **18 文件 / 174 条全过**、`prettier --check` 通过；另用**临时 vitest 用例**（验收后已删除）跑真实 HTTP 四组，全部通过——① 注册设备 → bootstrap 5 类记录 → 分析 200 平铺；② 同 `dataRev` 二次请求 `cached: true`；③ 归档列表 / 详情 → facts v2（30 天 `granularity: 'day'`，只含真正有记录的天）→ 规则降级 `model: null`；④ 数字白名单违规 502 且不入档、空窗口 409、当日第 7 次 429（未授权 403 由路由单测覆盖）。**本机没有真实 DeepSeek Key**：真实模型分支用注入的假客户端在 HTTP 层验证，真实 Key 效果留给用户验收。
+- ✅ 步骤 13b（2026-11-05，`82ed773`）聚合与接口：`src/analysis/{time,facts,metrics,rules,service}.ts` + `src/ai/analysis.ts`，四个接口（`POST /api/v1/analysis/reports`、`GET /api/v1/analysis/facts`、`GET /api/v1/reports`、`GET /api/v1/reports/:id`）全部 `no-store`；缓存键 `dataRev`、`force` 重新生成但只在成功后删旧缓存；降级 200 / `invalid_response` 502 / `ai_consent_off` 403 / `insufficient_data` 409 / 独立限流 429 / 入参 422；数字白名单校验；`ANALYSIS_RATE_LIMIT_MAX` 等 5 个新环境变量进入 `.env.example`。
+- ✅ 步骤 13c（2026-11-05，`40d2bf4`）每日简报 job：`src/jobs/daily-brief.ts`，进程内 60 s tick（`unref`）、`runKey` = 本地日期、默认关闭、读同步上来的 `settings.dailyBrief`（env 仅兜底）、生成时 `pruneReports(now - 365d)`；日志只记元信息不记正文。失败记 `failed`，下一 tick 重新抢锁（不再由 job 自己套重试）。
+- ✅ 步骤 13d（2026-11-05，`18d5f77`）**真实 Key 联调修复**：模型偶尔写 6 段（契约 2–5 段）导致 502、正文夹带 `daysWithAnyRecord` / `trend` 等内部字段名。改为内容不合规时**带失败原因重试一次**（`MAX_CONTENT_ATTEMPTS=2`、预算 30 s），提示词明确「analysis 固定 3 段、不出现英文字段名/JSON 键名/内部标识符」；日简报去掉外层重试避免 4 次调用模型。新增 2 条单测（首次不合规重试后落库 / 两次不合规 502 不落库），server 175 条全过。
+- ✅ 步骤 13 **本机验收**（2026-11-05，已推送 `41ed92f` / `82ed773` / `40d2bf4` / `18d5f77` + 文档提交，**未部署**）：server `tsc -b` 0 错、`npm test` **18 文件 / 175 条全过**、`prettier --check` 通过；真实 HTTP 四组（临时 vitest 用例，验收后已删）：① 注册设备 → bootstrap 5 类记录 → 分析 200 平铺；② 同 `dataRev` 二次请求 `cached: true`；③ 归档列表 / 详情 → facts v2（30 天 `granularity: 'day'`，只含真正有记录的天）→ 规则降级 `model: null`；④ 数字白名单违规 502 且不入档、空窗口 409、当日第 7 次 429（未授权 403 由路由单测覆盖）。**真实 DeepSeek Key 本机验证（2026-11-05，`server/.env` + `node --env-file=.env dist/index.js`）**：`/api/chat` 200 / 2.4 s SSE 中文增量 + 追问问题；`/api/report` 200 / 3.3 s、引用当天 8/10 组与 1200 kg；综合分析首次 200 / 5.7 s（`origin: "ai"`、`model: "deepseek-chat"`）、同参 `cached: true` 且 `reportId` 相同、`force` 200 / 5.4 s 生成新 id、列表与详情 id/标题一致、正文无英文字段名。**线上服务器仍是步骤 9 版本（Node 20），步骤 12/13 未部署。**
