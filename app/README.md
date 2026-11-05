@@ -40,7 +40,7 @@ npm run build        # 生产构建
 
 主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话在授权且服务端可用时调用真实 DeepSeek（标注「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock（标注「本地生成 · Mock 对话」）。`/reports` 的「今日简报」同理：授权 + 服务端可用时经 `/api/report` 生成文字（标注「DeepSeek 生成 · 经本站服务端代理」），否则本地 Mock（标注「本地生成 · Mock 报告」）。今日页「晨间简报」也已接通同一接口：打开面板时按「今日简报 / 7 天」请求，模型写标题与摘要，KPI 与建议节奏仍本地生成，失败/未授权时回退并明确标注。**步骤 13 起 `/reports` 末尾新增「服务端综合分析」块**：选中 7 / 30 / 90 天窗口后点「生成综合分析」→ `POST /api/v1/analysis/reports`，展示模型文字 + 指标卡 + 来源与缓存标记，下方列出服务端归档（`GET /api/v1/reports`）；此项依赖跨设备同步（需要 `syncToken`）且服务端已部署，未就绪时只显示说明、不发请求。设置页新增「每日简报」卡片（默认关闭、默认 21:00）。
 
-测试现状（2026-11-05，步骤 13 收尾后）：`npm test` **334 条**单元测试（24 个文件，步骤 13 新增 `analysis-client` / 综合分析块 / 每日简报设置项的用例），`npx playwright test` 60 用例 × 2 项目 = **120 次执行**（9 个文件、1.2 m；新增 `e2e/reports-analysis.spec.ts` 4 条 → 8 次执行，顺带修掉一处既有用例的 `.reports-kicker` strict mode 冲突），`npm run lint` **0 错 0 警告**（98 个文件）、`npm run typecheck` 通过、`npm run format:check` 通过，`npm run build` JS 628.24 kB（gzip 186.67 kB）/ CSS 145.40 kB（gzip 24.89 kB），`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图（步骤 13 重跑未起后端：`overflow/missing*` 全 0，`failures 12` 为 `/reports`、`plans-ai` 各 6 条 502 属前置条件未满足；**本轮 png 差异未提交**，等用户桌面端 + 移动端验收后再入库）。注意构建产物已过 500 kB：Vite 仍报 chunk 体积警告，`/plans` 尚未拆分懒加载（已知问题，非本步骤引入）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
+测试现状（2026-11-05，步骤 13 收尾后）：`npm test` **334 条**单元测试（24 个文件，步骤 13 新增 `analysis-client` / 综合分析块 / 每日简报设置项的用例），`npx playwright test` 60 用例 × 2 项目 = **120 次执行**（9 个文件、1.2 m；新增 `e2e/reports-analysis.spec.ts` 4 条 → 8 次执行，顺带修掉一处既有用例的 `.reports-kicker` strict mode 冲突），`npm run lint` **0 错 0 警告**（98 个文件）、`npm run typecheck` 通过、`npm run format:check` 通过，`npm run build` JS 628.24 kB（gzip 186.67 kB）/ CSS 145.40 kB（gzip 24.89 kB），`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图（步骤 13 重跑未起后端：`overflow/missing*` 全 0，`failures 12` 为 `/reports`、`plans-ai` 各 6 条 502 属前置条件未满足；**本轮 png 差异尚未提交（12 张）**，等用户桌面端 + 移动端验收后再单独入库）。注意构建产物已过 500 kB：Vite 仍报 chunk 体积警告，`/plans` 尚未拆分懒加载（已知问题，非本步骤引入）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
 
 > **`visual:check` 的前置条件**：脚本只连接已在运行的 4173，**自己不启动后端**。步骤 8b 之后 `/plans` 会先探测 `/api/health`，步骤 8c 之后 `/reports` 同样探测，所以跑之前要另开终端起本机后端 `cd ../server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，页面显示 Mock，与基线一致）。后端不在时 Vite 代理返回 502，浏览器把每个 `/plans`、`/reports` 状态记控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判失败（exit 1，截图像素本身没问题）。
 
@@ -49,12 +49,12 @@ npm run build        # 生产构建
 1. 步骤 9 ✅ 已完成（2026-11-04）：IP 直连部署（本地 build 上传 `app/dist` + Nginx 深链/反代/gzip + systemd + 真实 Key 只存服务器），8 页深链、SSE、`/api/report` 与限流均实测通过；晨间简报接入后已重新部署。下一步是拿到备案号后的步骤 10（域名 + HTTPS）；等待期默认推进步骤 11（8d 数据历史化）。备案进度：阿里云初审 ✅ 2026-11-04，2026-11-05 提交管局。完整计划见 `HANDOFF.md` §0.4 / §13 P3，服务器与部署约束见 `docs/部署与服务器现状.md`。
 2. **步骤 11（8d）数据历史化** —— ✅ 已完成（2026-11-04）：`schemaVersion` 2、训练真实历史、饮食/饮水/计划按日台账、备份 0.3.0。
 3. **步骤 12（P4a）账号 + 增量同步** —— ✅ 本机完成并验收（2026-11-05，12a–12f）：客户端同步层 + 设置页「数据同步」卡片；**已推送、未部署**（部署要等服务器升 Node ≥ 22.5）。
-4. **步骤 13（P4b）服务端聚合 + AI 综合分析** —— ✅ 本机完成并验证（2026-11-05，**工作区未提交**）：服务端 SQL 聚合事实包 + 四个 `/api/v1` 接口 + 每日简报 job；前端 `/reports`「服务端综合分析」块（7/30/90 天、四态、归档列表）与设置页「每日简报」卡片（默认关闭、21:00）。**未部署**（随步骤 12 一起等步骤 10 升 Node 22）。
+4. **步骤 13（P4b）服务端聚合 + AI 综合分析** —— ✅ 本机完成并验证（2026-11-05，**已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727`）、未部署**）：服务端 SQL 聚合事实包 + 四个 `/api/v1` 接口 + 每日简报 job；前端 `/reports`「服务端综合分析」块（7/30/90 天、四态、归档列表）与设置页「每日简报」卡片（默认关闭、21:00）。**未部署**（随步骤 12 一起等步骤 10 升 Node 22）。
 5. 步骤 14（备份 / 恢复 / 导出 / 删除账号）未开始，设计见 `docs/P4-数据层与AI综合分析设计方案.md` §8–§12。
 
 已完成（2026-11-05）：
 
-- 步骤 13 前端（13b/13c，工作区未提交）：新增 `src/lib/analysis-contract.ts`（唯一入口）与 `src/lib/analysis-client.ts`（请求 / 四态 / 9 类错误分类）；`ReportsPage` 末尾「服务端综合分析」块（窗口切换、生成、指标卡、来源与 `cached` 标记、归档列表与详情），服务端结果**不写入本机报告数组**；`SettingsPage` 新增「每日简报」卡片（默认关闭、`DAILY_BRIEF_AT` 默认 21:00，非法时间回退并提示，文案说明需先开启同步）；`MockDataProvider` 对外暴露 `syncToken`；**未改 `schemaVersion`（仍 2）与备份格式（仍 0.3.0）**。E2E 新增 `e2e/reports-analysis.spec.ts` 4 条用例（mock `/api/v1/**`）。
+- 步骤 13 前端（13b/13c，`82ed773` / `40d2bf4` 已推送、未部署）：新增 `src/lib/analysis-contract.ts`（唯一入口）与 `src/lib/analysis-client.ts`（请求 / 四态 / 9 类错误分类）；`ReportsPage` 末尾「服务端综合分析」块（窗口切换、生成、指标卡、来源与 `cached` 标记、归档列表与详情），服务端结果**不写入本机报告数组**；`SettingsPage` 新增「每日简报」卡片（默认关闭、`DAILY_BRIEF_AT` 默认 21:00，非法时间回退并提示，文案说明需先开启同步）；`MockDataProvider` 对外暴露 `syncToken`；**未改 `schemaVersion`（仍 2）与备份格式（仍 0.3.0）**。E2E 新增 `e2e/reports-analysis.spec.ts` 4 条用例（mock `/api/v1/**`）。
 
 - 步骤 12 客户端同步层（12d，`9abd8bb`）：新增 `src/lib/sync-{contract,client,queue,store,entities,engine}.ts` 与 62 条单测；outbox 合并、bootstrap/增量、LWW + 墓碑合并、形状守卫；设置页「数据同步」卡片（12e，`f09c3da`）含开关、恢复码、绑定已有账号、吊销本机，E2E 加 2 条 mock `/api/v1/**` 用例。
 - 步骤 11（8d，2026-11-04）：`schemaVersion` 2 迁移、训练真实历史（删演示常量）、饮食/饮水/计划按日台账、备份 0.3.0、报告按近 7/30/90 天窗口汇总。
