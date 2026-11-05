@@ -83,6 +83,11 @@ export interface MockDataContextValue {
   syncRecoveryCode: string | null
   /** 当前绑定的设备名。 */
   syncDeviceLabel: string
+  /**
+   * 当前绑定的设备令牌（Bearer），供服务端综合分析等接口使用；
+   * 未开启同步或未绑定时为 null，页面应据此隐藏需要授权的功能。
+   */
+  syncToken: string | null
   /** 打开同步：首次会注册账号并全量上传，之后只增量同步。 */
   enableSync: (label?: string) => Promise<void>
   /** 关闭同步：停网络、保留本机数据与凭据。 */

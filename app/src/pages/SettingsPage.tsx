@@ -10,6 +10,11 @@ import {
   serializeMockBackup,
 } from '../lib/mock-data-transfer'
 import { createCompleteMockData } from '../data/complete-mock-data'
+import {
+  DEFAULT_DAILY_BRIEF_AT,
+  normalizeDailyBriefSettings,
+  parseDailyBriefAt,
+} from '../lib/analysis-contract'
 import type { DataSource, Reminder, ReminderId } from '../types'
 
 type AiState = 'idle' | 'testing' | 'connected' | 'error'
@@ -108,9 +113,30 @@ export function SettingsPage() {
   const [restoreError, setRestoreError] = useState('')
   const [copiedCode, setCopiedCode] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState(false)
+  const [briefTimeError, setBriefTimeError] = useState(false)
 
   const enabledReminderCount = reminders.filter((reminder) => reminder.enabled).length
   const sourceCount = useMemo(() => Object.values(sources).filter(Boolean).length, [sources])
+  // 旧快照没有 dailyBrief：normalize 会补「关闭 + 21:00」，不需要提升 state schema 版本。
+  const dailyBrief = normalizeDailyBriefSettings(settings.dailyBrief)
+
+  const toggleDailyBrief = (enabled: boolean) => {
+    updateSettings({ dailyBrief: { ...dailyBrief, enabled } })
+    setSavedAt('有未保存修改')
+  }
+
+  const updateDailyBriefTime = (value: string) => {
+    const parsed = parseDailyBriefAt(value)
+    if (!parsed) {
+      // 空值或非法时间：按契约回落到默认 21:00，并给出可见提示，避免静默保存坏值。
+      setBriefTimeError(true)
+      updateSettings({ dailyBrief: { ...dailyBrief, at: DEFAULT_DAILY_BRIEF_AT } })
+      return
+    }
+    setBriefTimeError(false)
+    updateSettings({ dailyBrief: { ...dailyBrief, at: parsed } })
+    setSavedAt('有未保存修改')
+  }
 
   const updateReminder = (id: ReminderId, patch: Partial<Reminder>) => {
     updateSettings({
@@ -798,6 +824,60 @@ export function SettingsPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </section>
+
+          <section className="panel settings-card settings-brief-card" aria-labelledby="briefTitle">
+            <div className="settings-card-head">
+              <div>
+                <span className="settings-section-index">05</span>
+                <h2 id="briefTitle">每日简报</h2>
+                <p>服务器按固定时间汇总最近 7 天记录，生成一份简报并存进服务端归档。</p>
+              </div>
+              <span className="settings-card-tag">
+                {dailyBrief.enabled ? '已开启' : '默认关闭'}
+              </span>
+            </div>
+
+            <div className="settings-brief-body">
+              <label className="toggle-row">
+                <span className="toggle-copy">
+                  <strong>每天自动生成服务端简报</strong>
+                  <small>需要先开启跨设备同步；关闭后不再生成，也不会删除已经生成的报告</small>
+                </span>
+                <input
+                  className="toggle-input"
+                  type="checkbox"
+                  checked={dailyBrief.enabled}
+                  aria-label="每日简报"
+                  onChange={(event) => toggleDailyBrief(event.target.checked)}
+                />
+                <span className="toggle-ui" />
+              </label>
+
+              <label className="settings-time-field settings-brief-time">
+                <span>生成时间</span>
+                <input
+                  type="time"
+                  value={dailyBrief.at}
+                  aria-label="每日简报时间"
+                  onChange={(event) => updateDailyBriefTime(event.target.value)}
+                />
+                <small>{timeLabel(dailyBrief.at)}</small>
+              </label>
+
+              {briefTimeError && (
+                <p className="surface-error" role="alert">
+                  时间格式无效，已改回 {DEFAULT_DAILY_BRIEF_AT}。
+                </p>
+              )}
+
+              <p className="settings-inline-note">
+                <Icon name="clock" className="icon-sm" />
+                到点后服务器汇总最近 7
+                天的训练、饮食、学习与个人档案摘要，报告写入服务端归档；服务端报告保留 365
+                天后自动删除。
+              </p>
             </div>
           </section>
         </div>

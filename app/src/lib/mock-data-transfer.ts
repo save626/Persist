@@ -456,6 +456,9 @@ export function upgradeMockBackupData(
     }
   }
 
+  // 注意：settings.dailyBrief 是可选字段，读取方（设置页）用 normalizeDailyBriefSettings
+  // 兜底「关闭 + 21:00」，因此这里不做补写，也不改 PERSIST_STATE_SCHEMA_VERSION。
+
   return next
 }
 

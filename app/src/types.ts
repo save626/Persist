@@ -138,10 +138,22 @@ export interface Reminder {
 
 export type DataSource = 'fitness' | 'diet' | 'study' | 'profile'
 
+/** 每日简报（服务端定时聚合）：默认关闭，开启后由服务端每天按时生成并归档。 */
+export interface DailyBriefSettings {
+  enabled: boolean
+  /** 生成时刻 HH:mm；非法值回退 21:00。 */
+  at: string
+}
+
 export interface MockSettings {
   reminders: Reminder[]
   summaryOnly: boolean
   sources: Record<DataSource, boolean>
+  /**
+   * 每日简报设置。旧版本快照没有该字段，读取时用
+   * `normalizeDailyBriefSettings` 补默认值（关闭 + 21:00），不改 schema 版本。
+   */
+  dailyBrief?: DailyBriefSettings
 }
 
 export interface WaterLogEntry {
@@ -198,8 +210,8 @@ export interface ReportRecord {
   conclusions: string[]
   actions: string[]
   evidence: string[]
-  /** 这份报告的来源：经服务端调用 DeepSeek，或本地 Mock 规则生成；旧数据没有该字段。 */
-  origin?: 'ai' | 'mock'
+  /** 这份报告的来源：经服务端调用 DeepSeek、服务端规则降级，或本地 Mock 规则生成；旧数据没有该字段。 */
+  origin?: 'ai' | 'rules' | 'mock'
 }
 
 export type PlanCadence = 'weekly' | 'cycle'

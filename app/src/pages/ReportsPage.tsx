@@ -1,10 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
 import { calculateProfileCompleteness, countProfileFields } from '../data/profile'
+import {
+  ANALYSIS_CACHE_LABEL,
+  ANALYSIS_CONSENT_LABEL,
+  ANALYSIS_FALLBACK_NOTE,
+  ANALYSIS_INVALID_LABEL,
+  ANALYSIS_LOCAL_LABEL,
+  ANALYSIS_RULES_LABEL,
+  ANALYSIS_RULES_NOTE,
+  ANALYSIS_SERVER_LABEL,
+  ANALYSIS_SYNC_OFF_LABEL,
+  ANALYSIS_UNAVAILABLE_LABEL,
+  AnalysisRequestError,
+  createAnalysisClient,
+} from '../lib/analysis-client'
+import type {
+  AnalysisRangeDays,
+  AnalysisReportDetail,
+  AnalysisReportListItem,
+  AnalysisReportResponse,
+} from '../lib/analysis-contract'
 import { createDateWindow, todayDateKey } from '../lib/history'
 import {
   AI_REPORT_LABEL,
@@ -55,6 +75,23 @@ function applyReportSuggestions(items: PlanItem[], report: ReportRecord) {
       kind: 'water',
       done: false,
     })
+  }
+
+  if (report.type === '综合分析') {
+    // 服务端综合分析只提供文字建议：把「建议动作」转成今日计划条目，保留原文出处。
+    const slots = ['20:00', '20:30', '21:00', '21:30']
+    return report.actions.slice(0, slots.length).reduce(
+      (next, action, index) =>
+        upsertPlanItem(next, {
+          id: `analysis-action-${reportId}-${index}`,
+          name: action.length > 20 ? `${action.slice(0, 20)}…` : action,
+          time: slots[index],
+          detail: `${report.period}服务端综合分析建议`,
+          kind: 'default',
+          done: false,
+        }),
+      items,
+    )
   }
 
   if (reportId === 'report-week-current') {
@@ -234,9 +271,11 @@ function ReportDetailSheet({
         <span>
           {report.origin === 'ai'
             ? '本报告由 DeepSeek 生成 · 经本站服务端代理；请求只包含你在设置中授权的摘要，API Key 不会出现在浏览器。'
-            : report.origin === 'mock'
-              ? '本报告由本地 Mock 规则生成，未调用真实模型。'
-              : '这条报告来自本地示例数据，用于展示报告结构。'}
+            : report.origin === 'rules'
+              ? '本报告由服务端规则基于真实记录生成，模型暂时不可用，未调用外部模型。'
+              : report.origin === 'mock'
+                ? '本报告由本地 Mock 规则生成，未调用真实模型。'
+                : '这条报告来自本地示例数据，用于展示报告结构。'}
         </span>
       </div>
       <div className="surface-form-actions">
@@ -248,6 +287,360 @@ function ReportDetailSheet({
         </button>
       </div>
     </PageSheet>
+  )
+}
+
+/** 服务端综合分析页内状态：两种入口不可用 + 加载 + 两种成功来源 + 两种失败分支。 */
+type ServerAnalysisView =
+  | { kind: 'sync-off' }
+  | { kind: 'consent-off' }
+  | { kind: 'loading' }
+  | { kind: 'ai'; report: AnalysisReportResponse }
+  | { kind: 'rules'; report: AnalysisReportResponse }
+  | { kind: 'local'; error: AnalysisRequestError }
+  | { kind: 'error'; error: AnalysisRequestError }
+
+/** 服务端归档详情映射成本地报告结构，复用同一个详情抽屉；不写回 reports 历史。 */
+function mapAnalysisDetailToReport(detail: AnalysisReportDetail): ReportRecord {
+  return {
+    id: `analysis-${detail.id}`,
+    type: '综合分析',
+    title: detail.content.title,
+    date: formatReportDate(new Date(detail.createdAt)),
+    period: `近 ${detail.rangeDays} 天`,
+    summary: detail.content.summary,
+    status: detail.content.status,
+    metric: detail.metrics.map((metric) => ({ ...metric })),
+    conclusions: [...detail.content.conclusions],
+    actions: [...detail.content.actions],
+    evidence: [...detail.content.analysis],
+    origin: detail.origin === 'rules' ? 'rules' : 'ai',
+  }
+}
+
+function AnalysisReportContent({ report }: { report: AnalysisReportResponse }) {
+  return (
+    <>
+      <h3>{report.content.title}</h3>
+      <div className="reports-analysis-meta">
+        <span className="reports-status-pill">
+          <span className="dot" />
+          {report.content.status}
+        </span>
+        <span>
+          近 {report.range.days} 天 · {report.range.start} ~ {report.range.end}
+        </span>
+        {report.model && <span className="reports-analysis-model">{report.model}</span>}
+      </div>
+      <p className="reports-analysis-summary">{report.content.summary}</p>
+      <div className="reports-analysis-metrics">
+        {report.metrics.map((metric) => (
+          <div key={`${metric.label}-${metric.value}`}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <small>{metric.detail}</small>
+          </div>
+        ))}
+      </div>
+      <div className="reports-analysis-body">
+        {report.content.analysis.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
+      </div>
+      <div className="reports-analysis-lists">
+        <div>
+          <h4>观察结论</h4>
+          <ol>
+            {report.content.conclusions.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <h4>建议动作</h4>
+          <ul>
+            {report.content.actions.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      {report.content.warnings.length > 0 && (
+        <div className="reports-analysis-warnings" role="status">
+          <Icon name="lock" className="icon-sm" />
+          <div>
+            {report.content.warnings.map((item) => (
+              <p key={item}>{item}</p>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/** 服务端不可用时展示本机已有报告：明确标注「本地生成 · Mock 报告」，不冒充 AI。 */
+function LocalAnalysisFallback({ report }: { report: ReportRecord }) {
+  return (
+    <div className="reports-analysis-local-report">
+      <h3>{report.title}</h3>
+      <p>{report.summary}</p>
+      <div className="reports-analysis-metrics">
+        {report.metric.map((metric) => (
+          <div key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <small>{metric.detail}</small>
+          </div>
+        ))}
+      </div>
+      <div className="reports-analysis-lists">
+        <div>
+          <h4>观察结论</h4>
+          <ol>
+            {report.conclusions.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <h4>建议动作</h4>
+          <ul>
+            {report.actions.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AnalysisErrorState({
+  error,
+  rangeDays,
+}: {
+  error: AnalysisRequestError
+  rangeDays: AnalysisRangeDays
+}) {
+  if (error.kind === 'unauthorized') {
+    return (
+      <div className="reports-analysis-state">
+        <h3>本机令牌已失效，需要重新绑定</h3>
+        <p>{error.message}</p>
+        <p className="reports-analysis-note">
+          重新绑定不会删除本机数据，服务端仍以恢复码对应的账号为准。
+        </p>
+      </div>
+    )
+  }
+  if (error.kind === 'consent-off') {
+    return (
+      <div className="reports-analysis-state">
+        <h3>{ANALYSIS_CONSENT_LABEL}</h3>
+        <p>服务端检查到你关闭了 AI 授权或所有数据来源，因此没有发起分析。</p>
+      </div>
+    )
+  }
+  if (error.kind === 'insufficient') {
+    return (
+      <div className="reports-analysis-state">
+        <h3>窗口内记录不足，先记录几天再看</h3>
+        <p>{`当前窗口：近 ${rangeDays} 天。${error.message}`}</p>
+        <p className="reports-analysis-note">
+          服务端需要窗口内有足够多天的真实记录，才会生成综合分析。
+        </p>
+      </div>
+    )
+  }
+  if (error.kind === 'invalid') {
+    return (
+      <div className="reports-analysis-state">
+        <h3>分析请求没有被接受</h3>
+        <p>{error.message}</p>
+        <p className="reports-analysis-note">分析窗口只支持 7 / 30 / 90 天，可切换窗口后重试。</p>
+      </div>
+    )
+  }
+  if (error.kind === 'rate-limited') {
+    return (
+      <div className="reports-analysis-state">
+        <h3>请求太频繁，稍后再试</h3>
+        <p>{error.message}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="reports-analysis-state">
+      <h3>{ANALYSIS_INVALID_LABEL}</h3>
+      <p className="reports-analysis-note">
+        服务端返回的报告结构或长度不符合契约，记录本身没有受影响，可以重试。
+      </p>
+    </div>
+  )
+}
+
+function ServerAnalysisPanel({
+  view,
+  rangeLabel,
+  rangeDays,
+  localReport,
+  onReanalyze,
+  onRetry,
+  onGoProfile,
+  onGoSettings,
+}: {
+  view: ServerAnalysisView
+  rangeLabel: string
+  rangeDays: AnalysisRangeDays
+  localReport: ReportRecord
+  onReanalyze: () => void
+  onRetry: () => void
+  onGoProfile: () => void
+  onGoSettings: () => void
+}) {
+  const variant =
+    view.kind === 'ai'
+      ? 'ai'
+      : view.kind === 'rules'
+        ? 'rules'
+        : view.kind === 'local'
+          ? 'local'
+          : view.kind === 'loading'
+            ? 'loading'
+            : view.kind === 'sync-off'
+              ? 'sync-off'
+              : view.kind === 'consent-off'
+                ? 'consent'
+                : 'error'
+  const badge =
+    view.kind === 'ai'
+      ? ANALYSIS_SERVER_LABEL
+      : view.kind === 'rules'
+        ? ANALYSIS_RULES_LABEL
+        : view.kind === 'local'
+          ? ANALYSIS_LOCAL_LABEL
+          : view.kind === 'error'
+            ? view.error.kind === 'consent-off'
+              ? ANALYSIS_CONSENT_LABEL
+              : view.error.kind === 'invalid-response'
+                ? ANALYSIS_INVALID_LABEL
+                : ANALYSIS_UNAVAILABLE_LABEL
+            : null
+
+  return (
+    <section
+      className={`panel reports-analysis reports-analysis--${variant}`}
+      aria-labelledby="serverAnalysisTitle"
+      aria-live="polite"
+    >
+      <div className="reports-analysis-head">
+        <div>
+          <span className="reports-analysis-kicker">SERVER ANALYSIS · {rangeLabel}</span>
+          <h2 id="serverAnalysisTitle">服务端综合分析</h2>
+        </div>
+        {badge && <span className="reports-analysis-badge">{badge}</span>}
+      </div>
+
+      {view.kind === 'sync-off' && (
+        <div className="reports-analysis-state">
+          <h3>{ANALYSIS_SYNC_OFF_LABEL}</h3>
+          <p>
+            服务端综合分析在服务器上聚合记录并归档报告，需要先开启跨设备同步并绑定本机。下面的本地报告与历史不受影响。
+          </p>
+        </div>
+      )}
+
+      {view.kind === 'consent-off' && (
+        <div className="reports-analysis-state">
+          <h3>{ANALYSIS_CONSENT_LABEL}</h3>
+          <p>
+            服务端检查到你关闭了 AI
+            授权或所有数据来源，因此没有发起分析。开启后只会发送你授权的数据摘要。
+          </p>
+        </div>
+      )}
+
+      {view.kind === 'loading' && (
+        <div className="reports-analysis-state">
+          <h3>正在生成服务端综合分析…</h3>
+          <p>服务端正在聚合{rangeLabel}的记录并等待模型生成，通常需要几秒到十几秒。</p>
+        </div>
+      )}
+
+      {view.kind === 'ai' && (
+        <div className="reports-analysis-state">
+          {view.report.cached && (
+            <p className="reports-analysis-cache" role="status">
+              {ANALYSIS_CACHE_LABEL}
+            </p>
+          )}
+          <AnalysisReportContent report={view.report} />
+        </div>
+      )}
+
+      {view.kind === 'rules' && (
+        <div className="reports-analysis-state">
+          <p className="reports-analysis-note" role="status">
+            {ANALYSIS_RULES_NOTE}
+          </p>
+          <AnalysisReportContent report={view.report} />
+        </div>
+      )}
+
+      {view.kind === 'local' && (
+        <div className="reports-analysis-state">
+          <h3>{ANALYSIS_UNAVAILABLE_LABEL}</h3>
+          <p>{view.error.message}</p>
+          <p className="reports-analysis-note">{ANALYSIS_FALLBACK_NOTE}</p>
+          <LocalAnalysisFallback report={localReport} />
+        </div>
+      )}
+
+      {view.kind === 'error' && <AnalysisErrorState error={view.error} rangeDays={rangeDays} />}
+
+      <div className="reports-analysis-actions">
+        {view.kind === 'sync-off' && (
+          <button className="btn secondary" type="button" onClick={onGoSettings}>
+            去设置开启数据同步
+          </button>
+        )}
+        {view.kind === 'consent-off' && (
+          <button className="btn secondary" type="button" onClick={onGoProfile}>
+            去个人档案开启 AI 授权
+          </button>
+        )}
+        {view.kind === 'error' && view.error.kind === 'unauthorized' && (
+          <button className="btn secondary" type="button" onClick={onGoSettings}>
+            去设置里重新绑定本机
+          </button>
+        )}
+        {view.kind === 'error' && view.error.kind === 'consent-off' && (
+          <button className="btn secondary" type="button" onClick={onGoProfile}>
+            去个人档案开启 AI 授权
+          </button>
+        )}
+        {view.kind === 'loading' && (
+          <span className="reports-analysis-hint">正在等待服务端返回…</span>
+        )}
+        {(view.kind === 'ai' || view.kind === 'rules') && (
+          <button className="btn primary" type="button" onClick={onReanalyze}>
+            <Icon name="spark" className="icon-sm" />
+            重新分析
+          </button>
+        )}
+        {(view.kind === 'local' ||
+          (view.kind === 'error' &&
+            view.error.kind !== 'unauthorized' &&
+            view.error.kind !== 'consent-off' &&
+            view.error.kind !== 'insufficient')) && (
+          <button className="btn secondary" type="button" onClick={onRetry}>
+            <Icon name="undo" className="icon-sm" />
+            重试
+          </button>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -270,6 +663,8 @@ export function ReportsPage() {
     aiConsent,
     reports,
     setReports,
+    syncStatus,
+    syncToken,
   } = useMockData()
   const navigate = useNavigate()
   // 顶部「生成状态」原本只是本页的临时状态：跳到别的页面再回来会重置为「尚未生成」，
@@ -302,6 +697,48 @@ export function ReportsPage() {
   const generationDisplay: GenerationState =
     generation === 'idle' && todayBriefReport ? 'success' : generation
   const displayReport = generatedReport ?? todayBriefReport
+
+  // ——— 服务端综合分析（设计 §8）———
+  // 服务端分析结果只存在本页 state 与服务端归档里，绝不合并进 reports / 本地历史，
+  // 也不改写本地报告内容：两者数据来源、留存策略都不同。
+  const analysisClient = useMemo(() => createAnalysisClient(), [])
+  const analysisRangeDays = Number(range) as AnalysisRangeDays
+  const analysisSyncReady = syncStatus.enabled && Boolean(syncToken)
+  const analysisAnySourceEnabled =
+    settings.sources.fitness ||
+    settings.sources.diet ||
+    settings.sources.study ||
+    settings.sources.profile
+  const analysisGate: 'sync-off' | 'consent-off' | 'ready' = !analysisSyncReady
+    ? 'sync-off'
+    : !aiConsent || !analysisAnySourceEnabled
+      ? 'consent-off'
+      : 'ready'
+  const [analysisNonce, setAnalysisNonce] = useState(0)
+  const analysisForceRef = useRef(false)
+  // 「加载中」由「请求键是否已产出结果」派生：effect 里不再同步 setState，避免级联渲染。
+  const analysisRequestKey = `${analysisRangeDays}:${analysisNonce}:${syncToken ?? ''}`
+  const [analysisResult, setAnalysisResult] = useState<{
+    key: string
+    view: ServerAnalysisView
+  } | null>(null)
+  const [analysisArchive, setAnalysisArchive] = useState<AnalysisReportListItem[]>([])
+  const [archiveState, setArchiveState] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    'loading',
+  )
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [archiveRefreshKey, setArchiveRefreshKey] = useState(0)
+  const [analysisDetail, setAnalysisDetail] = useState<ReportRecord | null>(null)
+  const [analysisDetailId, setAnalysisDetailId] = useState<string | null>(null)
+  // 门禁关闭时不展示上次的旧结果；门禁恢复后由下面的 effect 重新请求。
+  const displayAnalysisView: ServerAnalysisView =
+    analysisGate === 'sync-off'
+      ? { kind: 'sync-off' }
+      : analysisGate === 'consent-off'
+        ? { kind: 'consent-off' }
+        : analysisResult && analysisResult.key === analysisRequestKey
+          ? analysisResult.view
+          : { kind: 'loading' }
 
   const sourceEnabled = (source: DataSource) => aiConsent && settings.sources[source]
 
@@ -646,6 +1083,90 @@ export function ReportsPage() {
     }
   }
 
+  // 请求服务端综合分析。force=true 跳过服务端缓存（「重新分析」）；
+  // 网络 / 超时 / 503 属于「服务不可用」，回退到本机报告内容；其余才是真正的错误态。
+  const runAnalysis = useCallback(
+    async (force: boolean, signal?: AbortSignal) => {
+      if (analysisGate !== 'ready' || !syncToken) return
+      const key = `${analysisRangeDays}:${analysisNonce}:${syncToken}`
+      try {
+        const report = await analysisClient.requestAnalysisReport(syncToken, {
+          rangeDays: analysisRangeDays,
+          force,
+          signal,
+        })
+        setAnalysisResult({
+          key,
+          view: { kind: report.origin === 'rules' ? 'rules' : 'ai', report },
+        })
+        // 命中缓存时归档里已有这份报告，不必再请求一次列表。
+        if (!report.cached) setArchiveRefreshKey((count) => count + 1)
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return
+        if (!(error instanceof AnalysisRequestError)) throw error
+        const view: ServerAnalysisView =
+          error.kind === 'network' || error.kind === 'timeout' || error.kind === 'server'
+            ? { kind: 'local', error }
+            : { kind: 'error', error }
+        setAnalysisResult({ key, view })
+      }
+    },
+    [analysisClient, analysisGate, analysisNonce, analysisRangeDays, syncToken],
+  )
+
+  const requestAnalysis = (force: boolean) => {
+    analysisForceRef.current = force
+    setAnalysisNonce((nonce) => nonce + 1)
+  }
+
+  // 窗口切换 / 同步恢复 / 手动重新分析时请求一次。
+  // 自动请求 force=false，让服务端按 dataRev 命中缓存；手动「重新分析」才跳过缓存。
+  useEffect(() => {
+    if (analysisGate !== 'ready' || !syncToken) return
+    const controller = new AbortController()
+    const force = analysisForceRef.current
+    analysisForceRef.current = false
+    void runAnalysis(force, controller.signal)
+    return () => controller.abort()
+  }, [analysisGate, runAnalysis, syncToken])
+
+  // 服务端归档：与正文分开请求，列表失败只影响这一块，不遮挡报告正文。
+  useEffect(() => {
+    if (analysisGate !== 'ready' || !syncToken) return
+    let active = true
+    void analysisClient
+      .fetchReportArchive(syncToken, { limit: 10 })
+      .then((result) => {
+        if (!active) return
+        setAnalysisArchive(result.reports)
+        setArchiveState('ready')
+        setArchiveError(null)
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+        setArchiveState('error')
+        setArchiveError(
+          error instanceof AnalysisRequestError ? error.message : '服务端归档读取失败，稍后再试。',
+        )
+      })
+    return () => {
+      active = false
+    }
+  }, [analysisClient, analysisGate, archiveRefreshKey, syncToken])
+
+  const openAnalysisArchive = async (item: AnalysisReportListItem) => {
+    if (!syncToken) return
+    setAnalysisDetailId(item.id)
+    try {
+      const detail = await analysisClient.fetchReportDetail(syncToken, item.id)
+      setAnalysisDetail(mapAnalysisDetailToReport(detail))
+    } catch (error) {
+      showToast(error instanceof AnalysisRequestError ? error.message : '报告读取失败，稍后再试。')
+    } finally {
+      setAnalysisDetailId(null)
+    }
+  }
+
   const requestApply = (report: ReportRecord) => {
     setSelectedReport(null)
     setPendingReport(report)
@@ -925,6 +1446,79 @@ export function ReportsPage() {
             </div>
           </section>
 
+          <ServerAnalysisPanel
+            view={displayAnalysisView}
+            rangeLabel={rangeLabel}
+            rangeDays={analysisRangeDays}
+            localReport={latestReport}
+            onReanalyze={() => requestAnalysis(true)}
+            onRetry={() => requestAnalysis(false)}
+            onGoProfile={() => navigate('/profile')}
+            onGoSettings={() => navigate('/settings')}
+          />
+
+          {analysisGate === 'ready' && (
+            <section
+              className="panel reports-analysis-archive"
+              aria-labelledby="analysisArchiveTitle"
+            >
+              <div className="panel-head">
+                <div>
+                  <h2 className="panel-title" id="analysisArchiveTitle">
+                    服务端归档
+                  </h2>
+                  <p className="panel-sub">服务端保存的综合分析报告，保留 365 天后自动删除。</p>
+                </div>
+                {archiveState === 'ready' && (
+                  <span className="reports-history-count">{analysisArchive.length} 份</span>
+                )}
+              </div>
+              {archiveState === 'loading' && (
+                <p className="reports-analysis-archive-state">正在读取归档…</p>
+              )}
+              {archiveState === 'error' && (
+                <p className="reports-analysis-archive-state" role="status">
+                  {archiveError}
+                </p>
+              )}
+              {archiveState === 'ready' && analysisArchive.length === 0 && (
+                <p className="reports-analysis-archive-state">
+                  服务端还没有归档报告，生成一次后就会出现在这里。
+                </p>
+              )}
+              {analysisArchive.length > 0 && (
+                <div className="reports-analysis-archive-list">
+                  {analysisArchive.map((item) => (
+                    <button
+                      type="button"
+                      className="reports-analysis-archive-row"
+                      key={item.id}
+                      onClick={() => {
+                        void openAnalysisArchive(item)
+                      }}
+                      disabled={analysisDetailId === item.id}
+                    >
+                      <span className="reports-analysis-archive-date">
+                        <strong>{formatReportDate(new Date(item.createdAt))}</strong>
+                        <small>{item.type}</small>
+                      </span>
+                      <span className="reports-analysis-archive-copy">
+                        <strong>{item.title}</strong>
+                        <small>
+                          近 {item.rangeDays} 天 · {item.status}
+                        </small>
+                      </span>
+                      <span className="reports-analysis-archive-origin">
+                        {item.origin === 'ai' ? ANALYSIS_SERVER_LABEL : ANALYSIS_RULES_LABEL}
+                      </span>
+                      <Icon name="chev" className="icon-sm" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           <section className="panel reports-history" aria-labelledby="reportHistoryTitle">
             <div className="panel-head">
               <div>
@@ -1070,6 +1664,14 @@ export function ReportsPage() {
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
           onApply={() => requestApply(selectedReport)}
+        />
+      )}
+
+      {analysisDetail && (
+        <ReportDetailSheet
+          report={analysisDetail}
+          onClose={() => setAnalysisDetail(null)}
+          onApply={() => requestApply(analysisDetail)}
         />
       )}
 

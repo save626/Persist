@@ -1264,3 +1264,38 @@
     height: 30px;
   }
 }
+
+/* Daily brief: 每日简报（服务端定时汇总 + 归档）。 */
+.settings-brief-body {
+  display: grid;
+  gap: 14px;
+  padding: 4px 22px 20px;
+}
+
+.settings-brief-body .toggle-row {
+  min-height: 58px;
+  padding: 2px 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-brief-time {
+  max-width: 190px;
+}
+
+.settings-brief-body .surface-error {
+  margin: 0;
+}
+
+.settings-brief-body .settings-inline-note {
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .settings-brief-body {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+}

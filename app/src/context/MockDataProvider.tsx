@@ -200,10 +200,16 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
 
   /** 同步状态：引擎每次状态变化都映射到这里，页面只读不写。 */
   const [syncStatus, setSyncStatus] = useState<SyncStatusSnapshot>(INITIAL_SYNC_STATUS)
-  /** 恢复码与设备名只在绑定/恢复/吊销后变化，避免每次状态推送都放进 context。 */
-  const [syncInfo, setSyncInfo] = useState<{ recoveryCode: string | null; deviceLabel: string }>({
+  /** 恢复码、设备名与令牌只在绑定/恢复/吊销后变化，避免每次状态推送都放进 context。 */
+  const [syncInfo, setSyncInfo] = useState<{
+    recoveryCode: string | null
+    deviceLabel: string
+    /** 服务端综合分析等需要 Bearer 令牌的请求从这里取；未绑定为 null。 */
+    token: string | null
+  }>({
     recoveryCode: null,
     deviceLabel: '',
+    token: null,
   })
 
   /** 「今天」的切片：页面读到的 `planItems` / `waterLog` / `meals` 语义不变，只表示今天。 */
@@ -388,9 +394,13 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     return engine
   }, [])
 
-  /** 恢复码/设备名不随每次状态推送变化，只在绑定类操作后刷新。 */
+  /** 恢复码/设备名/令牌不随每次状态推送变化，只在绑定类操作后刷新。 */
   const refreshSyncInfo = useCallback((engine: SyncEngine) => {
-    setSyncInfo({ recoveryCode: engine.recoveryCode, deviceLabel: engine.deviceLabel })
+    setSyncInfo({
+      recoveryCode: engine.recoveryCode,
+      deviceLabel: engine.deviceLabel,
+      token: engine.getMeta().token,
+    })
   }, [])
 
   const enableSync = useCallback(
@@ -547,7 +557,11 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     void engine.init().then((status) => {
       if (cancelled) return
       setSyncStatus(status)
-      setSyncInfo({ recoveryCode: engine.recoveryCode, deviceLabel: engine.deviceLabel })
+      setSyncInfo({
+        recoveryCode: engine.recoveryCode,
+        deviceLabel: engine.deviceLabel,
+        token: engine.getMeta().token,
+      })
       engine.start()
     })
     return () => {
@@ -659,6 +673,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       syncStatus,
       syncRecoveryCode: syncInfo.recoveryCode,
       syncDeviceLabel: syncInfo.deviceLabel,
+      syncToken: syncInfo.token,
       enableSync,
       disableSync,
       restoreSync,

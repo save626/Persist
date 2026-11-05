@@ -34,4 +34,9 @@ export const INITIAL_SETTINGS: MockSettings = {
     study: true,
     profile: true,
   },
+  /** 每日简报默认关闭；开启后由服务端每天在 21:00 聚合最近 7 天并归档。 */
+  dailyBrief: {
+    enabled: false,
+    at: '21:00',
+  },
 }
