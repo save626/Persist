@@ -1551,7 +1551,7 @@ Get-Content -Encoding utf8
 
 - 当前分支：`main`（由 `master` 改名而来，已建跟踪关系）。
 - 远端：`origin` = `git@github.com:save626/Persist.git`（SSH，密钥已注册在 `save626` 账号下；HTTPS 侧也配置了 Git Credential Manager）。
-- **步骤 12 相关提交已于 2026-11-05 推送**（用户确认视觉验收后）——远端 `refs/heads/main` 已从 `5ee8d85` 前进到步骤 12 的 HEAD，本地 `main` 与远端一致（`git ls-remote origin refs/heads/main` 核对）。下面是从 `bd779eb` 到 `5ee8d85` 的已推送历史：
+- **步骤 12 相关提交已于 2026-11-05 推送**（用户确认视觉验收后）——远端 `refs/heads/main` 已从 `91abaeb`（步骤 12 前最后一次推送）前进到 `202e9d0`（步骤 12 全部提交 + 推送后文档修正），本地 `main` 与远端一致（`git ls-remote origin refs/heads/main` 核对）。下面是从 `bd779eb` 到 `5ee8d85` 的已推送历史：
   - `bd779eb`（`chore: initial commit`，262 文件 / 37.39 MB）
   - `da787c4`（步骤 5 的文档同步）
   - `128d6a2`（步骤 6 本机 IndexedDB 持久化 + 文档同步，41 个文件：4 新增 / 14 修改 / 23 张截图）
@@ -1584,7 +1584,7 @@ Get-Content -Encoding utf8
   - `e7fbf45`（docs：12f 提交后的推送 / 工作区状态同步）
   - `4d3edcf`（`chore(design)`：13 张视觉基线重跑入库，用户双端验收通过）
   - 推送后的状态同步（`docs`，HEAD 见 `git log -1`）
-- **推送状态（2026-11-05）**：用户确认视觉验收后执行推送，`origin/main` 已从 `5ee8d85` 前进到步骤 12 的 HEAD，**本地 `main` 与远端一致**（`git ls-remote origin refs/heads/main` 与本地 hash 核对）；工作区干净，无未推送提交。`git push` / `git ls-remote` 在受限沙箱下会失败（`spawn EPERM`），需要一次性提升权限（2026-11-05 即以 `danger-full-access` 完成推送）。
+- **推送状态（2026-11-05）**：用户确认视觉验收后执行推送，`origin/main` 已从 `91abaeb` 前进到步骤 12 的 HEAD（`202e9d0`；其后的哈希与计数修正提交同样已推送），**本地 `main` 与远端一致**（`git ls-remote origin refs/heads/main` 与本地 hash 核对）；工作区干净，无未推送提交。`git push` / `git ls-remote` 在受限沙箱下会失败（`spawn EPERM`），需要一次性提升权限（2026-11-05 即以 `danger-full-access` 完成推送）。
 - **工作区（推送后，2026-11-05）**：干净——12f 的 pull 形状守卫（`app/src/lib/mock-data-transfer.ts` +36 / `sync-entities.ts` +68 / `sync-entities.test.ts` +42）与文档随 `e9c29a0` 提交，13 张 `design/*.png` 已随 `4d3edcf` 入库（用户桌面端 + 移动端验收通过）；`server/` 的 `dist/`、`data/`、`.env` 由 `.gitignore` 排除。
 - **工作区已干净**：65 张 `design/*.png`（18 张真实改动、6 张日期文字、41 张时钟漂移）已随 `5ee8d85` 入库，`git status` 无未提交改动（`server/` 的 `dist/` 与 `.env` 由 `.gitignore` 排除）。
 - 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`shared/dist/`、`server/dist/`、`server/data/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
@@ -1785,14 +1785,14 @@ npm run visual:check
 | 11-04 | **步骤 11c 报告窗口** | `12de14b` | 新增 `lib/history.ts`（`DateWindow`）与 `lib/report-window.ts`（窗口事实包）；报告页/摘要按近 7 / 30 / 90 天窗口汇总真实历史（饮食 `dietDays`、饮水真实累加、计划按日、训练归档 + 进行中会话）；今日页晨间简报保持「今天」口径不变；`/api/report` 请求体形状未变 | app **230/230**（16 文件）、E2E **102/0**（52.9 s；报告相关 22 条单跑 23.8 s）、`tsc -b` 0 错、oxlint 0 错 0 警告、JS **574.40 kB / gzip 171.26 kB**（+6.81 kB）、CSS 未变；`visual:check` 90 张生成、failures 12（全部 502 噪声）、25 张 png 待验收 |
 | 11-05 | **报告页返回态修复** | `8edb8ba` | 报告页顶部「AI REPORT ENGINE」成功态原本只存在页面级 `useState`，跳转其他页面再回来或整页刷新会重置为「尚未生成」，用户误以为报告丢失；改为按「`reports[0]` 是今天生成的今日简报」派生 `generationDisplay` / `displayReport`（报告实体仍随 `reports` 走 IndexedDB，未丢失） | app **230/230**（16 文件，未动数据层）、E2E **104/0**（50.4 s；新增跨页 + 刷新用例）、`tsc -b` 0 错、oxlint 0 错 0 警告、JS **574.64 kB / gzip 171.38 kB**（+0.24 kB）、CSS 未变；`visual:check` 90 张、failures 12（502 噪声） |
 | 11-05 | **学习来源随科目切换清空** | `971e1b6` | 用户反馈：新增/编辑学习记录时英语→高数，「学习来源」仍停在「百词斩」这类英语来源（候选列表和占位符已按科目换、输入框的值没换）。改为 `chooseCategory()` 在科目变化时一并把 `source` 置空，同科重复点击不清空，时长 / 日期 / 开始时间不动 | app **230/230**（16 文件，未动数据层）、E2E **106/0**（44.7 s；新增科目切换用例）、`tsc -b` 0 错、oxlint 0 错 0 警告、JS **574.67 kB / gzip 171.41 kB**（+0.04 kB）、CSS 未变 |
-| 11-05 | **视觉基线双端验收 + 推送** | `5ee8d85` | 65 张 `design/*.png`（18 张真实改动 / 6 张首页日期文字 / 41 张时钟漂移）经用户桌面端 + 移动端验收确认无视觉回归后入库；随后 7 个本地提交（`bc4ee88`…`5ee8d85`）推送 `origin/main`，远端与本地哈希一致 | 仅图片与文档；未改代码，app 单测 230 / E2E 106 不受影响 |
+| 11-05 | **视觉基线双端验收 + 推送** | `5ee8d85` | 65 张 `design/*.png`（18 张真实改动 / 6 张首页日期文字 / 41 张时钟漂移）经用户桌面端 + 移动端验收确认无视觉回归后入库；随后 8 个本地提交（`bc4ee88`…`91abaeb`）推送 `origin/main`，远端与本地哈希一致 | 仅图片与文档；未改代码，app 单测 230 / E2E 106 不受影响 |
 | 11-05 | **步骤 12a 数据层** | `ca02250` | 服务端 SQLite 数据层：`node:sqlite` 驱动封装（要求 Node ≥ 22.5）、migration（users / devices / 8 张实体表 + `sync_ops` / `sync_seq`）、表清单与 repository；驱动差异隔离在 `db/driver.ts` | server 112 中的 28 条（db-driver 5 / db-migrate 7 / db-repositories 16）；`tsc` 0 错 |
 | 11-05 | **步骤 12b 账号与同步接口** | `6fe6b3d`（文档 `d555cb0`） | `/api/v1/devices`（注册）/ `/devices/restore` / `/devices/revoke`、`/api/v1/sync/{bootstrap,push,pull}`、设备令牌鉴权（`auth.ts` + `routes/guards.ts`）、`opId` 幂等与 `rev` 游标、删除写墓碑（`deleted_at` + 新 `rev`） | server 112 中的 26 条（devices 10 / sync 16），累计 **112/112（13 文件）** |
 | 11-05 | **步骤 12c 同步契约搬 `shared/`** | `c6a65fd` | 新建 `@persist/shared`：`contract/{sync,entities,parse}.ts`；`app` / `server` 以 `file:../shared` 同源引用；新增 `npm run shared:build`（`shared/dist` 已 gitignore） | `shared` 独立 `tsc` 0 错；app / server 类型对齐、无重复定义 |
 | 11-05 | **步骤 12d 客户端同步层** | `9abd8bb` | 新增 `sync-contract` / `sync-client` / `sync-store` / `sync-queue` / `sync-entities` / `sync-engine`；`persist-sync` IndexedDB（元数据 + outbox）；5 s 防抖增量、60 s 兜底轮询、`online` / `visibility` 触发；设置页开关接线 | 配套单测最终 62 条（store 13 / queue 7 / client 12 / engine 14 / entities 16，12e/12f 补齐） |
 | 11-05 | **步骤 12e 设置页「数据同步」** | `f09c3da` | 设置页新增「数据同步」卡片：`aria-label="跨设备同步"` 开关（默认关，关闭时不发任何请求）、恢复码 4×8 大写、本机设备 / 最近同步 / 立即同步 / 吊销本机（二次确认）、「用恢复码绑定已有账号」与格式校验 | E2E 106→110（新增 2 条 × 2 项目）；`visual:check` 13 张 png 差异待验收 |
 | 11-05 | **步骤 12f 收尾 + 文档同步** | `e9c29a0`（已推送） | pull 形状守卫 `matchesRecordShape`（形状不完整 / body id 与信封 id 不一致的实体计 `skipped`，不写坏本地存档）、本机同步验收 P4 §7.4 19/19、视觉重跑、8 篇文档同步 | app **292/292**（21 文件）、server **112/112**（13 文件）、E2E **110**、构建 JS 606.08 kB / CSS 140.20 kB；**未部署** |
-| 11-05 | **视觉基线验收 + 推送** | `4d3edcf`（已推送） | 13 张 `design/*.png`（6 张设置页因新增同步卡片高度变化 / 6 张首页与 1 张快速记录仅秒级倒计时文字）经用户桌面端 + 移动端确认后入库；随后本地 10 个提交（`ca02250`…`4d3edcf`）推送 `origin/main`，远端与本地一致 | 仅图片与文档；12f 门禁数字沿用（292 / 112 / 110 / build 绿色） |
+| 11-05 | **视觉基线验收 + 推送** | `4d3edcf`（已推送） | 13 张 `design/*.png`（6 张设置页因新增同步卡片高度变化 / 6 张首页与 1 张快速记录仅秒级倒计时文字）经用户桌面端 + 移动端确认后入库；随后本地 10 个提交（`ca02250`…`202e9d0`）推送 `origin/main`，远端与本地一致（此后仅文档修正） | 仅图片与文档；12f 门禁数字沿用（292 / 112 / 110 / build 绿色） |
 
 ### 18.2 关键披露
 
@@ -1808,7 +1808,7 @@ npm run visual:check
 10. ~~3 条 `set-state-in-effect` lint 警告长期存在~~ ✅ 已于 2026-11-04 清零（`f5a57f5`）。
 11. ~~契约类型暂放 `server/src/contract.ts` 而非 `shared/`~~ → 步骤 12c 已建 `@persist/shared` 承载**同步**契约；**chat / report 契约仍在 `server/src/contract.ts`**（镜像 `app/src/lib/chat-types.ts`、`report-types.ts`），迁移另排期。
 12. 视觉基线易抖动：首页 1 s 实时时钟造成 ≤0.07% 像素差（最大色差 4/255），连跑两次可复现 ⇒ 归档还原、不提交；而 Prettier `{' '}` 造成的 47/255 差异是**真实回归**，须逐像素判定。
-13. **步骤 12 已推送、未部署**：10 个提交与 13 张视觉基线（`4d3edcf`）均已推送，服务端未部署（Node 20.20.2 缺 `node:sqlite`）。同步副本**不是备份**（无历史版本 / 无恢复），墓碑 30 天保留与定期清理是设计口径、**尚未实现**；pull 形状守卫会丢弃旧版本写下的不合规实体（计 `skipped`，不修复迁移）。
+13. **步骤 12 已推送、未部署**：提交（至 `202e9d0`）与 13 张视觉基线（`4d3edcf`）均已推送，服务端未部署（Node 20.20.2 缺 `node:sqlite`）。同步副本**不是备份**（无历史版本 / 无恢复），墓碑 30 天保留与定期清理是设计口径、**尚未实现**；pull 形状守卫会丢弃旧版本写下的不合规实体（计 `skipped`，不修复迁移）。
 
 ### 18.3 不可丢失的历史教训
 
