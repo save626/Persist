@@ -3,16 +3,16 @@
 个人自用、长期记录、本地优先的计划与复盘工具：以「今日」为中心，统一记录健身、饮食饮水与学习，并在之后用跨模块数据生成 AI 分析与建议。
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
-- 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成，未部署）
-- 规模：八页面可完整点击验收，app 单测 292（21 文件）、server 单测 112（13 文件）、E2E 110 次执行、oxlint 0 错 0 警告；视觉基线 91 张（步骤 12 重跑后的 13 张差异已随 `4d3edcf` 入库）
+- 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成，未部署）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
+- 规模：八页面可完整点击验收，app 单测 334（24 文件）、server 单测 174（18 文件）、E2E 120 次执行、oxlint 0 错 0 警告；视觉基线 91 张（步骤 13 重跑的 png 差异尚未提交，等用户验收）
 
-## 当前阶段（2026-11-05，步骤 12 账号 + 增量同步已推送、未部署）
+## 当前阶段（2026-11-05，步骤 12 已推送未部署 · 步骤 13 本机完成未部署）
 
 前端产品原型**已完成并通过双端视觉验收，视觉范围冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI，`9f9cc71`）：AI 引导建档 → 长期计划草案确认 → 启用/归档闭环已通；AI 建档对话（`POST /api/chat`）、AI 报告文字与今日页晨间简报文字（`POST /api/report`）在「档案页开启 AI 数据授权 + 服务端健康」时走真实 DeepSeek，失败或未授权时回退本地规则/Mock 并如实标注；**报告的指标数字、依据条目与简报 KPI 始终由前端按本地记录确定性生成，模型只写文字**。业务数据全部写入本机 IndexedDB（刷新/重开不丢，有「清空本机数据」入口，导出导入为 0.3.0 备份格式并兼容旧版）：步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（`schemaVersion` 2），报告页可按近 7 / 30 / 90 天窗口汇总真实历史。
 
-服务端 P3 已完成（8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`），并**于 2026-11-04 以 IP 直连方式部署到阿里云 ECS（Nginx + systemd + 真实 DeepSeek Key）并通过联调验收——仅内部调试，不得对外宣称「已上线」**。P4 已开工：步骤 11（数据历史化）2026-11-04 完成，步骤 12（P4a 账号 + 增量同步，12a–12f）2026-11-05 **本机完成并验收、已推送到 `origin/main`，但未部署**（服务端需 Node ≥ 22.5 的 `node:sqlite`，线上仍是 Node 20.20.2 的步骤 9 版本）。域名已购、阿里云备案初审已通过、**备案号未下发**（因此不得宣称已上线，也不能用域名对外提供服务）。
+服务端 P3 已完成（8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`），并**于 2026-11-04 以 IP 直连方式部署到阿里云 ECS（Nginx + systemd + 真实 DeepSeek Key）并通过联调验收——仅内部调试，不得对外宣称「已上线」**。P4 已开工：步骤 11（数据历史化）2026-11-04 完成，步骤 12（P4a 账号 + 增量同步，12a–12f）2026-11-05 **本机完成并验收、已推送到 `origin/main`，但未部署**（服务端需 Node ≥ 22.5 的 `node:sqlite`，线上仍是 Node 20.20.2 的步骤 9 版本）。**步骤 13（P4b 服务端 SQL 聚合 + AI 综合分析）2026-11-05 在本机完成并验证，代码仍在工作区未提交、未部署**：事实包 v2 → 单次模型调用 → 模型只写文字（数字全来自 SQL 且有白名单校验）；四个 `/api/v1` 接口（分析生成 / 事实包 / 归档列表 / 归档详情）、每日简报 job（默认关闭、进程内调度）、报告归档 365 天保留；前端 `/reports` 新增「服务端综合分析」块、设置页新增「每日简报」卡片。**本机没有真实 DeepSeek Key**，真实模型分支用注入的假客户端验证，真实 Key 效果待用户验收。域名已购、阿里云备案初审已通过、**备案号未下发**（因此不得宣称已上线，也不能用域名对外提供服务）。
 
-下一步：**拿到备案号后的步骤 10（域名 + HTTPS + 8d/步骤 12 前端产物部署 + 服务器升 Node 22）**；等待期可推进 **步骤 13**（AI 综合分析：事实包 → 单次调用 → 只写文字）。步骤 12 的代码已就绪：服务端 SQLite 数据层 + `/api/v1/devices*`、`/api/v1/sync/*`（12a/12b）、`@persist/shared` 同步契约（12c）、客户端同步层（12d）、设置页「数据同步」卡片（12e）、pull 形状守卫收尾（12f）。详细计划见 [`HANDOFF.md`](HANDOFF.md) §0.4 与 §13。
+下一步：**拿到备案号后的步骤 10（域名 + HTTPS + 8d/步骤 12/步骤 13 前端产物部署 + 服务器升 Node 22）**；本地可继续推进 **步骤 14**（备份 / 恢复 / 导出 / 删除账号）。步骤 12 的代码已就绪：服务端 SQLite 数据层 + `/api/v1/devices*`、`/api/v1/sync/*`（12a/12b）、`@persist/shared` 同步契约（12c）、客户端同步层（12d）、设置页「数据同步」卡片（12e）、pull 形状守卫收尾（12f）。详细计划见 [`HANDOFF.md`](HANDOFF.md) §0.4 与 §13。
 
 ## 文档地图
 
@@ -32,8 +32,8 @@
 
 ```text
 app/      React + Vite Web 客户端（主产物 app/dist）
-server/   Fastify 服务端：P3 的 /api/health、SSE /api/chat、POST /api/report；步骤 12 的 /api/v1/devices*、/api/v1/sync/* + SQLite（未部署）
-shared/   跨端共享纯 TS 契约（`@persist/shared`）：同步实体与接口契约（步骤 12c 起前后端同源，`shared/dist` 已 gitignore）
+server/   Fastify 服务端：P3 的 /api/health、SSE /api/chat、POST /api/report；步骤 12 的 /api/v1/devices*、/api/v1/sync/* + SQLite；步骤 13 的 /api/v1/analysis/*、/api/v1/reports* + 每日简报 job + 报告归档（12/13 均未部署）
+shared/   跨端共享纯 TS 契约（`@persist/shared`）：同步实体与接口契约（步骤 12c）、综合分析契约（步骤 13），前后端同源，`shared/dist` 已 gitignore
 design/   视觉基线与截图（15 状态 × 6 视口 = 91 张，由 visual:check 生成）
 docs/     工程约定、部署现状、P4 设计方案
 ```
@@ -53,8 +53,8 @@ npm run dev -- --port 4173      # http://127.0.0.1:4173/ ，/api 代理到 127.0
 ```powershell
 npm run lint
 npm run typecheck
-npm test               # 292 条 / 21 个文件
-npx playwright test    # 55 用例 × 2 项目 = 110 次执行，0 跳过
+npm test               # 334 条 / 24 个文件
+npx playwright test    # 60 用例 × 2 项目 = 120 次执行，9 个文件
 npm run build
 npm run visual:check   # 91 张截图 → design/；需先起无 Key 后端，改布局/弹层时跑
 ```
@@ -66,12 +66,14 @@ npm run visual:check   # 91 张截图 → design/；需先起无 Key 后端，�
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
-npm run typecheck && npm test && npm run build   # 112 条 / 13 个文件
+npm run typecheck && npm test && npm run build   # 174 条 / 18 个文件
 Copy-Item .env.example .env    # 本机联调才填 DEEPSEEK_API_KEY；.env 不入库、用完即删
 node dist/index.js             # 默认 127.0.0.1:3000；无 Key 时 /api/chat、/api/report 返回 503
 ```
 
 > Key 只允许存在于服务端环境变量（生产放 `/etc/persist/server.env`，600）。真实 Key 曾出现在开发对话中，**上线前必须轮换**。
+>
+> 步骤 13 新增 5 个分析与简报相关变量：`ANALYSIS_RATE_LIMIT_MAX`（默认 6 次 / 5 分钟，独立于 chat/report 的限流器）、`ANALYSIS_TIMEOUT_MS`（45000）、`ANALYSIS_MAX_TOKENS`（2600）、`DAILY_BRIEF_ENABLED`（false）、`DAILY_BRIEF_AT`（21:00）；默认值与注释见 [`server/.env.example`](server/.env.example)，行为说明见 [`server/README.md`](server/README.md)。
 
 ## 视觉与交互基线
 
@@ -82,3 +84,5 @@ node dist/index.js             # 默认 127.0.0.1:3000；无 Key 时 /api/chat�
 业务数据保存在**当前浏览器**的 IndexedDB（数据库 `persist-app`，单条记录 `persist-mock-state`）：刷新、关标签页、重开浏览器都不丢；清站点数据、换浏览器、换设备、无痕模式会丢失。设置页导出/导入为 0.3.0 备份格式（兼容旧版），导入会整体替换本机数据且不可撤销。
 
 跨设备同步的代码已在步骤 12 完成（服务端 SQLite 副本 + 设备令牌 + 增量同步 + 设置页开关，**默认关闭**），但**尚未部署**——线上服务端仍然不存储任何用户业务数据；步骤 12 部署后，开启同步才会把本机数据副本上传到自己的服务器，且同步副本不是备份。
+
+步骤 13 的服务端综合分析报告同样**只存在服务端归档**（`analysis_reports`，保留 365 天，每次生成时清理过期项），不进本机 IndexedDB、不进 0.3.0 导出包；归档里只存模型文字与指标快照，墓碑 30 天 / 审计日志 30 天的清理尚未实现。

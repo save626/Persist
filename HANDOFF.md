@@ -1,8 +1,8 @@
 # Persist 项目交接文档
 
-> 更新：2026-11-05 · 分支 `main` · 基线 `e260602` + 提交链：步骤 9 IP 直连部署（`76df093`）→ 晨间简报接真实模型（`9f9cc71`）→ 文档同步（`267146a`）→ 双端验收通过记录（`27858da`）→ 清理 lint 警告与残留文件（`f5a57f5`）→ 第三次重部署与文档同步 → 步骤 11（8d）数据历史化：11a 数据层 v2（`6d769a7`）→ 11b 健身真实历史（`bc4ee88`）→ 11c 报告窗口（`12de14b`）→ 报告页返回态修复（`8edb8ba`）→ 视觉基线入库（`5ee8d85`）→ 步骤 12（P4a）账号 + 增量同步：12a 数据层（`ca02250`）→ 12b 账号与同步接口（`6fe6b3d`，文档同步 `d555cb0`）→ 12c 同步契约搬 `shared/`（`c6a65fd`）→ 12d 客户端同步层（`9abd8bb`）→ 12e 设置页「数据同步」（`f09c3da`）→ 12f 收尾（pull 形状守卫 + 本机验收 + 视觉重跑 + 文档同步）→ 饮食照片/选图附件下线（`fbab985`）与跨日空餐次修复（`50d90ef`，本次文档同步）
+> 更新：2026-11-05 · 分支 `main` · 基线 `e260602` + 提交链：步骤 9 IP 直连部署（`76df093`）→ 晨间简报接真实模型（`9f9cc71`）→ 文档同步（`267146a`）→ 双端验收通过记录（`27858da`）→ 清理 lint 警告与残留文件（`f5a57f5`）→ 第三次重部署与文档同步 → 步骤 11（8d）数据历史化：11a 数据层 v2（`6d769a7`）→ 11b 健身真实历史（`bc4ee88`）→ 11c 报告窗口（`12de14b`）→ 报告页返回态修复（`8edb8ba`）→ 视觉基线入库（`5ee8d85`）→ 步骤 12（P4a）账号 + 增量同步：12a 数据层（`ca02250`）→ 12b 账号与同步接口（`6fe6b3d`，文档同步 `d555cb0`）→ 12c 同步契约搬 `shared/`（`c6a65fd`）→ 12d 客户端同步层（`9abd8bb`）→ 12e 设置页「数据同步」（`f09c3da`）→ 12f 收尾（pull 形状守卫 + 本机验收 + 视觉重跑 + 文档同步）→ 饮食照片/选图附件下线（`fbab985`）与跨日空餐次修复（`50d90ef`）→ 格式与文档同步（`c7cbcaa` / `91081a3`，当前 `HEAD` = `origin/main`）→ **步骤 13（P4b）服务端聚合 + AI 综合分析：本机完成并验证（2026-11-05），代码仍在工作区未提交**
 > 本文件是「**现在是什么 + 下一步做什么**」的唯一事实源。其他分工：项目介绍与长期规划 → [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)（v2.0）；部署与服务器 → [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)；P4 终态设计 → [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md)；工程/视觉/测试约定 → [`docs/工程约定.md`](docs/工程约定.md)。
-> 当前阶段：八个页面（含 `/plans`）与既有交互已完成并视觉验收，**前端已冻结**——例外只有四处经用户批准：2026-11-04「今日页晨间简报接入真实 AI」（`9f9cc71`）与**步骤 11（8d 数据历史化）**（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba`，只换数据来源与历史口径，不改导航与设计语言）、2026-11-05 饮食照片/选图附件下线（`fbab985`，按用户要求删除拍照与选图，只留手填与 AI 粘贴解析）、2026-11-05 跨日空餐次回归修复（`50d90ef`，用户双端报障后修）；服务端 P3（8a/8b/8c）已完成，**步骤 9（IP 直连部署）已于 2026-11-04 完成并通过验收**（真实 DeepSeek Key 已轮换，只存服务器 `/etc/persist/server.env`）；**P4 步骤 12（账号 + 增量同步）已于 2026-11-05 在本机完成并通过验收**（12a–12f：SQLite 数据层 + 设备令牌/恢复码 + `shared/` 同步契约 + 客户端同步层 + 设置页「数据同步」卡片；app 单测 292/292、server 112/112、E2E 110 全绿、P4 §7.4 六项 19/19 通过），**已推送到 `origin/main`、但未部署**——服务器仍服务步骤 9 那版静态包，且步骤 12 起的服务端要求 Node ≥ 22.5（服务器当前 Node 20.20.2，部署等步骤 10）；设置页新增「数据同步」卡片带来的 **13 张视觉基线改动已经用户桌面端 + 移动端验收后随 `4d3edcf` 入库**；**2026-11-05 又完成两件事并已推送**：按用户要求下线饮食拍照/选图附件（只保留手填与 AI 粘贴解析，`fbab985`，20 张视觉基线经双端验收后入库），以及修复用户双端报障的跨日缺陷——前一天有记录、第二天首次打开时今日餐次为空，导致「记录下一餐」无响应、AI 登记选不了餐次、登记不入库（`50d90ef`，app 单测 295/295、E2E 112 全绿）；P4 步骤 13–14 仍是设计；ICP 备案阿里云初审已通过（2026-11-04），计划 2026-11-05 提交管局，**备案号未下发 ⇒ 仍属「备案中」，不得宣称「已上线」**。
+> 当前阶段：八个页面（含 `/plans`）与既有交互已完成并视觉验收，**前端已冻结**——例外只有五处经用户批准：2026-11-04「今日页晨间简报接入真实 AI」（`9f9cc71`）与**步骤 11（8d 数据历史化）**（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba`，只换数据来源与历史口径，不改导航与设计语言）、2026-11-05 饮食照片/选图附件下线（`fbab985`，按用户要求删除拍照与选图，只留手填与 AI 粘贴解析）、2026-11-05 跨日空餐次回归修复（`50d90ef`，用户双端报障后修）、**2026-11-05 步骤 13（P4b 服务端综合分析）在 `/reports` 末尾新增「服务端综合分析」块与设置页「每日简报」卡片**（不改既有页面结构与视觉语言；该批 png 已重跑但**本轮未提交**，等用户双端验收后入库）；服务端 P3（8a/8b/8c）已完成，**步骤 9（IP 直连部署）已于 2026-11-04 完成并通过验收**（真实 DeepSeek Key 已轮换，只存服务器 `/etc/persist/server.env`）；**P4 步骤 12（账号 + 增量同步）已于 2026-11-05 在本机完成并通过验收**（12a–12f：SQLite 数据层 + 设备令牌/恢复码 + `shared/` 同步契约 + 客户端同步层 + 设置页「数据同步」卡片），**已推送到 `origin/main`、但未部署**——服务器仍服务步骤 9 那版静态包，且步骤 12 起的服务端要求 Node ≥ 22.5（服务器当前 Node 20.20.2，部署等步骤 10）；设置页新增「数据同步」卡片带来的 **13 张视觉基线改动已经用户桌面端 + 移动端验收后随 `4d3edcf` 入库**；**2026-11-05 又完成三件事**：①按用户要求下线饮食拍照/选图附件（只保留手填与 AI 粘贴解析，`fbab985`，20 张视觉基线经双端验收后入库）；②修复用户双端报障的跨日缺陷——前一天有记录、第二天首次打开时今日餐次为空，导致「记录下一餐」无响应、AI 登记选不了餐次、登记不入库（`50d90ef`，app 单测 295/295、E2E 112 全绿）；③**步骤 13（P4b 服务端聚合 + AI 综合分析）本机完成并验证，代码仍在工作区未提交、未部署**——事实包 v2 / 四个 `/api/v1` 分析接口 / 报告归档 365 天 / 每日简报 job / 前端综合分析块与设置卡片；server 174/174（18 文件）、app 334/334（24 文件）、E2E 120（9 文件 / 1.2 m）、oxlint 0/0（98 文件）、`vite build` JS 628.24 kB / CSS 145.40 kB；**本机没有真实 DeepSeek Key**，真实模型分支用注入的假客户端验证；P4 步骤 14 仍是设计；ICP 备案阿里云初审已通过（2026-11-04），计划 2026-11-05 提交管局，**备案号未下发 ⇒ 仍属「备案中」，不得宣称「已上线」**。
 > 本地验收地址：`http://127.0.0.1:4173/`（`cd app` 后 `npm run dev -- --port 4173`；手机访问加 `--host 0.0.0.0`）。
 > 本文档地位：**代码实现优先于任何文档**；如文档与代码冲突，以 `D:\Persist\app` 与 `D:\Persist\server` 为准。
 
@@ -12,19 +12,19 @@
 
 ### 0.1 一句话现状
 
-Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端产品原型 + 已接通的 AI 服务端**：8 个页面（今日 / 健身 / 饮食 / 学习 / 个人档案 / AI 报告 / 设置 / 长期计划）与 5 项主导航可用；业务数据写入本机 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢，含长期计划、设置、复盘、快照，且**训练/饮食/饮水/计划已按日台账落历史**，`schemaVersion: 2`）；AI 引导建档、AI 报告文字与今日页晨间简报文字在「档案页开启授权 + 服务端可用」时经本站代理调用真实 DeepSeek，失败回退本地 Mock 并如实标注；JSON 导出导入为备份 0.3.0（含历史字段，兼容 0.2.0 / 0.1.0）；设置页有「清空本机数据」。自动化为 app 单测 292 条（21 个文件）+ server 单测 112 条（13 个文件）+ E2E 110 次执行 + 视觉基线 91 张（13 张已随步骤 12 验收更新）（oxlint 0 错 0 警告）。**步骤 12 起本机已有服务端 SQLite 副本、设备令牌与增量同步**（设置页「数据同步」默认关闭，关闭时不发任何同步请求；开启后全量 bootstrap + 5 秒防抖增量），但**同步能力已在本机跑通并推送，但未部署**。服务端代码已于 2026-11-04 部署到服务器（IP 直连，仅内部调试），**线上仍是步骤 9 的版本**——8d 与步骤 12 的前端/服务端产物均未部署。
+Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 分析」工具。当前是**可完整点击验收、已通过桌面端 + 移动端视觉验收的前端产品原型 + 已接通的 AI 服务端**：8 个页面（今日 / 健身 / 饮食 / 学习 / 个人档案 / AI 报告 / 设置 / 长期计划）与 5 项主导航可用；业务数据写入本机 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢，含长期计划、设置、复盘、快照，且**训练/饮食/饮水/计划已按日台账落历史**，`schemaVersion: 2`）；AI 引导建档、AI 报告文字与今日页晨间简报文字在「档案页开启授权 + 服务端可用」时经本站代理调用真实 DeepSeek，失败回退本地 Mock 并如实标注；JSON 导出导入为备份 0.3.0（含历史字段，兼容 0.2.0 / 0.1.0）；设置页有「清空本机数据」。自动化为 app 单测 334 条（24 个文件）+ server 单测 174 条（18 个文件）+ E2E 120 次执行（9 文件）+ 视觉基线 91 张（步骤 12 的 13 张已入库，步骤 13 重跑的差异**尚未提交**）（oxlint 0 错 0 警告 / 98 文件）。**步骤 12 起本机已有服务端 SQLite 副本、设备令牌与增量同步**（设置页「数据同步」默认关闭，关闭时不发任何同步请求；开启后全量 bootstrap + 5 秒防抖增量），**步骤 13 起本机还有服务端综合分析**（7/30/90 天事实包、四个 `/api/v1` 接口、报告归档 365 天、每日简报 job；分析结果只存服务端，不写回本机），但**两者都未部署**。服务端代码已于 2026-11-04 部署到服务器（IP 直连，仅内部调试），**线上仍是步骤 9 的版本**——8d、步骤 12、步骤 13 的产物均未部署。
 
 ### 0.2 现在能做什么 / 不能做什么
 
-**能**：八个页面全部交互与跨页联动（今日、健身含自由运动、饮食饮水、学习、档案、AI 报告、设置、长期计划）；本机持久化与一键清空；备份 0.3.0 导出/导入；训练/饮食/饮水/计划按日历史与「近 7 / 30 / 90 天」报告窗口；AI 建档对话真实调用（授权 + 服务端可用时）；AI 报告文字真实调用（数字与依据由前端按窗口内的本地记录确定性生成）；无 Key / 未授权 / 服务不可用时自动回退并标注来源。
+**能**：八个页面全部交互与跨页联动（今日、健身含自由运动、饮食饮水、学习、档案、AI 报告、设置、长期计划）；本机持久化与一键清空；备份 0.3.0 导出/导入；训练/饮食/饮水/计划按日历史与「近 7 / 30 / 90 天」报告窗口；AI 建档对话真实调用（授权 + 服务端可用时）；AI 报告文字真实调用（数字与依据由前端按窗口内的本地记录确定性生成）；无 Key / 未授权 / 服务不可用时自动回退并标注来源；**步骤 13 起本机可让服务端按 7/30/90 天窗口聚合事实包并出「综合分析」**（模型只写文字、数字全部来自 SQL，规则降级、缓存、365 天归档都在本机验证过），`/reports` 页底新增「服务端综合分析」块、设置页新增「每日简报」卡片。
 
 **不能**（不要当成已有能力）：
 
 - ~~没有服务端数据库、账号、跨设备同步~~ → 步骤 12 的代码（SQLite 副本 + 设备令牌 + 增量同步）**已在本机完成并验收，但未部署**，所以线上仍然没有跨设备同步：换浏览器 / 清站点数据 / 无痕模式即丢数据。
 - **历史只覆盖本机落过盘的天**：8d 之后训练（归档会话）/饮食（按日餐次）/饮水（带 `date`）/计划（带 `date`）都有真实历史，但更早的月份没有补录数据；演示种子只覆盖最近 7 天，因此「近 30 / 90 天」窗口数字与近 7 天相同。同步只把本机已有记录复制到服务器，**不会补出没落过盘的历史**。
 - 没有服务端备份/恢复，也没有真实快照恢复（快照只记录生成时间与记录数）；导入会整体替换本机数据且不可撤销。步骤 12 的同步副本**不是备份**：备份 / 恢复 / 导出 / 删除账号属步骤 14。
-- AI 只有「单次窗口的简报」：报告页数字已按窗口汇总，但服务端提示词仍写「今日…」，且**未接服务端历史检索，不能做跨月综合分析与趋势叙述**（P4 尚在步骤 12，提示词口径随步骤 13 修正）。
-- 服务端 AI 接口只有按 IP 限流（20 次 / 300 s），**没有账号鉴权**；步骤 12 新增的 `/api/v1/*` 有设备令牌鉴权，但**已在本机验收、未部署**。线上服务端仍是步骤 9 的版本（IP 直连、仅内部调试），任何人拿到 IP 都能按限流额度调用 `/api/chat` 与 `/api/report`，**不得对外宣称「已上线」**。
+- AI 能力边界：**步骤 13 的服务端综合分析只在本机跑通、未部署**（线上仍是步骤 9 版本，没有 `/api/v1/analysis/*`）；报告页「今日简报」的数字仍由前端按窗口内的本地记录确定性生成；每日简报 job **默认关闭**，且读的是同步上来的设置——**跨设备同步没开、设置没同步上去，它就不会跑**。
+- 服务端 AI 接口只有按 IP 限流（20 次 / 300 s），**没有账号鉴权**；步骤 12 新增的 `/api/v1/*` 有设备令牌鉴权、步骤 13 的分析接口再加独立限流，但**均未部署**。线上服务端仍是步骤 9 的版本（IP 直连、仅内部调试），任何人拿到 IP 都能按限流额度调用 `/api/chat` 与 `/api/report`，**不得对外宣称「已上线」**。
 - 无 Android 包（P5 未开始）、无系统通知（提醒只在界面配置）、健身历史详情按真实动作类型展示但仍只覆盖力量/有氧两类自由运动字段。
 - 域名 `wpersist.top` 未解析、443 未开、无证书；**备案号下发前不得用域名对外提供 HTTP 服务**。
 
@@ -38,7 +38,7 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 6. **未授权模块对 AI 不可见**：只发送 `ProfileData.aiConsent` + `MockSettings.sources` 允许的摘要，未授权模块在 `digest` 中为 `null`。
 7. **公开仓库**：不得提交真实公网 IP（写作 `121.196.*.*`）、root 密码、API Key、`.env`、`*.local.md`、日志与构建产物。
 8. **不得宣称已上线**：备案号下发前不得用域名对外服务，不得编造备案号，不得按经验值承诺上线日期（管局法定期限 20 个工作日）。
-9. **不得把计划写成现状**：P4 的服务端聚合、AI 综合分析、备份恢复仍是「设计」；步骤 12 的账号与增量同步**已在本机完成并验收并推送，但未部署**，不得写成「已上线」或「服务器里已经有你的数据」。
+9. **不得把计划写成现状**：P4 的备份恢复仍是「设计」；步骤 12 的账号与增量同步**已在本机完成并验收并推送，但未部署**；步骤 13 的服务端综合分析**已在本机完成并验证，但代码未提交、未部署**——不得写成「已上线」「服务器里已经有你的数据」或「已用真实 Key 验证综合分析」（本机没有真实 DeepSeek Key）。
 10. **提交纪律**：提交前 `git diff --cached --name-only` 审计一遍（排除 `node_modules/`、`app/dist/`、`test-results/`、`Water intake record/`），推送后核对远端 `refs/heads/main` 与本地 HEAD 一致。
 
 ### 0.4 下一步（一次一步，做完停下）
@@ -48,12 +48,12 @@ Persist 是个人自用、本地优先的「计划 → 记录 → 复盘 → AI 
 | ~~9~~ | ~~IP 直连首次部署~~ | ✅ **已完成（2026-11-04）**：`/var/www/persist` + `/opt/persist/server` + systemd `persist-server` + `/etc/nginx/conf.d/persist.conf`；8 个页面深链均 200、SSE 188 个事件 4.2 s 内增量到达、`/api/report` 2.78 s、限流 429 + `Retry-After` 实测通过；真实 Key 已轮换且只存 `/etc/persist/server.env`（`600`）。细节见 `docs/部署与服务器现状.md` §6 |
 | **10** | 域名 + HTTPS + 安全加固（解析、开 443、certbot、HTTP→HTTPS、SSH 密钥、删 3389、fail2ban） | **等备案号下发**。进度：提交备案 ✅ 2026-11-03 → 阿里云初审 ✅ 2026-11-04 → 提交管局 ⏳ 计划 2026-11-05 → 管局审核 ⏳ 20 工作日法定期限 → 下发备案号 ⏳ → 再做本步 |
 | **11**（8d） | 数据历史化：训练真实历史落库、饮食/饮水/计划按日台账、`schemaVersion` 1→2、备份 0.3.0 | ✅ **已完成（2026-11-04）**：11a 数据层 v2（`6d769a7`）→ 11b 健身真实历史（`bc4ee88`）→ 11c 报告窗口（`12de14b`）→ 报告页返回态修复（`8edb8ba`）、学习来源随科目切换清空（`971e1b6`）；app 单测 230/230、E2E 106 全绿，P4 §6.3 前四项达标；**视觉基线已于 2026-11-05 双端验收通过并入库（`5ee8d85`）**；8d 前端资源尚未部署 |
-| **12**（P4a） | 设备令牌 + 恢复码 + 增量同步：服务端 SQLite 数据层、`/api/v1/devices*`、`/api/v1/sync/*`、`shared/` 同步契约、客户端同步层、设置页「数据同步」 | ✅ **本机完成并验收（2026-11-05，12a–12f）**：app 292/292（21 文件）、server 112/112（13 文件）、E2E 110、P4 §7.4 19/19；**已推送、未部署**（服务器 Node 20.20.2 跑不了 `node:sqlite`，部署等步骤 10；视觉基线 13 张已入库） |
-| **13**（P4b） | 服务端聚合 + AI 综合分析：facts builder → 模型只写文字、报告缓存/归档、规则降级 | ⬜ 未开始；设计见 P4 §8，依赖步骤 12 |
-| **14**（P4c） | 备份 / 恢复 / 导出 / 删除账号（PIPL 闭环） | ⬜ 未开始；设计见 P4 §12，依赖步骤 12 |
+| **12**（P4a） | 设备令牌 + 恢复码 + 增量同步：服务端 SQLite 数据层、`/api/v1/devices*`、`/api/v1/sync/*`、`shared/` 同步契约、客户端同步层、设置页「数据同步」 | ✅ **本机完成并验收（2026-11-05，12a–12f）**：app 292/292（21 文件）、server 112/112（13 文件）、E2E 110、P4 §7.4 19/19（**均为步骤 12 完成时的数字**；步骤 13 之后是 app 334、server 174、E2E 120）；**已推送、未部署**（服务器 Node 20.20.2 跑不了 `node:sqlite`，部署等步骤 10；视觉基线 13 张已入库） |
+| **13**（P4b） | 服务端聚合 + AI 综合分析：facts builder → 模型只写文字、报告缓存/归档、规则降级 | ✅ **本机完成并验证（2026-11-05，13a–13c），代码仍在工作区未提交、未部署**：server 174/174（18 文件）、app 334/334（24 文件）、E2E 120（9 文件 / 1.2 m）、oxlint 0/0（98 文件）；本机无真实 DeepSeek Key，真实模型分支用注入的假客户端验证；视觉 png 已重跑但本轮未提交（待用户双端验收） |
+| **14**（P4c） | 备份 / 恢复 / 导出 / 删除账号（PIPL 闭环） | ⬜ 未开始（P4 剩下的一步）；设计见 P4 §12，依赖步骤 12 |
 | **15**（P5） | Capacitor Android 打包与真机验证 | 依赖部署与冻结后的前端 |
 
-步骤 3–9、11 已于 2026-11-03/04 完成、步骤 12 于 2026-11-05 本机完成（明细见 §13 与 §18，不在本表重复）。**步骤 12 已本机完成并推送、但未部署**：服务器 Node 20.20.2 不支持 `node:sqlite`，部署等步骤 10。**终态方案的唯一来源是 P4 文档**，不要照旧规划的 Dexie / Drizzle / Docker 设想实施。
+步骤 3–9、11 已于 2026-11-03/04 完成、步骤 12 于 2026-11-05 本机完成、步骤 13 于 2026-11-05 本机完成并验证（明细见 §13 与 §18，不在本表重复）。**步骤 12 已本机完成并推送、步骤 13 已本机完成但代码未提交，两者都未部署**：服务器 Node 20.20.2 不支持 `node:sqlite`，部署等步骤 10。**终态方案的唯一来源是 P4 文档**，不要照旧规划的 Dexie / Drizzle / Docker 设想实施。
 
 ### 0.5 每步汇报格式（固定 8 段，中文）
 
@@ -121,7 +121,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 健身/饮食/饮水/学习可记录 | ✅ 已完成 | 可跨页联动并持久化到本机 |
 | 关闭并重新打开后数据仍存在 | ✅ 已完成（本机浏览器级） | IndexedDB 持久化；换浏览器 / 清站点数据会丢，线上无跨设备同步（步骤 12 已本机完成，未部署） |
 | 晚间状态与 AI 复盘 | ✅ 已完成（8c 起文字可来自真实模型） | 指标与依据仍由前端按本地记录确定性生成，模型只写文字；不可用时回退 Mock 并标注 |
-| 近 7 天和月度统计 | 🟡 部分完成 | 报告页已按近 7 / 30 / 90 天窗口汇总真实历史（8d）；跨月趋势叙述仍要等服务端聚合（P4 步骤 13） |
+| 近 7 天和月度统计 | ✅ 已完成（本机） | 报告页本地块按近 7 / 30 / 90 天窗口汇总真实历史（8d）；步骤 13 起 `/reports` 增加「服务端综合分析」块：事实包由服务端 SQL 聚合（7 / 30 / 90 天，30 天给逐日 + 周汇总、90 天只给周汇总），模型只写文字，跨月趋势叙述已可如实生成（**未部署**，本机验证） |
 | 完整导出并在空环境恢复 | 🟡 本机 JSON 导出导入 0.3.0 已完成 | 含历史字段，兼容 0.2.0 / 0.1.0；无服务端备份与真实空库恢复（P4 步骤 14） |
 | Android APK 可安装 | ⬜ 未开始 | 尚未接 Capacitor |
 | DeepSeek 不可用时可降级 | ✅ 已完成 | 8b/8c 已实现探活 + 回退 + 如实标注；`/reports` 契约错误显式报错，不伪造报告 |
@@ -162,7 +162,8 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | 服务器 | 阿里云 ECS 环境准备（Node 20 + Nginx + 安全组 80） | ✅ 环境就绪（2026-11-03）；**代码已于 2026-11-04 部署**（见 `docs/部署与服务器现状.md`） |
 | 步骤 7 | P3-0：设置页「清空本机数据」入口 | ✅ 已完成（2026-11-03，`a544a38`，E2E 100 次全绿） |
 | 下一阶段 C | Fastify + DeepSeek 服务端代理（步骤 8） | ✅ 代码完成：8a 服务端骨架（`9138175`）、8b 前端接入 + 真实 Key 联调（`b99d3ad`）、8c AI 报告接服务端（`bdd4265`）；app 单测 230/230、server 58/58、E2E 106 全绿；**步骤 9 部署验收已完成（2026-11-04）**；此后今日页晨间简报也接入 `/api/report`（`9f9cc71`），清理 3 条 lint 警告（`f5a57f5`），并完成步骤 11（8d）数据历史化（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba`），修复学习来源不随科目切换（`971e1b6`） |
-| 步骤 12 | P4a：账号 + 增量同步（本机） | ✅ **本机完成并验收（2026-11-05，12a–12f）**：服务端 SQLite 数据层 + 设备令牌/恢复码 + `/api/v1/*` + `shared/` 同步契约 + 客户端同步层 + 设置页「数据同步」卡片；server 112/112（13 文件）、app 292/292（21 文件）、E2E 110、P4 §7.4 19/19；**已推送、未部署**（部署等步骤 10 升 Node 22） |
+| 步骤 12 | P4a：账号 + 增量同步（本机） | ✅ **本机完成并验收（2026-11-05，12a–12f）**：服务端 SQLite 数据层 + 设备令牌/恢复码 + `/api/v1/*` + `shared/` 同步契约 + 客户端同步层 + 设置页「数据同步」卡片；**已推送、未部署**（部署等步骤 10 升 Node 22） |
+| 步骤 13 | P4b：服务端聚合 + AI 综合分析（本机） | ✅ **本机完成并验证（2026-11-05，13a–13c）**：事实包 v2（7/30/90 天，数字全部来自 SQL）+ 四个 `/api/v1` 分析接口 + 报告缓存（`dataRev`）与 365 天归档 + 规则降级 / 数字白名单 + 每日简报 job + `/reports` 综合分析块与设置卡片；server 174/174（18 文件）、app 334/334（24 文件）、E2E 120（9 文件）、oxlint 0/0；**代码仍在工作区未提交、未部署**（本机无真实 Key，真实模型分支用注入假客户端验证） |
 | 部署 | 步骤 9 IP 直连部署 → 步骤 10 备案后域名 + HTTPS | ✅ 步骤 9 完成（2026-11-04，仅 IP 直连内部调试，**未宣称上线**）；步骤 10 待备案号（阿里云初审 2026-11-04 通过，2026-11-05 提交管局） |
 | 下一阶段 D | 服务端备份、校验与恢复 | 未开始（步骤 14） |
 | 下一阶段 E | Capacitor / Android 发布 | 未开始 |
@@ -180,8 +181,8 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | AI 报告 | 已完成 | 已完成（8c 起可走真实 DeepSeek，指标与依据仍由前端生成） | 已完成 | 已完成（本机 IndexedDB） | 已覆盖（含探活、回退、契约错误分流） |
 | 设置 | 已完成 | Mock 已完成 | 已完成 | 已完成（本机 IndexedDB） | 已覆盖（含刷新恢复） |
 | 长期计划 | 已完成（`/plans`） | 已完成（含 AI 建档对话；8b 起可走真实 DeepSeek，失败回退 Mock） | 已完成 | 已完成（本机 IndexedDB） | 已覆盖（含刷新恢复、回退用例） |
-| 服务端 | 仅 API（`/api/health`、SSE `/api/chat`、JSON `/api/report`），无页面 | 8a/8b/8c 已完成（Fastify + DeepSeek 代理骨架 + 前端接入 + 报告生成）；12a–12c 完成数据层、账号/同步接口与 `shared/` 契约 | 已接入（`/api/chat` 供 AI 建档；`/api/report` 供报告） | 步骤 12 起本机有 SQLite 单文件副本（**未部署**，线上仍是 P3 无状态代理） | 服务端单测 112/112（13 文件）；E2E 用不可达端口验证回退 |
-| 账号与同步 | 无新路由；设置页新增「数据同步」卡片（12e） | 开关默认关闭（关闭时不发任何请求）；开启后全量 bootstrap → 5 秒防抖增量；恢复码 / 立即同步 / 吊销本机 | 与今日、健身、饮食、学习、档案、计划等切片联动（outbox → push/pull，LWW + 墓碑） | 本机 `server/data/persist.sqlite`（`node:sqlite`，Node ≥ 22.5）；**未部署** | 12d/12f app 同步层单测 62 条（5 文件）；服务端 12a/12b 单测含在 112 内 |
+| 服务端 | 仅 API（`/api/health`、SSE `/api/chat`、JSON `/api/report`），无页面 | 8a/8b/8c 已完成（Fastify + DeepSeek 代理骨架 + 前端接入 + 报告生成）；12a–12c 完成数据层、账号/同步接口与 `shared/` 契约；13a–13c 完成 schema v2、事实包聚合、`/api/v1/analysis/*` 与 `/api/v1/reports`、每日简报 job 与综合分析契约 | 已接入（`/api/chat` 供 AI 建档；`/api/report` 供报告；`/api/v1/analysis/reports` 供服务端综合分析） | 步骤 12 起本机有 SQLite 单文件副本（**未部署**，线上仍是 P3 无状态代理） | 服务端单测 174/174（18 文件）；E2E 用不可达端口验证回退 |
+| 账号与同步 | 无新路由；设置页新增「数据同步」卡片（12e）与「每日简报」卡片（13c） | 同步开关默认关闭（关闭时不发任何请求）；开启后全量 bootstrap → 5 秒防抖增量；恢复码 / 立即同步 / 吊销本机；每日简报默认关闭（21:00），**改设置后需同步上去服务端才会跑** | 与今日、健身、饮食、学习、档案、计划等切片联动（outbox → push/pull，LWW + 墓碑） | 本机 `server/data/persist.sqlite`（`node:sqlite`，Node ≥ 22.5，schema v2）；**未部署** | 12d/12f app 同步层单测 62 条（5 文件）；13b/13c 服务端分析用例含在 174 内；E2E `reports-analysis.spec.ts` 4 条 × 2 |
 | 部署 / 服务器 | ECS 2C2G 已装 Node 20 + Nginx；2026-11-04 部署前端静态 + Fastify（IP 直连） | 无（线上仍 P3 无状态） | 无（同源相对 `/api`） | 线上无（步骤 12 的本机 SQLite 未部署） | ✅ 步骤 9 验收 7/7 通过（含用户双端人工验收，§13.2） |
 | Android | 未开始 | 无 | 无 | 无 | 无 |
 
@@ -401,6 +402,8 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 - `D:\Persist\app\src\pages\ReportsPage.tsx`
 - `D:\Persist\app\src\data\reports.ts`
 - `D:\Persist\app\src\lib\fitness.ts`
+- `D:\Persist\app\src\lib\analysis-client.ts`（步骤 13：四个分析接口 + 四态来源标签 + 9 类错误分流）
+- `D:\Persist\app\src\lib\analysis-contract.ts`（步骤 13：转出 `@persist/shared/contract/analysis`）
 
 当前能力（8c 之后已接真实模型，8d 之后数字按窗口）：
 
@@ -409,17 +412,20 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 - 8c：授权 + `/api/health` 可用时走同源 `/api/report`（DeepSeek），展示「DeepSeek · 经本站服务端代理」；失败分流为可读错误并回退 Mock，绝不伪装成真实模型。
 - 指标卡、结论、行动建议由确定性代码按窗口事实生成（`report-window.ts` + `report-digest.ts`），模型只写分析文字；服务端不可用时仍可看到本地简报。
 - 历史报告保存/查看、应用建议到今日计划（复制计划项）、Mock 报告导出。
+- 步骤 13c：页面末尾新增「服务端综合分析」块（与上面的本地简报并存）——窗口 7 / 30 / 90 天、生成 / 重新生成（`force`）、来源标记（`DeepSeek 经本站服务端代理` vs `规则降级`）、`cached:true` 缓存标记、归档列表与详情（`GET /api/v1/reports`）。服务端结果**只存在页面状态与服务端归档**里，不写本地 `reports`。**依赖 `/api/v1/analysis/*`，本机可用、线上未部署**。
 
 已知边界：
 
-- 服务端提示词仍写「今日…」；窗口数字虽已按近 N 天传播，但模型叙述口径要到步骤 13（P4b）才统一（当前不宣称「趋势分析」）。
-- 无服务端历史检索、无 Token 费用统计；限流为服务端 20 次 / 300 s。
+- 本地简报的服务端提示词仍写「今日…」，但数字已按窗口汇总；跨窗口的趋势叙述由步骤 13 的服务端综合分析块给出（本机）。
+- 两个块互不覆盖：服务端结果只留在页面状态与服务端归档，**不写回本地 `reports`**，0.3.0 导出里也没有这些报告（本地简报与导出仍是步骤 11 口径）。
+- 无服务端历史检索、无 Token 费用统计；限流为服务端 20 次 / 300 s，步骤 13 的分析接口另有一个独立限流器（默认 6 次 / 5 分钟）。
 
 ## 4.7 设置页
 
 关键文件：
 
 - `D:\Persist\app\src\pages\SettingsPage.tsx`
+- `D:\Persist\app\src\data\settings.ts`（`MockSettings.dailyBrief?`，可选字段，`schemaVersion` 仍是 2、备份仍是 0.3.0）
 
 已完成 Mock 能力：
 
@@ -435,6 +441,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 - 清空本地 Mock 设置。
 - 隐私和服务端自托管说明弹层。
 - 数据同步卡片（步骤 12e）：跨设备同步开关（默认关）、注册后展示恢复码（4×8 大写）、「用恢复码绑定已有账号」、本机设备 / 最近同步、立即同步、吊销本机（`alertdialog` 二次确认）。**依赖服务端 `/api/v1/*` 与 SQLite，目前只在本机可用，线上未部署**。
+- 每日简报卡片（步骤 13c）：开关（默认**关**）、时间输入（默认 `21:00`）、非法时间回退到默认值并给提示；卡片明确写「需先开启数据同步并把设置同步到服务端才生效」。**同样的本机可用、线上未部署**。
 
 重要边界：
 
@@ -442,7 +449,8 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 - “生成快照”不创建可恢复磁盘副本，只记录时间和当前记录数量。
 - Mock 连接测试不是实际网络请求。
 - 「数据同步」开关关闭时不发起任何同步请求；开启后先把本机数据全量上传一次，再按 5 秒防抖做增量。同步副本**不是备份**（不能回滚到历史版本），恢复码即账号凭据、丢失无法找回。
-- 设置（含提醒开关、时间、AI 授权、数据源）修改后写入本机 IndexedDB，刷新与重开浏览器都保持；只有清除站点数据才回到初始值。
+- 「每日简报」只在服务端按 `settings.payload_json.dailyBrief`（同步上来的设置）判断，env 只是兜底；开关默认关、默认 21:00，进程内 60 s tick，**不需要 systemd timer / cron**；设置改了但没同步上去时服务端看到的还是旧值。
+- 设置（含提醒开关、时间、AI 授权、数据源、每日简报）修改后写入本机 IndexedDB，刷新与重开浏览器都保持；只有清除站点数据才回到初始值。
 
 ## 4.8 应用壳与快速记录
 
@@ -549,11 +557,11 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | Lint | Oxlint |
 | 格式化 | Prettier（`prettier-plugin-tailwindcss` 已于 2026-11-03 移除） |
 | 当前数据层 | React Context 内存状态（已由 IndexedDB 持久化，§6.6） |
-| 当前后端 | Fastify 5（P3 8a+8b+8c + P4a 12a–12c 已实现，`server/`，监听 `127.0.0.1:3000`；本机 `npm test` 112/112（13 文件），前端 AI 建档与报告都已接入并完成真实 Key 联调；**2026-11-04 部署的是步骤 9 版本**，systemd `persist-server` 常驻，步骤 12 的服务端改动**未部署**） |
+| 当前后端 | Fastify 5（P3 8a+8b+8c + P4a 12a–12c + P4b 13a–13c 已实现，`server/`，监听 `127.0.0.1:3000`；本机 `npm test` 174/174（18 文件），前端 AI 建档与报告都已接入并完成真实 Key 联调（综合分析的真实模型分支只用注入假客户端验证——本机无 Key）；**2026-11-04 部署的是步骤 9 版本**，systemd `persist-server` 常驻，步骤 12、13 的服务端改动**均未部署**） |
 | 部署/托管 | Nginx 1.24（阿里云 ECS / Alibaba Cloud Linux 3 / Node.js v20.20.2），前端纯静态托管 + `/api` 反代 `127.0.0.1:3000`，详见 `docs/部署与服务器现状.md` |
 | AI 供应商 | DeepSeek（`deepseek-chat`；Key 只在服务端 `/etc/persist/server.env`。前端 AI 建档走 `/api/chat`，报告文字走 `/api/report`） |
 | 数据库 | SQLite **单文件库**（步骤 12a 已引入）：驱动**已定**内置 `node:sqlite`（2026-11-05，P4 §11.4，要求 Node ≥ 22.5；服务器在步骤 10 一并升级）。本机默认 `server/data/persist.sqlite`（`DB_PATH` 可覆盖），生产目标 `/var/lib/persist/persist.sqlite`（**待部署**）；**明确不装 MySQL/MariaDB**，不用 ORM，驱动差异隔离在 `server/src/db/driver.ts` |
-| 当前共享层 | `@persist/shared`（步骤 12c，`shared/`）：`contract/{sync,entities,parse}.ts`，`app` 与 `server` 以 `file:../shared` 同源引用（`shared/dist` 由 `npm run shared:build` 产出、已 gitignore）；chat/report 的请求响应类型与校验仍暂放 `server/src/contract.ts`（镜像 `app/src/lib/chat-types.ts` 与 `app/src/lib/report-types.ts`），迁 `shared/` 另排期 |
+| 当前共享层 | `@persist/shared`（步骤 12c 建包，步骤 13a 扩到综合分析）：`contract/{sync,entities,parse,analysis}.ts`，`app` 与 `server` 以 `file:../shared` 同源引用（`shared/dist` 由 `npm run shared:build` 产出、已 gitignore）；chat/report 的请求响应类型与校验仍暂放 `server/src/contract.ts`（镜像 `app/src/lib/chat-types.ts` 与 `app/src/lib/report-types.ts`），迁 `shared/` 另排期 |
 
 开发环境实测：
 
@@ -581,14 +589,16 @@ D:\Persist
 │     └─ test/            测试初始化
 ├─ design/                视觉原型与截图
 ├─ docs/                  产品规划与工程文档
-├─ server/                Fastify + DeepSeek 代理（P3 8a+8b+8c）+ 数据层与同步接口（步骤 12a/12b）
+├─ server/                Fastify + DeepSeek 代理（P3 8a+8b+8c）+ 数据层与同步接口（步骤 12a/12b）+ 综合分析（步骤 13a–13c）
 │  ├─ src/                app / config / contract / auth / rate-limit / index
-│  │  ├─ routes/          health、chat、report、guards、devices、sync
+│  │  ├─ routes/          health、chat、report、guards、devices、sync、analysis、reports
 │  │  ├─ sync/            accounts（注册/恢复/吊销）、service（push 幂等 / bootstrap / pull）
-│  │  ├─ db/              driver、migrations、entities、index、repositories（entities / devices / sync-ops / sync-seq）
-│  │  └─ ai/              deepseek、prompts、extract、report
-│  └─ test/               Vitest 13 文件 112 条
-└─ shared/                @persist/shared（步骤 12c）：contract/{sync,entities,parse}.ts，app / server 同源引用
+│  │  ├─ analysis/        time、facts（7/30/90 天事实包）、metrics、rules（规则降级）、service（缓存 / 归档 / 白名单）
+│  │  ├─ jobs/            daily-brief（进程内 60 s tick、默认关闭、按 runKey 幂等）
+│  │  ├─ db/              driver、migrations（v1→v2）、entities、index、repositories（entities / devices / sync-ops / sync-seq / reports / jobs）
+│  │  └─ ai/              deepseek、prompts、extract、report、analysis
+│  └─ test/               Vitest 18 文件 174 条
+└─ shared/                @persist/shared（步骤 12c 建包，步骤 13a 加综合分析契约）：contract/{sync,entities,parse,analysis}.ts，app / server 同源引用
 ```
 
 ### 5.3 应用入口与页面组成
@@ -973,6 +983,12 @@ D:\Persist\app\src\lib\mock-data-transfer.ts
 - 失败与授权分流（底部说明按状态如实切换，绝不把规则文案标成 AI）：未授权 → 不发请求、不发数据，直接本机规则；没有任何打开的数据来源 → 同样不发请求；503 / 429 / 网络失败 → 回退本机规则并写明「已回退到本机规则，未使用模型输出」；结构不合契约 → 回退并写明「不符合契约」；只有真正拿到通过 `parseReportContent` 校验的内容才显示「文字由 DeepSeek 生成 · 经本站服务端代理」与点亮图标。
 - 请求进行中先展示本地规则 + 「正在请求 DeepSeek…」说明，不空等、不闪烁；关闭面板会 `AbortController` 取消请求。
 
+**服务端综合分析（步骤 13，本机完成，未提交未部署）**
+
+- 服务端 `POST /api/v1/analysis/reports` 走**单次、非流式**模型调用（`deepseek-chat`，`timeout` 45 s、`max_tokens` 2600），事实包由 SQL 聚合后拼进提示词；模型只输出结构化文字，正文数字必须全部出现在事实包 JSON 里，否则 502 `invalid_response` 且不入档。
+- **本机没有真实 DeepSeek Key**：真实模型分支是用**注入的假客户端**（临时 vitest，HTTP 层 + 真实 SQLite）验证的——请求体、超时与 token 上限、返回解析、数字白名单、`origin:"ai"`（客户端标签「服务端分析 · DeepSeek」）都验过；另用无 Key 环境验了规则降级路径（200 + `origin:"rules"`、`model:null`）。**不得写成「已用真实 Key 验证综合分析」**。
+- 降级与错误分流（都有单测）：无 Key / 超时 / 上游错 → 200 + 规则降级；`aiConsent === false` → 403 `ai_consent_off`；窗口无记录 → 409 `insufficient_data`；分析限流 → 429；请求体或 `rangeDays` 非法 → 422 `invalid_request`；缺令牌 → 401。
+
 **服务端当前边界（8c 后仍成立）**
 
 - 服务端只有按 IP 限流（`/api/chat` 与 `/api/report` 共用 20 次 / 5 分钟），**线上没有账号鉴权**；Key 只在服务端环境变量，前端/构建产物已扫描确认无 Key。步骤 12 新增的 `/api/v1/devices*`、`/api/v1/sync/*` 走设备令牌鉴权，**但未部署**（线上仍只有上述三个 P3 接口）。
@@ -1037,22 +1053,22 @@ D:\Persist\app\src\lib\mock-data-transfer.ts
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 类型检查 | `npm run typecheck` | 通过，0 错误（2026-11-05 步骤 12 收尾后复跑；`shared/` 独立 `tsc` 0 错，`app` / `server` 引用同源契约无类型漂移） |
-| 单元测试 | `npm test` | **295/295 通过，21 个测试文件**（2026-11-05 饮食跨日修复后复跑；步骤 12 收尾时为 292/21，本次跨日修复在 `history.test.ts` 新增 3 条 `dayMeals` 用例：骨架形状、当天有记录时原样返回、返回对象互不共享；步骤 11 后为 230/16，步骤 12 新增 `sync-store.test.ts` 13 / `sync-queue.test.ts` 7 / `sync-client.test.ts` 12 / `sync-engine.test.ts` 14 / `sync-entities.test.ts` 16 = 62 条，既有文件未缩水） |
-| 端到端测试 | `npx playwright test` | **112 通过 / 0 跳过 / 0 失败**，56 个用例 × 2 个项目 = 112 次执行，58.1 s（2026-11-05 格式化提交后最终复跑；修复当次 52.8 s，新增 `day-rollover.spec.ts` 1 条 × 2 项目：把 IndexedDB 里持久化饮食的日期整体改成昨天后重载，验证今日仍有 4 个餐次、能打开「编辑早餐」、AI 登记下拉 4 个选项、确认登记后食物写入所选餐次、无 pageerror；步骤 12 时为 110 次执行，含 2 条同步用例用 mock `**/api/v1/**` 驱动，其余用例仍把 `/api` 指向不可达端口验证回退） |
-| Lint | `npm run lint` | **0 错误 0 警告**（2026-11-05 饮食跨日修复后复跑仍 0/0；调试期间临时脚本的 2 条警告已随脚本删除；3 条 `react(set-state-in-effect)` 已随 `f5a57f5` 消除） |
+| 类型检查 | `npm run typecheck` | 通过，0 错误（2026-11-05 步骤 13 后复跑；`shared/` 独立 `tsc -b` 0 错，`app` / `server` 引用同源契约无类型漂移，`server` `tsc -b` 0 错） |
+| 单元测试 | `npm test` | **334/334 通过，24 个测试文件**（2026-11-05 步骤 13 后复跑；步骤 13 新增 3 个文件共 39 条：`lib/analysis-client.test.ts` 26（四态映射、9 类错误分流、`dataRev`/`force`/`limit` 参数）、`pages/ReportsPage.analysis.test.tsx` 8（综合分析块渲染、缓存标记、归档列表与详情、错误分类文案、响应形状为平铺而非 `{report}`）、`pages/SettingsPage.brief.test.tsx` 5（每日简报默认关闭、21:00、非法时间回退与提示、需先开同步）；此前 295/21（饮食跨日修复）、292/21（步骤 12 收尾）、230/16（步骤 11 后），逐步只增不减） |
+| 端到端测试 | `npx playwright test` | **120 通过 / 0 跳过 / 0 失败**，60 个用例 × 2 个项目 = 120 次执行，9 个文件，1.2 m（2026-11-05 步骤 13 后复跑；新增 `reports-analysis.spec.ts` 4 条 × 2 = 8 次执行：服务端综合分析块可生成并显示来源与缓存标记、归档列表与详情可打开、失败时显示错误分类文案、未开同步时显示前置说明；此前 112 次（格式化提交后 58.1 s）） |
+| Lint | `npm run lint` | **0 错误 0 警告（98 个文件）**（2026-11-05 步骤 13 后复跑；3 条 `react(set-state-in-effect)` 已随 `f5a57f5` 消除） |
 | 格式检查 | `npx prettier --check .`（在 `app` 内执行） | 通过：`All matched files use Prettier code style!`（2026-11-05 饮食修复收尾复跑：首次检查有 10 个文件未格式化——本次改动 6 个（`DietPage` / `SettingsPage` / `TodaySheets` / `MockDataProvider` / `history.test` / `day-rollover.spec`）+ 既有漂移 4 个（`morning-brief.ts` / `morning-brief.test.ts` / `persist-state.test.ts` / `use-new-record-param.test.tsx`，自 `9f9cc71` 起漏跑格式化）；`--write` 后实际改动 9 个文件（`MockDataProvider` 写入后与 HEAD 逐字节一致），全仓通过，重建产物哈希不变） |
-| 生产构建 | `npm run build` | 通过（`index-Diy7Ja9h.js` 604.31 kB / gzip 180.26 kB，`index-BNFgRy0R.css` 138.98 kB / gzip 23.96 kB，2026-11-05 饮食跨日修复后复跑；主 JS 仍超 500 kB 提示线。相比步骤 12 的 606.08 kB / 140.20 kB：JS 略降 + 删掉照片附件相关代码，CSS 降 1.22 kB 来自删除的附件样式） |
-| 视觉检查 | `npm run visual:check`（**前提：同源 `/api` 可达**，先起无 Key 后端，否则 502 会判 `consoleErrors > 0`） | 最近一次全量重跑为 2026-11-04 步骤 8b 后全绿：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（exit 0），77 张 png 更新并经用户双端验收通过后入库。**8c 改动 `/reports` 后，reports 相关基线已单独重跑（6 张 png 更新，各项 0、exit 0）并经用户双端验收通过，随 `7625865` 提交推送**。**晨间简报接入后再次重跑（未起后端）：91 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`reports` 与 `plans-ai` 各 6 视口报 `Failed to load resource: 502`（同源 `/api` 不可达，属运行前提未满足，非本次改动）；`design/` 仅首页实时日期文字导致 7 张像素漂移（0.035%），已还原未入库**。**步骤 11（8d）后与 2026-11-05 报告页返回态修复后各重跑一次（未起后端，preview 4173）：两次均为 90 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`failures 12`（`reports` 6 + `plans-ai` 6 的 502 控制台错误，非像素回归），exit 1；`design/` 累计 65 张 png 更新（18 张真实改动：`fitness-*` 6 / `fitness-new-*` 6 / `reports-*` 6；6 张首页为日期文字 11/4→11/5；其余 41 张单张变化 ≤ 400 B，属 1 s 实时时钟/倒计时漂移），**已于 2026-11-05 由用户桌面端 + 移动端验收通过并入库（`5ee8d85`）**；2026-11-05 学习来源修复只改分类按钮的处理逻辑并加一条用例，无静态样式变化，故未重跑视觉基线；**步骤 12（设置页新增「数据同步」卡片）后重跑（2026-11-05，未起后端，本地 `npm run dev -- --port 4173` + `PERSIST_API_TARGET=http://127.0.0.1:9`）：15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / missingDialogs 0 / missingElements 0`；`failures 12` 为 `reports` 6 + `plans-ai` 6 的 `502 (Bad Gateway)` 控制台错误（运行前提未满足，与基线同源），exit 1；与已入库基线 `5ee8d85` 相比 13 张 png 差异：6 张设置页（新增「数据同步」卡片，页面高度 +324~371 px）、6 张首页（仅每秒倒计时文字，像素差 0.03%~0.07%）、1 张快速记录；已随 `4d3edcf` 入库（用户双端验收通过）**；**2026-11-05 饮食照片附件下线后重跑（未起后端，本地 `npm run dev -- --port 4173` + `PERSIST_API_TARGET=http://127.0.0.1:9`）：15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`failures 12` 仍为 `reports` 6 + `plans-ai` 6 的 502 噪声（exit 1）；20 张 png 差异全部来自本次界面改动：饮食页 7 张（6 视口 + `diet-new-mobile-430`，删附件行与文案后页面变短）、首页 6 张（快捷入口附件入口下线）、设置页 6 张（隐私说明去掉照片表述）、快速记录 1 张；已随 `fbab985` 入库（用户双端验收通过）** |
-| 服务端类型/单测 | `npm run typecheck` + `npm test`（`server/`） | 0 错；**112/112**（13 个文件：config 4 / contract 9 / rate-limit 3 / extract 8 / deepseek 7 / chat 7 / prompts 3 / report 17 / db-driver 5 / db-migrate 7 / db-repositories 16 / devices 10 / sync 16），**要求 Node ≥ 22.5**（内置 `node:sqlite`，Node 20 直接 `Cannot find module 'node:sqlite'`）（2026-11-05 步骤 12 后复跑） |
-| 服务端冒烟 | `node dist/index.js` + HTTP 调用 | 无 Key：`/api/health` 200（`ai: "disabled"`、`db: "ok"`、`version: 1`）、`/api/chat` 503、`/api/report` 503；真实 Key（本机临时进程，PORT=3001）：`/api/health` 200（`ai: "deepseek"`）、`POST /api/report` 200 + 中文简报（2.7 s）、只授权学习时无训练/饮食字样；**步骤 12 冒烟（2026-11-05，PORT=3101）**：register → push → 杀进程 → 重启 → 同一 token pull 实体原样返回（重启后数据仍在）、`recoveryCode` restore 拿到同一 `userId` 的新 token、同一 `opId` 重放 rev 不变（幂等） |
+| 生产构建 | `npm run build` | 通过（`index-<hash>.js` **628.24 kB / gzip 186.67 kB**，`index-<hash>.css` **145.40 kB / gzip 24.89 kB**，2026-11-05 步骤 13 后复跑；主 JS 仍超 500 kB 提示线，`/plans` 未拆 bundle。此前 604.31 kB / 138.98 kB（饮食跨日修复后）、606.08 kB / 140.20 kB（步骤 12 后）；本次 +23.93 kB 来自综合分析块 / 设置卡片 / 分析客户端与契约代码） |
+| 视觉检查 | `npm run visual:check`（**前提：同源 `/api` 可达**，先起无 Key 后端，否则 502 会判 `consoleErrors > 0`） | 最近一次全量重跑为 2026-11-04 步骤 8b 后全绿：15 个状态 × 6 个视口 = 90 张 + 快速记录 1 张 = 91 张，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`（exit 0），77 张 png 更新并经用户双端验收通过后入库。**8c 改动 `/reports` 后，reports 相关基线已单独重跑（6 张 png 更新，各项 0、exit 0）并经用户双端验收通过，随 `7625865` 提交推送**。**晨间简报接入后再次重跑（未起后端）：91 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`reports` 与 `plans-ai` 各 6 视口报 `Failed to load resource: 502`（同源 `/api` 不可达，属运行前提未满足，非本次改动）；`design/` 仅首页实时日期文字导致 7 张像素漂移（0.035%），已还原未入库**。**步骤 11（8d）后与 2026-11-05 报告页返回态修复后各重跑一次（未起后端，preview 4173）：两次均为 90 张生成、`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`failures 12`（`reports` 6 + `plans-ai` 6 的 502 控制台错误，非像素回归），exit 1；`design/` 累计 65 张 png 更新（18 张真实改动：`fitness-*` 6 / `fitness-new-*` 6 / `reports-*` 6；6 张首页为日期文字 11/4→11/5；其余 41 张单张变化 ≤ 400 B，属 1 s 实时时钟/倒计时漂移），**已于 2026-11-05 由用户桌面端 + 移动端验收通过并入库（`5ee8d85`）**；2026-11-05 学习来源修复只改分类按钮的处理逻辑并加一条用例，无静态样式变化，故未重跑视觉基线；**步骤 12（设置页新增「数据同步」卡片）后重跑（2026-11-05，未起后端，本地 `npm run dev -- --port 4173` + `PERSIST_API_TARGET=http://127.0.0.1:9`）：15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / missingDialogs 0 / missingElements 0`；`failures 12` 为 `reports` 6 + `plans-ai` 6 的 `502 (Bad Gateway)` 控制台错误（运行前提未满足，与基线同源），exit 1；与已入库基线 `5ee8d85` 相比 13 张 png 差异：6 张设置页（新增「数据同步」卡片，页面高度 +324~371 px）、6 张首页（仅每秒倒计时文字，像素差 0.03%~0.07%）、1 张快速记录；已随 `4d3edcf` 入库（用户双端验收通过）**；**2026-11-05 饮食照片附件下线后重跑（未起后端，本地 `npm run dev -- --port 4173` + `PERSIST_API_TARGET=http://127.0.0.1:9`）：15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`failures 12` 仍为 `reports` 6 + `plans-ai` 6 的 502 噪声（exit 1）；20 张 png 差异全部来自本次界面改动：饮食页 7 张（6 视口 + `diet-new-mobile-430`，删附件行与文案后页面变短）、首页 6 张（快捷入口附件入口下线）、设置页 6 张（隐私说明去掉照片表述）、快速记录 1 张；已随 `fbab985` 入库（用户双端验收通过）**；**步骤 13（`/reports` 综合分析块 + 设置页「每日简报」卡片）后重跑（2026-11-05，未起后端，本地 `npm run dev -- --port 4173` + `PERSIST_API_TARGET=http://127.0.0.1:9`）：15 状态 × 6 视口 = 90 张 + 快速记录 1 张，`overflow 0 / missingDialogs 0 / missingElements 0 / quickRecordReady true`；`failures 12` 仍是 `reports` 6 + `plans-ai` 6 的 502 控制台错误（运行前提未满足），exit 1；12 张 png 差异（`reports-*` 6 与设置页 6），**但本轮未提交**——等用户桌面端 + 移动端验收后再入库** |
+| 服务端类型/单测 | `npm run typecheck` + `npm test`（`server/`） | `tsc -b` 0 错；**174/174**（18 个文件：步骤 12 的 13 个文件 112 条 + 步骤 13 新增 `analysis-content` / `analysis-facts` / `analysis-routes` / `daily-brief` / `reports-repo` 5 个文件 62 条），**要求 Node ≥ 22.5**（内置 `node:sqlite`，Node 20 直接 `Cannot find module 'node:sqlite'`）（2026-11-05 步骤 13 后复跑） |
+| 服务端冒烟 | `node dist/index.js` + HTTP 调用 | 无 Key：`/api/health` 200（`ai: "disabled"`、`db: "ok"`、`version: 2`）、`/api/chat` 503、`/api/report` 503、`POST /api/v1/analysis/reports` **200 + `origin:"rules"` + `model:null`**（诚实降级而非报错）；真实 Key（本机临时进程，PORT=3001，历史记录）：`/api/health` 200（`ai: "deepseek"`）、`POST /api/report` 200 + 中文简报（2.7 s）、只授权学习时无训练/饮食字样；**步骤 12 冒烟（2026-11-05，PORT=3101）**：register → push → 杀进程 → 重启 → 同一 token pull 实体原样返回（重启后数据仍在）、`recoveryCode` restore 拿到同一 `userId` 的新 token、同一 `opId` 重放 rev 不变（幂等）；**步骤 13 冒烟（临时 vitest 走真实 HTTP，验收后已删除）**：bootstrap 5 类记录 → 分析 200 平铺 → 同 `dataRev` `cached:true` → `/api/v1/reports` 列表与 `/:id` 详情 → facts v2 粒度（30 天 `granularity:'day'`、只出有记录的天）→ 无 Key 规则降级 `model:null` → 白名单违规 502 不入档 → 空窗口 409 → 当日第 7 次 429 → 未授权 403 |
 
 Playwright 配置为两个项目：
 
 - `desktop-chrome`
 - `mobile-chrome`（Pixel 7，`isMobile: true`）
 
-共 56 个用例 × 2 个项目 = 112 次执行，**0 跳过 0 失败**。原先 `plans.spec.ts` 中「档案页 AI 建档入口」在移动端被 `test.skip(isMobile)` 跳过，原因是该按钮在 ≤900px 被全局隐藏规则一并向隐藏；现已给按钮加 `profile-onboard-action` 并从隐藏规则豁免，移动端同样真实点击验证，测试不再跳过。
+共 60 个用例 × 2 个项目 = 120 次执行（9 个文件），**0 跳过 0 失败**。原先 `plans.spec.ts` 中「档案页 AI 建档入口」在移动端被 `test.skip(isMobile)` 跳过，原因是该按钮在 ≤900px 被全局隐藏规则一并向隐藏；现已给按钮加 `profile-onboard-action` 并从隐藏规则豁免，移动端同样真实点击验证，测试不再跳过。步骤 13 新增 `reports-analysis.spec.ts` 4 条（×2），其中用于断言响应形状的用例正是为「平铺 vs 包一层」那次 bug 加的回归。
 
 步骤 6 新增 `e2e/persistence.spec.ts` 3 条（饮水记录 / 长期计划 / 提醒设置）在桌面与移动两个项目都真实刷新页面验证，覆盖「刷新后仍在」与「重复刷新不累加」。步骤 7 在同一文件补第 4 条「清空本机数据后刷新回到初始示例数据」：先造出与基线不同的状态（饮水 1.2 L → 1.5 L、关掉饮水提醒）→ 进入设置页二次确认清空 → 断言界面立刻回到基线（提醒开关重新勾选、快照区显示「尚未生成快照」）→ 刷新后仍为基线（断言 1.2 L 且不含 1.5 L、提醒开关已勾选），用来抓「200 ms 防抖把旧数据写回」这类顺序错误。
 
@@ -1088,7 +1104,10 @@ Playwright 配置为两个项目：
 | `app\src\lib\sync-client.test.ts` | 12 | 12d：注册（POST `/api/v1/devices`、不带令牌）、缺 `recoveryCode` 判不可用、push 带 Bearer + `opId` 并解析 `skipped`、pull 的 `since`/`limit` 夹取、restore/revoke 路径、bootstrap 全量上传；失败分类（401 不可重试 / 429·5xx·网络·超时可重试 / 400 不可重试）与指数退避 5 s→5 min 封顶 |
 | `app\src\lib\sync-engine.test.ts` | 14 | 12d：未开启时不发任何请求、enable 走「注册 → bootstrap → pull」、本地写入差分入 outbox 后 push 清账、本地删除发墓碑、pull 合并 LWW、令牌失效标 `needsAttention` 且保留 outbox、网络失败退避、离线只显示「离线」、disable 后停发请求并保留本地与凭据、重开补发关闭期间的写入、restore 从 rev 0 拉取且丢弃上一账号未发完的变更、revoke 回收状态、`noteDataChange` 触发 5 s 防抖 |
 | `app\src\lib\sync-entities.test.ts` | 16 | 12f：8 个可同步切片摊平成实体（跳过报告 / 进行中会话）、单行实体占位 id 与顶层 `aiConsent`、饮食实体带日期/餐次且不含照片字段；`stableStringify` 与 `hashText`、`diffLocalEntities` 增量与消失键；`applyPulledEntities` 的 LWW、墓碑删除、未知 kind / 缺字段计 `skipped`、**远端记录形状不完整时跳过**（不把坏记录写进存档）、body id ≠ 信封 id 跳过、饮食按日合并；`toCandidates` / `removedCandidates` |
-| `server\test\*.test.ts` | 112 | 服务端 13 个文件：config 4、contract 9、rate-limit 3、extract 8、deepseek 7、chat 7、prompts 3、report 17（请求校验 7 / 内容净化 4 / 路由 6）、db-driver 5、db-migrate 7、db-repositories 16、devices 10、sync 16（opId 幂等、LWW、墓碑、pull 分页与游标、bootstrap 事务、鉴权 401） |
+| `app\src\lib\analysis-client.test.ts` | 26 | 13b/13c：四个分析接口的请求构造（`rangeDays` / `force` / `limit` / `cursor`、Bearer 令牌）、平铺 `AnalysisReportResponse` 解析、四态来源标签与缓存标记、9 类错误分流（network / timeout / unauthorized / consent-off / insufficient / invalid / rate-limited / server / invalid-response）、归档列表与详情 |
+| `app\src\pages\ReportsPage.analysis.test.tsx` | 8 | 13c：`/reports` 综合分析块——窗口 7/30/90 切换、生成后显示指标与来源、`cached:true` 标记、归档列表与详情打开、错误分类文案、未开同步时显示前置说明、**响应形状为平铺（不是 `{report}` 包一层）的回归断言** |
+| `app\src\pages\SettingsPage.brief.test.tsx` | 5 | 13c：设置页「每日简报」卡片——默认关闭、默认 21:00、改时间后写入设置、非法时间回退并提示、未开同步时卡片提示需先开启同步 |
+| `server\test\*.test.ts` | 174 | 服务端 18 个文件：步骤 12 的 13 个（config 4、contract 9、rate-limit 3、extract 8、deepseek 7、chat 7、prompts 3、report 17、db-driver 5、db-migrate 7、db-repositories 16、devices 10、sync 16）+ 步骤 13 的 5 个：`analysis-content`（数字白名单、文案净化与长度限制）、`analysis-facts`（7/30/90 天粒度与只出有记录的天、空窗口、事实包 v2 形状）、`analysis-routes`（200 平铺 / `cached` / `force` / 403 / 409 / 422 / 429 / 502 且不入档 / `no-store`）、`daily-brief`（未到点 / 环境变量关闭 / 无用户跳过、`runKey` 幂等、设置页开关优先于 env、两次失败记 `failed` 后当天换好模型可重试、零记录记 `insufficient_data`、`start` 立即补跑一次）、`reports-repo`（归档写读、`dataRev` 唯一约束、365 天清理） |
 | `app\src\lib\countdown.test.ts` | 4 | 倒计时边界和格式化 |
 
 ### 10.3 最新构建产物
@@ -1097,8 +1116,8 @@ Playwright 配置为两个项目：
 dist/index.html                  0.61 kB（611 B）
 dist/favicon.svg                9,522 B
 dist/icons.svg                  5,031 B
-dist/assets/index-BNFgRy0R.css  138.98 kB（gzip 23.96 kB）
-dist/assets/index-Diy7Ja9h.js   604.31 kB（gzip 180.26 kB）
+dist/assets/index-<hash>.css    145.40 kB（gzip 24.89 kB）
+dist/assets/index-<hash>.js     628.24 kB（gzip 186.67 kB）
 ```
 
 产物演进（便于识别“哈希变了是否正常”）：
@@ -1116,10 +1135,11 @@ dist/assets/index-Diy7Ja9h.js   604.31 kB（gzip 180.26 kB）
 11. 学习来源随科目切换清空（`971e1b6`）后：主 JS **574.67 kB**（`index-BM4N278W.js`，574,679 B，+0.04 kB；gzip 171.38 → 171.41 kB），CSS 哈希与体积仍为 `index-CrJgYfMj.css` 137.70 kB——只改了分类按钮的处理函数并加了一条 E2E 用例，**零样式改动**。看到 `index-BM4N278W.js` 即代表构建产物已含该修复；该产物**仍未部署**。
 12. 步骤 12（12c–12f）后：主 JS **606.08 kB**（`index-UkB7XkZI.js`，606,086 B；gzip 171.41 → 180.91 kB，+9.50 kB）：`shared/` 契约包、客户端同步层（`sync-contract` / `sync-client` / `sync-queue` / `sync-store` / `sync-entities` / `sync-engine`）与 12f 的 pull 形状守卫；CSS 变为 `index-7YbMuqJW.css`（140.20 kB，+2.50 kB：设置页「数据同步」卡片与恢复码/吊销对话框样式）。**注意：步骤 12 的产物含服务端同步所需代码但服务端未部署，前端也不得单独发版**；看到 `index-UkB7XkZI.js` + `index-7YbMuqJW.css` 即代表构建产物已含 12f 收尾。
 13. 饮食照片附件下线 + 跨日空餐次修复（`fbab985` / `50d90ef`）后：主 JS **604.31 kB**（`index-Diy7Ja9h.js`，606,086 → 604,310 B 量级，gzip 180.91 → 180.26 kB：删掉附件行、图标与同步字段，新增 `createEmptyMeals` / `dayMeals` 骨架逻辑），CSS 变为 `index-BNFgRy0R.css`（138.98 kB，−1.22 kB：删除 97 行附件相关样式）。看到 `index-Diy7Ja9h.js` + `index-BNFgRy0R.css` 即代表产物已含本次两项改动；该产物**仍未部署**（服务器仍是步骤 9 的旧包）。
+14. 步骤 13（13a–13c）后（**工作区未提交**）：主 JS **628.24 kB**（gzip 186.67 kB，+23.93 kB / +6.41 kB gzip）：`analysis-contract`（转出 `@persist/shared/contract/analysis`）、`analysis-client`（四个接口 + 四态标签 + 9 类错误分流）、`/reports` 综合分析块与归档列表、设置页「每日简报」卡片；CSS **145.40 kB**（gzip 24.89 kB，+6.42 kB）：综合分析块、归档列表与简报卡片样式。**主 JS 已过 500 kB 提示线且 `/plans` 仍未拆包**；产物仍**未提交、未部署**（服务器仍是步骤 9 的旧包）。
 
 > 更正：清理后的 CSS 体积实测为 137.64 kB（早期摘要曾误记为 134.42 kB，以 §18.1 变更史为准）。
 
-2026-11-03 起构建一直提示主 JS 超过 Vite 默认 500 kB 提示线；步骤 12 后 606.08 kB、2026-11-05 饮食改动后 604.31 kB，**提示仍在但未阻塞验收**。后续建议按路由懒加载拆包（`/plans` 是天然的懒加载候选）。
+2026-11-03 起构建一直提示主 JS 超过 Vite 默认 500 kB 提示线；步骤 12 后 606.08 kB、2026-11-05 饮食改动后 604.31 kB、**步骤 13 后 628.24 kB**，**提示仍在但未阻塞验收**。后续建议按路由懒加载拆包（`/plans` 是天然的懒加载候选，`/reports` 的分析块也适合按需加载）。
 
 ### 10.4 Lint 警告（已清零）
 
@@ -1398,7 +1418,7 @@ npm run visual:check
 | **P2** 本机持久化（步骤 6） | ✅ `128d6a2` | 原生 IndexedDB，整库单记录 + `schemaVersion` 迁移；刷新/重开不丢 |
 | **P3-0** 清空本机数据（步骤 7） | ✅ `a544a38` | 停写回 → 清库 → 重置内存态 → 恢复写回，二次确认 + toast |
 | **P3** 服务端 AI 代理 | ✅ 2026-11-04 | `9138175` + `b99d3ad` + `bdd4265` + 步骤 9 部署（Nginx + systemd + SSE/长请求/限流实测通过），步骤 10 等备案号 |
-| **P4** 数据层与 AI 综合分析 | 🟡 进行中 2/4 | 终态设计已定稿（`docs/P4-数据层与AI综合分析设计方案.md`）：步骤 11（数据历史化）2026-11-04 完成；步骤 12（账号 + 增量同步）2026-11-05 **本机完成并验收、已推送未部署**；步骤 13–14 未开始 |
+| **P4** 数据层与 AI 综合分析 | 🟡 进行中 3/4 | 终态设计已定稿（`docs/P4-数据层与AI综合分析设计方案.md`）：步骤 11（数据历史化）2026-11-04 完成；步骤 12（账号 + 增量同步）2026-11-05 **本机完成并验收、已推送未部署**；步骤 13（服务端聚合 + AI 综合分析）2026-11-05 **本机完成并验证、代码未提交未部署**；只剩步骤 14（备份 / 恢复 / 导出 / 删除账号） |
 | **P5** Capacitor Android | ⬜ 未开始 | 依赖前端冻结 + 部署稳定 |
 | **P6** 质量与性能清理 | 🟡 部分完成 | 已移除 `prettier-plugin-tailwindcss` 并全仓格式化；lint 警告已清零（`f5a57f5`）；剩包拆分、补单测等 |
 
@@ -1438,22 +1458,22 @@ npm run visual:check
 | 步骤 | 内容 | 依赖 |
 |---|---|---|
 | **11**（8d） | 数据历史化：按日台账、真实训练历史、`schemaVersion` 1→2、备份 0.3.0 | ✅ **已完成 2026-11-04**（`6d769a7` / `bc4ee88` / `12de14b` / `8edb8ba` / `971e1b6`；视觉基线已双端验收入库 `5ee8d85`） |
-| **12**（P4a） | SQLite 表 + migration + repository、`/api/v1/devices*`、`/api/v1/sync/{bootstrap,push,pull}`（`opId` 幂等 / LWW / 30 天墓碑 / `rev` 游标）、客户端 outbox、设置页同步区块 | ✅ **本机完成并验收 2026-11-05**：12a `ca02250` / 12b `6fe6b3d`（文档 `d555cb0`）/ 12c `c6a65fd` / 12d `9abd8bb` / 12e `f09c3da` / 12f 收尾（pull 形状守卫 + 本机验收 + 视觉重跑 + 文档同步）；app 292/292、server 112/112、E2E 110、P4 §7.4 19/19。**已推送、未部署**（服务器 Node 20.20.2 无 `node:sqlite`，部署等步骤 10；视觉基线 13 张已入库） |
-| **13**（P4b） | facts builder、`ANALYSIS_SYSTEM_PROMPT`（禁止算术）、`/api/v1/analysis/{facts,reports}`、`dataRev` 缓存 + 定时简报 + 规则降级 | ← 11 + 12 |
+| **12**（P4a） | SQLite 表 + migration + repository、`/api/v1/devices*`、`/api/v1/sync/{bootstrap,push,pull}`（`opId` 幂等 / LWW / 30 天墓碑 / `rev` 游标）、客户端 outbox、设置页同步区块 | ✅ **本机完成并验收 2026-11-05**：12a `ca02250` / 12b `6fe6b3d`（文档 `d555cb0`）/ 12c `c6a65fd` / 12d `9abd8bb` / 12e `f09c3da` / 12f 收尾（pull 形状守卫 + 本机验收 + 视觉重跑 + 文档同步）；app 292/292、server 112/112、E2E 110、P4 §7.4 19/19（**步骤 12 完成时的数字**）。**已推送、未部署**（服务器 Node 20.20.2 无 `node:sqlite`，部署等步骤 10；视觉基线 13 张已入库） |
+| **13**（P4b） | facts builder、`ANALYSIS_SYSTEM_PROMPT`（禁止算术）、`/api/v1/analysis/{facts,reports}`、`dataRev` 缓存 + 定时简报 + 规则降级 | ✅ **本机完成并验证 2026-11-05**：13a 契约 + schema v2 / 13b 聚合与四个接口 / 13c 每日简报 + 前端；server 174/174（18 文件）、app 334/334（24 文件）、E2E 120（9 文件）、oxlint 0/0（98 文件）；**代码仍在工作区未提交、未部署**（本机无真实 Key，真实模型分支用注入假客户端验证） |
 | **14**（P4c） | `/api/v1/backups*`（`VACUUM INTO` + sha256 + 恢复预览 + 二次确认 + 恢复前自动备份）、`/api/v1/export`（0.3.0 同构）、`DELETE /api/v1/account`、备份保留策略 | ← 12 |
 
-每步独立验收与提交，门禁：typecheck 0 错 + 单测 / E2E / 构建全绿 + 视觉有变化则重跑基线并请用户双端验收 + 文档同步 + 独立提交推送。**步骤 12 已按此走完 12a–12f，代码、文档与视觉基线均已于 2026-11-05 推送**（本地 `main` 与 `origin/main` 一致），**但未部署**（等步骤 10 升 Node 22）。
+每步独立验收与提交，门禁：typecheck 0 错 + 单测 / E2E / 构建全绿 + 视觉有变化则重跑基线并请用户双端验收 + 文档同步 + 独立提交推送。**步骤 12 已按此走完 12a–12f，代码、文档与视觉基线均已于 2026-11-05 推送**（本地 `main` 与 `origin/main` 一致），**但未部署**（等步骤 10 升 Node 22）。**步骤 13 已走完 13a–13c 的实施与验证，但卡在「提交」这一步之前**：代码仍在工作区（`HEAD` = `91081a3`），视觉基线 12 张未入库，等用户双端验收后再提交推送。
 
 ### 13.5 P5 / P6
 
 - **P5 Android**：接 Capacitor + Android 工程 → 网络/通知/分享/安全区 → 返回键、键盘、横竖屏、后台行为 → WebView 内 IndexedDB 持久化复验 → USB 安装与真机验证 → 离线与 AI 不可用降级（复用 8b/8c 的 Mock 回退）。验收：目标机可装可启动、断网可记录、升级安装不丢数据。
-- **P6 质量清理**：① ~~修 3 条 `set-state-in-effect` lint 警告~~ **已完成（`f5a57f5`，现行 oxlint 0 错 0 警告）**；② 按路由 `React.lazy()` 拆主包（`/plans` 优先，当前主包 574.40 kB）；③ ~~健身历史升级为通用 `WorkoutSet`~~ **已于 11b 完成**（历史读 `fitnessHistory`，按动作类型展示）；④ 补纯业务单测（健身汇总、饮水边界、学习统计、报告数据源、导入导出）；⑤ 可复用类型/纯函数迁 `shared/`；⑥ 评估无障碍、键盘导航与焦点管理。
+- **P6 质量清理**：① ~~修 3 条 `set-state-in-effect` lint 警告~~ **已完成（`f5a57f5`，现行 oxlint 0 错 0 警告）**；② 按路由 `React.lazy()` 拆主包（`/plans` 优先，当前主包 **628.24 kB**，已过 500 kB 提示线）；③ ~~健身历史升级为通用 `WorkoutSet`~~ **已于 11b 完成**（历史读 `fitnessHistory`，按动作类型展示）；④ 补纯业务单测（健身汇总、饮水边界、学习统计、报告数据源、导入导出）；⑤ 可复用类型/纯函数迁 `shared/`（步骤 12c/13a 已迁同步与分析契约，chat/report 仍待迁）；⑥ 评估无障碍、键盘导航与焦点管理。
 
 ### 13.6 已完成阶段留下的技术约束（改动前必读）
 
 - **持久化结构（P2）**：DB `persist-app` v1 / store `mock-state` / 单记录 `id='persist-mock-state'`，13 个状态切片（含 `fitnessHistory` / `dietDays` 等历史字段）合成一条记录整体重写（约 100–300 KB/次，200 ms 防抖）；`schemaVersion` 现为 **2**，`MIGRATIONS` v0→v1→v2，遇到更高版本返回 `unsupported-version` 只读；首挂载水合、`pagehide` / `visibilitychange` 补写；`unavailable`（2 s 超时）与 `corrupt` 降级；`corrupt` / `unavailable` 目前只有控制台告警，没有面向用户的 Toast（未做项）。
 - **清空数据（P3-0）**：顺序固定为停止写回 → `clearTimeout(saveTimerRef)` → `clearPersistedState()` → `replaceMockData(createInitialMockData())`（含 `snapshot=null`）→ 同步刷新 `latestStateRef` → 恢复写回；`hydrated` 保持 true。
-- **服务端契约**：`/api/chat` 请求 `turns` 1–20 条、单条 ≤2000 字、合计 ≤12000 字、末条必须 `user`；`/api/report` 请求体只有 `{ type, rangeDays, digest }`。改契约同时改 `server/src/contract.ts` 与 `app/src/lib/chat-types.ts` / `report-types.ts`。
+- **服务端契约**：`/api/chat` 请求 `turns` 1–20 条、单条 ≤2000 字、合计 ≤12000 字、末条必须 `user`；`/api/report` 请求体只有 `{ type, rangeDays, digest }`。改契约同时改 `server/src/contract.ts` 与 `app/src/lib/chat-types.ts` / `report-types.ts`。步骤 12/13 的新契约在 `@persist/shared`（`contract/{sync,entities,parse,analysis}.ts`）；`POST /api/v1/analysis/reports` 返回**平铺**的 `AnalysisReportResponse`（不是 `{ report }`），归档列表是 `{ reports, nextCursor }`。
 - **为什么不用 Dexie**：`npm install` 受沙箱与全局缓存路径限制（EPERM），且当前只有「单用户单记录」场景；将来拆多 store / 多表查询再评估（步骤 11 会重新评估）。
 
 ---
@@ -1472,7 +1492,7 @@ npm run visual:check
 | ~~Prettier 插件会压平条件类名~~ | 风险已消除：`prettier-plugin-tailwindcss` 已于 2026-11-03 从配置和 `package.json` 移除，全仓格式化不再破坏条件类名 | 保留规则：条件类名仍统一用 `cn()` 或完整字符串三元；格式化前后仍建议 `Select-String` 抽查条件类名 |
 | “快照”容易被误解 | 用户可能以为可以恢复数据 | UI 和文档明确其只是元信息（但它会持久化保存） |
 | 回滚粒度仍偏粗 | 现有提交链（`bd779eb` / `da787c4` / `128d6a2` / `e3e9730` / `d4c9696` / `style:`），清理与格式化已单独成提交，但整体仍是按阶段而非按功能切片 | 每个阶段结束时提交一次，保持可回滚 |
-| 报告质量与口径 | 8c 后报告文字可来自模型，但只有「今日简报」接服务端；若提示词失控，模型可能写出摘要里没有的数字 | 提示词已明确禁止任何数值推算，`sanitizeReportContent()` 兜底长度与结构；真实联调曾捕获「再补水 0.5 L」并修复；报告指标与依据始终由前端确定性生成，模型无法改数字 |
+| 报告质量与口径 | 8c 后报告文字可来自模型，但只有「今日简报」接服务端；若提示词失控，模型可能写出摘要里没有的数字 | 提示词已明确禁止任何数值推算，`sanitizeReportContent()` 兜底长度与结构；真实联调曾捕获「再补水 0.5 L」并修复；报告指标与依据始终由前端确定性生成，模型无法改数字；步骤 13 再收紧一层：服务端综合分析正文里出现的每个数字都必须在事实包 JSON 里，否则 502 且不入档（`analysis-content` 单测 11 条） |
 | 服务器 root 密码登录 + 安全组开着 3389 | 公网 22 端口暴露且允许密码爆破；3389 对 Linux 无用；部署用 ed25519 公钥已加入 `/root/.ssh/authorized_keys`（2026-11-04），但**密码登录仍开着** | 步骤 10：关闭 root 密码登录、删除 3389 规则、装 `fail2ban`（见部署文档 §6/§10） |
 | 2 GiB 内存 + 3 Mbps 峰值带宽 + 按流量计费（0.8 元/GB） | 在服务器上 `npm ci` + `vite build` 极易 OOM；未配压缩/缓存时每次回访都重复计流量 | 前端只在本地构建后上传 `app/dist`；Nginx 开 gzip，hashed 资源 `immutable` 一年、`index.html` `no-cache`（见部署文档 §5.1） |
 | 域名备案中（2026-11-03 提交；**2026-11-04 阿里云初审已通过**；计划 2026-11-05 提交省通信管理局审核） | 备案号下发前不能用域名对外提供 HTTP 服务，阿里云会拦截；管局审核时长不可控（法定期限 20 个工作日） | 现阶段只用 IP 直连做内部验收；步骤 10（解析域名、开 443、签证书）只能等备案号下发，**不要按经验值承诺上线日期**，也不要在任何对外文案里写域名已可用 |
@@ -1488,13 +1508,15 @@ npm run visual:check
 - ~~3 条 lint 警告未清理~~ ✅ 已于 2026-11-04 随 `f5a57f5` 清零（深链改为从 URL 派生弹层状态，未用 `eslint-disable`）。
 - ~~饮食照片没有真实存储~~ ✅ 2026-11-05 已整体移除照片入口（不再产生、同步或展示任何图片字段）。
 - 提醒没有系统通知能力。
-- 「训练建议」/「学习观察」两类报告仍打开本地已有报告；数字与依据在 8d 后已按近 7 / 30 / 90 天窗口真实汇总（不再用演示常量），但服务端提示词仍写「今日…」，窗口叙述口径留给步骤 13（P4b）统一。
+- 「训练建议」/「学习观察」两类报告仍打开本地已有报告；数字与依据在 8d 后已按近 7 / 30 / 90 天窗口真实汇总（不再用演示常量）。步骤 13 起 `/reports` 另有「服务端综合分析」块（事实包 v2 + 单次模型调用 + 365 天归档，**未部署**），两套报告并存：本地块仍按已有口径出数，服务端结果不写回本地 `reports`。
 - ~~`/reports` 视觉基线在 8c 后过期~~ ✅ 已于 2026-11-04 重跑（6 张 png 更新，`overflow 0 / consoleErrors 0 / missingDialogs 0 / missingElements 0 / failures 0`、exit 0），经用户桌面端 + 移动端验收后随 `7625865` 提交推送；reports 基线现与代码一致。
 - 持久化已有 UI 入口的清空（步骤 7「清空本机数据」，`a544a38`）；导入会整体替换本机数据且无撤销；读盘失败只在控制台告警，没有面向用户的提示。
 - 没有跨标签页同步与写入冲突处理；同一浏览器两个标签页同时编辑时以最后写入为准。
 - P3 服务端（`9138175` + `b99d3ad` + `bdd4265`）只有按 IP 限流，**没有用户鉴权**（P3 无账号体系）；未配 `DEEPSEEK_API_KEY` 时 `/api/health` 报 `ai: "disabled"`、`/api/chat` 与 `/api/report` 固定 503，前端据此回退 Mock，属预期降级路径。两个接口共用同一个 20 次/5 分钟限流器（有意为之：消耗同一份额度），因此连续做报告会挤占建档对话的额度。
 - 真实 DeepSeek 调用尚未做费用/额度监控与 token 统计；模型输出质量（追问条数、周目标数量）仍有波动。真实 Key 曾出现在开发对话中，**上线前必须轮换**。
-- `@persist/shared` 已在步骤 12c 建立并承载同步契约（`contract/{sync,entities,parse}.ts`，`shared/dist` 需 `npm run shared:build`）；**chat/report 的请求响应类型仍在 `server/src/contract.ts`**，改 `ChatEvent` 须同时改 `app/src/lib/chat-types.ts`，改报告契约须同时改 `app/src/lib/report-types.ts`；这部分迁移另排期。
+- `@persist/shared` 已在步骤 12c 建立、步骤 13a 扩到综合分析（`contract/{sync,entities,parse,analysis}.ts`，`shared/dist` 需 `npm run shared:build`）；**chat/report 的请求响应类型仍在 `server/src/contract.ts`**，改 `ChatEvent` 须同时改 `app/src/lib/chat-types.ts`，改报告契约须同时改 `app/src/lib/report-types.ts`；这部分迁移另排期。
+- 服务端综合分析的已知边界（步骤 13，**未提交未部署**）：①只读同步上来的 `entities` 表——同步没开或数据没上来时窗口是空的（返回 409 `insufficient_data`，不会编）；②事实包粒度是 7 天逐日、30 天逐日 + 周、90 天只给周，**只包含有记录的天**，没有值的天不补零；③模型只写文字，正文数字必须在事实包内，否则 502 且不入档；④无 Key / 超时 / 上游错一律 200 + `origin:"rules"` 规则降级（`model:null`），不会假装成 AI；⑤报告缓存键是 `dataRev`（= 服务端 `sync_seq.value`），**同一份数据重复生成返回 `cached:true`**，`force:true` 才重建；⑥报告保留 365 天，清理发生在生成时，**墓碑 30 天与审计日志 30 天的清理任务仍未实现**。
+- 每日简报 job（步骤 13c）：进程内 60 s tick（`unref`，**不需要 systemd timer / cron**）、默认关闭（`DAILY_BRIEF_ENABLED=false`）、默认 21:00；读的是**同步上来的设置**（`settings.payload_json.dailyBrief`），env 只是兜底——跨设备同步未开或设置没同步上去时不会跑；每天按 `runKey`（本地日期）幂等，最多尝试 2 次，失败记 `job_runs`。
 - 同步的已知边界（步骤 12，未部署）：① 只同步「本机已有记录」，不会补出没落过盘的历史；② pull 前有形状守卫（`matchesRecordShape`），形状不完整的远端实体会被计 `skipped` 丢弃而不是修复后写入，因此旧版本客户端写坏的实体同步不过来；③ 同步关闭时不发任何请求，失败只体现在设置页状态与指数退避重试，**没有逐条冲突 / 失败列表**，也没有「暂停某切片」之类的开关；④ 同步副本**不是备份**（无历史版本、无恢复），备份 / 导出 / 删除账号在步骤 14。
 - 同步的冲突策略是 LWW（按 `updatedAt` 后写胜）+ 墓碑：同一实体的两处并发编辑不会合并，后写入者整体覆盖；删除写墓碑（`deleted_at` + 新 `rev`、payload 清空）并由 pull 传播给其他设备。**墓碑的 30 天保留 / 定期清理是 P4 §6 的设计口径，步骤 12 未实现清理任务**。这与「无冲突 UI」是有意取舍，不是缺陷。
 - 跨日期自动化仍有限：8d 已让饮食 / 饮水 / 计划 / 训练按日台账累积，但 E2E 里没有「跨两天」的用例（本机日期切换靠改系统时钟，未纳入自动化）；演示种子只覆盖最近 7 天。
@@ -1546,7 +1568,7 @@ Get-Content -Encoding utf8
 
 ### 15.3 Git 状态
 
-截至 2026-11-05（步骤 12f 收尾后）：
+截至 2026-11-05（步骤 13 本机完成之后；下面按阶段保留历史状态，**最新状态看最后一条「工作区现状」**）：
 
 - 当前分支：`main`（由 `master` 改名而来，已建跟踪关系）。
 - 远端：`origin` = `git@github.com:save626/Persist.git`（SSH，密钥已注册在 `save626` 账号下；HTTPS 侧也配置了 Git Credential Manager）。
@@ -1591,6 +1613,10 @@ Get-Content -Encoding utf8
   - 推送后 `origin/main` = 本地 HEAD，`git ls-remote origin refs/heads/main` 核对一致；工作区干净，无未推送提交
 - **推送状态（2026-11-05）**：用户确认视觉验收后执行推送，`origin/main` 已从 `91abaeb` 前进到步骤 12 的 HEAD（`202e9d0`；其后的哈希与计数修正提交同样已推送），**本地 `main` 与远端一致**（`git ls-remote origin refs/heads/main` 与本地 hash 核对）；工作区干净，无未推送提交。`git push` / `git ls-remote` 在受限沙箱下会失败（`spawn EPERM`），需要一次性提升权限（2026-11-05 即以 `danger-full-access` 完成推送）。
 - **工作区（推送后，2026-11-05）**：干净——12f 的 pull 形状守卫（`app/src/lib/mock-data-transfer.ts` +36 / `sync-entities.ts` +68 / `sync-entities.test.ts` +42）与文档随 `e9c29a0` 提交，13 张 `design/*.png` 已随 `4d3edcf` 入库（用户桌面端 + 移动端验收通过）；本次饮食改动的 20 张 `design/*.png` 已随 `fbab985` 入库；`server/` 的 `dist/`、`data/`、`.env` 由 `.gitignore` 排除。
+- **工作区现状（步骤 13 之后，2026-11-05，最新）**：**不再干净**——步骤 13（13a–13c）的全部源码改动仍在工作区未提交。`git status` 口径（截至文档同步这一轮）：
+  - 新增（未跟踪）：`shared/src/contract/analysis.ts`、`server/src/analysis/`、`server/src/jobs/`、`server/src/ai/analysis.ts`、`server/src/db/repositories/reports.ts`、`server/src/routes/{analysis,reports}.ts`、`server/test/{analysis-content,analysis-facts,analysis-routes,daily-brief,reports-repo}.test.ts` 与 `server/test/helpers/`、`app/src/lib/{analysis-client,analysis-contract}.ts`、`app/src/lib/analysis-client.test.ts`、`app/src/pages/{ReportsPage.analysis,SettingsPage.brief}.test.tsx`、`app/e2e/reports-analysis.spec.ts`。
+  - 修改（已跟踪）：`shared/package.json`、`shared/src/index.ts`、`server/src/{app,config,index}.ts`、`server/src/ai/{deepseek,prompts}.ts`、`server/src/db/migrations.ts`、`server/test/{db-migrate,sync}.test.ts`、`app/src/{types.ts,context/MockDataProvider.tsx,context/mock-data-context.ts,data/settings.ts,lib/mock-data-transfer.ts,pages/ReportsPage.tsx,pages/SettingsPage.tsx,styles/reports.css,styles/settings.css}`，以及 12 张 `design/*.png`（`reports-*` 6 + `settings-*` 6，重跑但**未入库**，等用户桌面端 + 移动端验收）与 9 篇文档。
+  - `HEAD` 仍是 `91081a3`（= `origin/main`），**没有任何步骤 13 的提交**；下一轮提交时只 `git add` 上述源码与文档，别把 `design/*.png` 顺手带上（除非用户已确认验收），`.step13-review/`（4 张评审截图）也不要提交。
 - **工作区已干净**：65 张 `design/*.png`（18 张真实改动、6 张日期文字、41 张时钟漂移）已随 `5ee8d85` 入库，`git status` 无未提交改动（`server/` 的 `dist/` 与 `.env` 由 `.gitignore` 排除）。
 - 提交前已删除根目录 `$null` 与 `app/$null` 两个重定向误建的垃圾文件；`.gitignore` 排除了 `node_modules/`、`app/dist/`、`app/coverage/`、`app/playwright-report/`、`app/test-results/`、`shared/dist/`、`server/dist/`、`server/data/`、`*.tsbuildinfo`、`.env*`、`design/.edge-profile*/`、`Water intake record/`、`*.log`、`.chrome-headless-*/`。
 - 提交前审计命令（每次提交都用）：`git diff --cached --name-only` 过滤 `node_modules/|^app/dist/|test-results|playwright-report|coverage|Water intake record|\.log$|\.tsbuildinfo$`。
@@ -1700,7 +1726,10 @@ npm run visual:check
 - `D:\Persist\app\src\lib\ai-chat-client.test.ts`（步骤 8b：SSE 解析与回退语义）
 - `D:\Persist\app\src\lib\ai-report-client.test.ts`（步骤 8c：探活、请求体、错误分类、响应校验）
 - `D:\Persist\app\src\lib\sync-*.test.ts`（步骤 12：`sync-store` 13 / `sync-queue` 7 / `sync-client` 12 / `sync-engine` 14 / `sync-entities` 16 = 62 条）
-- `D:\Persist\server\test\`（13 文件 112 条：config / contract / rate-limit / extract / deepseek / chat / prompts / report / db-driver / db-migrate / db-repositories / devices / sync）
+- `D:\Persist\app\src\lib\analysis-client.test.ts`（步骤 13b/13c：四个分析接口、平铺响应、9 类错误分流，26 条）
+- `D:\Persist\app\src\pages\ReportsPage.analysis.test.tsx`（步骤 13c：综合分析块与归档，8 条）、`D:\Persist\app\src\pages\SettingsPage.brief.test.tsx`（步骤 13c：每日简报卡片，5 条）
+- `D:\Persist\app\e2e\reports-analysis.spec.ts`（步骤 13c：综合分析块生成 / 归档 / 错误文案 / 未开同步，4 条 × 2 项目）
+- `D:\Persist\server\test\`（18 文件 174 条：步骤 12 的 13 个文件 + 步骤 13 的 `analysis-content` / `analysis-facts` / `analysis-routes` / `daily-brief` / `reports-repo`）
 - `D:\Persist\app\src\lib\*.test.ts`
 - `D:\Persist\app\src\data\complete-mock-data.test.ts`
 - `D:\Persist\app\scripts\visual-check.mjs`
@@ -1801,6 +1830,9 @@ npm run visual:check
 | 11-05 | **饮食照片/选图附件下线** | `fbab985`（已推送） | 用户要求「拍照和选择图片功能给删除，只能手动填写或者在 AI 热量登记时粘贴解析」：删除 `FoodEntry.photoName`、同步实体透传与旧数据回填、演示种子照片名、餐次编辑与首页快捷入口的附件行、隐私文案、失效 CSS（97 行）与相机图标；手动登记与 AI 粘贴解析保留，旧记录残留字段读取时忽略；20 张视觉基线重跑后经双端验收入库 | app 代码 31 文件 +30/−188；门禁与下一行一起复跑（最终 295 / 112） |
 | 11-05 | **跨日空餐次回归修复** | `50d90ef`（已推送） | 用户双端报障：前一天有记录、第二天首次打开时「记录下一餐」点了没反应、AI 热量登记的餐次下拉选不了、确认登记不入库。根因：按日台账（12b）里 `mealsForDate(今天)` 在缺日时返回 `[]`，页面直接取 `meals[0].id` 抛 TypeError。修复：新增 `createEmptyMeals()` / `dayMeals()` 给页面四个空餐次骨架，Provider 今日切片改用它且 `setMeals` 以骨架为写入起点（否则 `patchMealsForDate` 吞掉首次写入），DietPage 加空值兜底；`mealsForDate` 仍返回 `[]`（统计口径不变），骨架只在内存、打开 App 不会凭空写空台账 | app **295/295**（21 文件，+3）、E2E **112/112**（修复当次 52.8 s、格式化后最终复跑 58.1 s，新增 `day-rollover.spec.ts` ×2 项目）、`tsc -b` 0 错、oxlint 0 错 0 警告、`prettier --check .` 通过、JS **604.31 kB / gzip 180.26 kB**、CSS **138.98 kB / gzip 23.96 kB**（格式化后重建哈希不变）、`visual:check` 15 态 90 张 `failures 12`（502 噪声，与基线一致）；双端确认修复 |
 | 11-05 | **格式化收尾** | `c7cbcaa` | 饮食修复后跑全仓 `prettier --check` 发现 10 个文件不符合格式（本次改动 6 + 自 `9f9cc71` 起既有漂移 4），`prettier --write` 后实际改动 9 个文件、全仓通过；纯空白与换行改动，未改语义 | `tsc -b` 0 错、oxlint 0/0、app **295/295**、E2E **112/112**（58.1 s）、重建 `index-Diy7Ja9h.js` / `index-BNFgRy0R.css` **哈希与体积完全不变** |
+| 11-05 | **步骤 13a 契约 + schema v2** | **未提交（工作区）** | `shared/src/contract/analysis.ts`（`ANALYSIS_REPORT_TYPE` / `ANALYSIS_RANGE_DAYS` / `ReportFactsV2` / `ANALYSIS_CONTENT_LIMITS` / 平铺的 `AnalysisReportResponse` / `ANALYSIS_ERROR_CODES` / `DATA_RETENTION` / `DEFAULT_DAILY_BRIEF_AT` + `parseDailyBriefAt` / `normalizeDailyBriefSettings`），`shared/package.json` 加 `./contract/analysis` 子路径；服务端 schema **v2**：`analysis_reports`（`UNIQUE(user_id,type,range_days,data_rev)` 做报告缓存与归档）+ `job_runs`（`UNIQUE(name,run_key)` 做 job 幂等）；`db/repositories/reports.ts`；`app/src/lib/analysis-contract.ts` 作为前端唯一入口 | `shared` 构建 0 错、server `tsc -b` 0 错；v1→v2 迁移在真实库上跑通（`/api/health` `version: 2`） |
+| 11-05 | **步骤 13b 聚合与接口** | **未提交（工作区）** | `server/src/analysis/{time,facts,metrics,rules,service}.ts` + `ai/analysis.ts`：SQL 聚合 7/30/90 天事实包（7 天只出日、30 天日出+周、90 天只出周）→ 单次模型调用 → 数字白名单校验；`POST /api/v1/analysis/reports`（`dataRev` 缓存、`force` 先删缓存、不传 `rangeDays` 默认 7）、`GET /api/v1/analysis/facts`、`GET /api/v1/reports{,/:id}`，全部 `cache-control: no-store`；独立分析限流（`ANALYSIS_RATE_LIMIT_MAX` 默认 6 / 5 分钟）；错误码 403 `ai_consent_off` / 409 `insufficient_data` / 422 `invalid_request` / 429 / 502 `invalid_response`；无 Key / 超时 / 上游错 → 200 + `origin:"rules"` + `model:null`；`pruneReports(now-365d)` 在生成时清理；`.env.example` 增 5 个变量 | server **174/174（18 文件）** 全过；临时 vitest 用例走真实 HTTP 四组全过（注册 → bootstrap 5 类记录 → 分析 200 平铺 → 同 `dataRev` `cached:true` → 归档列表/详情 → facts v2 粒度 → 规则降级 `model:null` → 白名单违规 502 不入档 → 空窗口 409 → 当日第 7 次 429（403 授权关闭由路由单测覆盖）），验收后已删除临时用例 |
+| 11-05 | **步骤 13c 每日简报 + 前端** | **未提交（工作区）** | 服务端 `src/jobs/daily-brief.ts`（进程内 60 s tick、`unref`、默认关闭、`runKey` = 本地日期、失败最多 2 次、读**同步上来的** `settings.payload_json.dailyBrief`、env 仅兜底、日志只记 `{reportId,origin,cached,rangeDays,runKey}`）；前端 `app/src/lib/analysis-client.ts`（四态 + 9 类错误）、`/reports` 末尾「服务端综合分析」块（窗口切换 / 生成 / 指标卡 / 来源与 `cached` 标记 / 归档列表与详情，**不写入本机 `reports`**）、设置页「每日简报」卡片（默认关闭、21:00、非法时间回退并提示）、`MockSettings.dailyBrief?`（`schemaVersion` 仍 2、备份仍 0.3.0）、`Provider` 暴露 `syncToken`；E2E 新增 `e2e/reports-analysis.spec.ts` 4 条 × 2 | app **334/334（24 文件）**、E2E **120/120（9 文件，1.2 m）**、oxlint **0/0（98 文件）**、`tsc` 0 错、`prettier --check` 通过、`vite build` JS **628.24 kB（gzip 186.67）** / CSS **145.40 kB（gzip 24.89）**；`visual:check` 90 张 + 1 张、`failures 12`（`/reports` 与 `plans-ai` 的既有 502 噪声，与基线一致），**png 已重跑但本轮未提交**（等用户双端验收） |
 
 ### 18.2 关键披露
 
@@ -1818,12 +1850,17 @@ npm run visual:check
 12. 视觉基线易抖动：首页 1 s 实时时钟造成 ≤0.07% 像素差（最大色差 4/255），连跑两次可复现 ⇒ 归档还原、不提交；而 Prettier `{' '}` 造成的 47/255 差异是**真实回归**，须逐像素判定。
 13. **步骤 12 已推送、未部署**：提交（至 `202e9d0`）与 13 张视觉基线（`4d3edcf`）均已推送，服务端未部署（Node 20.20.2 缺 `node:sqlite`）。同步副本**不是备份**（无历史版本 / 无恢复），墓碑 30 天保留与定期清理是设计口径、**尚未实现**；pull 形状守卫会丢弃旧版本写下的不合规实体（计 `skipped`，不修复迁移）。
 14. **跨日首开的空日语义（2026-11-05 定稿）**：`mealsForDate` 对缺日仍返回 `[]`（统计与同步口径），页面一律走 `dayMeals` 拿「四个空餐次」的可写骨架；骨架只存在于内存，打开 App 不会凭空写出一条空 `dietDays`，只有真实登记才落库。没有这层骨架时，页面直接取 `meals[0].id` 会抛 TypeError 并让整块餐次区静默失效——12b 起潜伏、2026-11-05 才被双端报障暴露（`50d90ef` 修复，并加跨日 E2E 防回归）。
+15. **步骤 13 已本机完成并验证，但代码仍在工作区未提交、未部署**：13a–13c（分析契约 / schema v2 / 四个接口 / 每日简报 job / 前端综合分析块与设置卡片）全部落在工作区，`design/*.png` 的 12 张重跑差异也没提交（等用户双端验收）。任何「综合分析已上线 / 已部署」的说法都是错的。
+16. **本机没有真实 DeepSeek Key**：步骤 13 的真实模型分支是用**注入的假客户端**（临时 vitest）验证的——请求体、`timeout` 45 s、`max_tokens` 2600、返回解析与数字白名单都在真实 HTTP + 真实 SQLite 链路上跑过，但**没有一次真实上游调用**。文档与汇报不得写「已用真实 Key 验证综合分析」。
+17. **步骤 13 的口径与未实现项**：①报告按 `dataRev`（= 服务端 `sync_seq.value`）缓存，同数据重复生成返回 `cached:true`，`force:true` 先删缓存再生成；②模型只写文字，正文出现的每个数字都必须在 `JSON.stringify(facts)` 里，否则 502 `invalid_response` 且**不入档**；③无 Key / 超时 / 上游错一律 200 + `origin:"rules"`（诚实降级，不伪装 AI），空窗口 409 `insufficient_data`，`aiConsent:false` 403 `ai_consent_off`；④报告保留 **365 天**，清理发生在**生成时**（`pruneReports`），不是定时任务；⑤墓碑 30 天与审计日志 30 天的**清理任务仍未实现**（设计口径）；⑥每日简报 job 默认关闭，读的是**同步上来的设置**——跨设备同步未开启 / 设置未同步时不会跑，env 仅兜底；⑦`/reports` 的前端产物已过 500 kB 警告线且 `/plans` 未拆 bundle，属已知问题。
 
 ### 18.3 不可丢失的历史教训
 
 1. `PlansPage.tsx` 曾因 PowerShell 2 参数 `WriteAllText` 写入被截断且当时无 git 备份，靠从 `dist` 产物反解等价重写才恢复——**长文件写入必须走专用写文件路径**，不要用并行 PowerShell 重定向。
 2. 视觉脚本口径固定为 `app/scripts/visual-check.mjs`：15 状态 × 6 视口（含 421×926 的 6.78 英寸 20:9 真机视口），弹窗类只截视口尺寸，快速记录浮层等待 360 ms，含「必需元素」断言，合计 91 张。
 3. 措辞纪律：备案统一口径「**拿到备案号才做步骤 10**」；不写「已经推送三次」这类会自我失效的计数；管局审核只说法定期限 20 个工作日，不承诺上线日期。
+4. **响应形状要按契约读，不要凭记忆读**：步骤 13b 完成后前端第一版按 `{ report }` 包一层解析 `POST /api/v1/analysis/reports`，而服务端按契约返回**平铺**的 `AnalysisReportResponse`，结果生成成功却渲染成空态。修法不是各自打补丁，而是把「平铺 / 包一层」写进 `shared/README.md` 的响应形状约定，并补一条断言响应形状的回归测试（契约在 `@persist/shared/contract/analysis`，前后端都从它取类型）。
+5. **E2E 选择器别复用刚被新块占用的类名**：步骤 13c 的 `/reports` 新增块沿用了 `.reports-kicker`，与既有块形成 strict-mode 冲突（Playwright 报多元素匹配），改为 `reports-analysis-kicker` 后 4 条用例恢复。新增 UI 块时先 grep 类名是否已被 spec 引用。
 
 ---
 
@@ -1831,20 +1868,20 @@ npm run visual:check
 
 1. 读本文档 → `docs/部署与服务器现状.md` → `docs/P4-数据层与AI综合分析设计方案.md` → `docs/工程约定.md`；用 `git log --oneline -5` + `git status` 确认 HEAD 与工作区状态与 §15.3 一致。
 2. 复跑一遍基线（`typecheck` / `test` / 全量 E2E / `build`，受限沙箱下需一次性提权，见 §15.4），确认环境与 §10 数字一致再动手。
-3. 与用户确认这一段要推进的步骤（步骤 9、11 已于 2026-11-04 完成、步骤 12 于 2026-11-05 本机完成并推送但**未部署**；通常下一步是等备案号做步骤 10（域名 + HTTPS + Node 22 升级 + 部署步骤 12），或先在本地做步骤 13（服务端聚合 + AI 综合分析））。
+3. 与用户确认这一段要推进的步骤（步骤 9、11 已于 2026-11-04 完成、步骤 12 于 2026-11-05 本机完成并推送但**未部署**、步骤 13 于 2026-11-05 本机完成并验证但**代码未提交、未部署**；通常下一步是等备案号做步骤 10（域名 + HTTPS + Node 22 升级 + 部署步骤 12/13），或先在本地做步骤 14（备份 / 恢复 / 导出 / 删除账号））。
 4. 一次只做一步：先说明计划与影响面 → 实施 → 跑验证 → 写 §0.5 的 8 段报告 → **停下等确认**。
-5. 守纪律：视觉冻结不碰样式；改契约同步 `server/src/contract.ts`（chat/report）或 `shared/src/contract/*`（同步）与前端对应类型；文档与代码同提交；每阶段独立提交并核对远端 hash（步骤 12 的提交**已推送**并核对远端哈希）。
-6. 拿到备案号之前不做步骤 10，也不对外宣称「已上线 / 域名可用」；**步骤 12 未部署前，任何「已有跨设备同步 / 已上服务器」的说法都是错的**。
-7. P4 的 Node 版本与 SQLite 驱动已拍板（Node ≥ 22.5 + `node:sqlite`，2026-11-05），开工步骤 13 前只需逐条确认 P4 文档 §18 的剩余待确认项。
+5. 守纪律：视觉冻结不碰样式；改契约同步 `server/src/contract.ts`（chat/report）或 `shared/src/contract/*`（同步、综合分析）与前端对应类型；文档与代码同提交；每阶段独立提交并核对远端 hash（步骤 12 的提交**已推送**并核对远端哈希；步骤 13 的改动还没提交，提交时别把 `design/*.png` 顺手带上）。
+6. 拿到备案号之前不做步骤 10，也不对外宣称「已上线 / 域名可用」；**步骤 12、13 未部署前，任何「已有跨设备同步 / 已有服务端综合分析 / 已上服务器」的说法都是错的**。
+7. P4 的 Node 版本与 SQLite 驱动已拍板（Node ≥ 22.5 + `node:sqlite`，2026-11-05）；步骤 13 已落地，开工步骤 14 前只需逐条确认 P4 文档 §12 的备份 / 恢复 / 导出 / 删除账号口径。
 
 ---
 
 ## 20. 交接结论
 
-Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端 + 本机跑通的同步能力**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（**训练 / 饮食 / 饮水 / 计划已按日台账落历史**，`schemaVersion` 2，刷新不丢，有清空入口与 0.3.0 导出导入；饮食不再有拍照/选图入口，只支持手填与 AI 粘贴解析），单元测试 app **295**（21 文件）+ server **112**（13 文件）、E2E **112** 次执行、视觉基线 91 张（13 张随 `4d3edcf`、20 张随 `fbab985` 入库）、oxlint 0 错 0 警告。**P4 的前置步骤 11（8d 数据历史化）与步骤 12（P4a 账号 + 增量同步，12a–12f）均已在本机完成并验收**：服务端 SQLite 数据层、设备令牌 / 恢复码、`/api/v1/*`、`shared/` 同步契约、客户端同步层、设置页「数据同步」卡片全部落地，P4 §7.4 验收 19/19。**但步骤 12 未部署**——提交已推送（本地 `main` 与 `origin/main` 一致），服务器 Node 20.20.2 跑不了 `node:sqlite`。服务器环境就绪，已于 2026-11-04 完成 IP 直连部署与两次重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**），**线上仍是步骤 9 的版本**；域名已购、阿里云初审通过、**备案号未下发**。步骤 13–14 仍是设计。
+Persist 当前是一个**覆盖完整日常闭环、经自动化验证的前端产品 + 已接通的 AI 服务端 + 本机跑通的同步与分析能力**：八个页面（含长期计划）可完整点击验收，AI 引导建档 → 长期计划草案 → 确认启用 → 归档/重启闭环已通，AI 建档对话、AI 报告文字与今日页晨间简报文字均可在授权 + 服务端可用时走真实 DeepSeek（失败自动回退 Mock 并如实标注），全部业务记录写入本机 IndexedDB（**训练 / 饮食 / 饮水 / 计划已按日台账落历史**，`schemaVersion` 2，刷新不丢，有清空入口与 0.3.0 导出导入；饮食不再有拍照/选图入口，只支持手填与 AI 粘贴解析），单元测试 app **334**（24 文件）+ server **174**（18 文件）、E2E **120** 次执行（9 文件）、视觉基线 91 张（13 张随 `4d3edcf`、20 张随 `fbab985` 入库；步骤 13 重跑的差异**未提交**）、oxlint 0 错 0 警告（98 文件）。**P4 的前置步骤 11（8d 数据历史化）、步骤 12（P4a 账号 + 增量同步，12a–12f）与步骤 13（P4b 服务端聚合 + AI 综合分析，13a–13c）均已在本机完成并验收**：服务端 SQLite 数据层（schema v2）、设备令牌 / 恢复码、`/api/v1/*`、`shared/` 同步与综合分析契约、客户端同步层、设置页「数据同步」卡片、7/30/90 天事实包 + 单次模型调用 + 报告缓存与 365 天归档、规则降级与数字白名单、每日简报 job、`/reports` 综合分析块全部落地；步骤 12 P4 §7.4 验收 19/19、步骤 13 临时 HTTP 四组用例全过。**但两步都未部署**——步骤 12 已推送（本地 `main` 与 `origin/main` 一致），步骤 13 的代码**还在工作区未提交**；服务器 Node 20.20.2 跑不了 `node:sqlite`。服务器环境就绪，已于 2026-11-04 完成 IP 直连部署与两次重新部署（Nginx + systemd + 真实 Key，仅内部调试，**未宣称上线**），**线上仍是步骤 9 的版本**；域名已购、阿里云初审通过、**备案号未下发**。P4 只剩步骤 14（备份 / 恢复 / 导出 / 删除账号）。
 
 接手时最需要记住三件事：
 
 - **历史已真实，但只覆盖本机落过盘的天**：训练 / 饮食 / 饮水 / 计划自 8d 起按日台账落库，报告页可按近 7 / 30 / 90 天窗口汇总；但演示种子只覆盖最近 7 天，所以近 30 / 90 天数字与近 7 天相同。跨设备历史已有代码（步骤 12）但**没部署**，线上仍要等部署后才成立。
-- **下一步不是数据历史化，也不是步骤 12**：两者都已完成（步骤 12 仅本机）。步骤 10 必须等备案号，且届时需一并把服务器升到 Node ≥ 22.5 再部署步骤 12；备案下发前可在本地推进步骤 13。
-- **口径要诚实**：AI 降级、只做了 IP 直连（**未上线**）、步骤 12 **已推送、未部署**、线上无跨设备同步、快照不是备份、同步副本也不是备份——这些都要如实说，不得把计划或本机能力写成线上现状。
+- **下一步不是数据历史化，也不是步骤 12 / 13**：三者都已完成（12 已推送、13 未提交，均未部署）。步骤 10 必须等备案号，且届时需一并把服务器升到 Node ≥ 22.5 再部署步骤 12 与 13；备案下发前可在本地推进步骤 14。
+- **口径要诚实**：AI 降级、只做了 IP 直连（**未上线**）、步骤 12 已推送未部署、步骤 13 本机完成未提交未部署、线上无跨设备同步、线上无服务端综合分析、本机无真实 Key（分析的真实模型分支用注入假客户端验证）、快照不是备份、同步副本也不是备份——这些都要如实说，不得把计划或本机能力写成线上现状。
