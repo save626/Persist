@@ -9,6 +9,7 @@ app/playwright-report/
 app/test-results/
 server/dist/
 server/.npm-cache/
+server/data/
 *.tsbuildinfo
 
 # Local environment

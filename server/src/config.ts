@@ -21,6 +21,9 @@ export interface ServerConfig {
   maxTurns: number
   maxTurnChars: number
   maxPromptChars: number
+  /** SQLite 单文件库路径；生产由 server.env 指到 /var/lib/persist/persist.sqlite。 */
+  dbPath: string
+  dbBusyTimeoutMs: number
 }
 
 export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -62,6 +65,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     maxTurns: 20,
     maxTurnChars: 2_000,
     maxPromptChars: 12_000,
+    dbPath: env.DB_PATH?.trim() || 'data/persist.sqlite',
+    dbBusyTimeoutMs: readInt(env, 'DB_BUSY_TIMEOUT_MS', 5_000, 100, 60_000),
   }
 }
 
@@ -74,5 +79,7 @@ export function describeConfig(config: ServerConfig) {
     model: config.deepseekModel,
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
+    db: 'sqlite',
+    schemaVersion: 'v1',
   }
 }
