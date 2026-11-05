@@ -22,6 +22,9 @@ import {
 import { countMockRecords } from '../lib/mock-data-transfer'
 import { PERSIST_SAVE_DEBOUNCE_MS } from '../lib/persist-state'
 import { clearPersistedState, loadPersistedState, savePersistedState } from '../lib/persist-storage'
+import { createSyncClient } from '../lib/sync-client'
+import { SyncEngine, type SyncStatusSnapshot } from '../lib/sync-engine'
+import { createSyncStore } from '../lib/sync-store'
 import type {
   DietDay,
   EveningReviewPayload,
@@ -136,6 +139,29 @@ function createInitialMockData(now: Date = new Date()): ImportableMockData {
   }
 }
 
+/** 同步尚未初始化时的展示状态：默认关闭，页面上只有一个空壳。 */
+const INITIAL_SYNC_STATUS: SyncStatusSnapshot = {
+  enabled: false,
+  pending: 0,
+  lastSyncAt: null,
+  online: true,
+  syncing: false,
+  error: null,
+  needsAttention: false,
+  state: '未开启',
+}
+
+/** 默认设备名：不追踪具体型号，只按平台给一个人能看懂的标签。 */
+function defaultSyncDeviceLabel(): string {
+  if (typeof navigator === 'undefined') return '本机浏览器'
+  const ua = navigator.userAgent
+  if (/Android/i.test(ua)) return 'Android 浏览器'
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS 浏览器'
+  if (/Mac OS X/i.test(ua)) return 'Mac 浏览器'
+  if (/Windows/i.test(ua)) return 'Windows 浏览器'
+  return '本机浏览器'
+}
+
 export function MockDataProvider({ children }: { children: ReactNode }) {
   /** 本次会话的「今天」。日期只在挂载时取一次，避免跨零点后页面数据整体跳变。 */
   const [today] = useState(() => todayDateKey())
@@ -172,6 +198,14 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   /** 当前排队的防抖写入定时器；「清空本机数据」必须先掐掉它，否则旧数据会被写回。 */
   const saveTimerRef = useRef<number | null>(null)
 
+  /** 同步状态：引擎每次状态变化都映射到这里，页面只读不写。 */
+  const [syncStatus, setSyncStatus] = useState<SyncStatusSnapshot>(INITIAL_SYNC_STATUS)
+  /** 恢复码与设备名只在绑定/恢复/吊销后变化，避免每次状态推送都放进 context。 */
+  const [syncInfo, setSyncInfo] = useState<{ recoveryCode: string | null; deviceLabel: string }>({
+    recoveryCode: null,
+    deviceLabel: '',
+  })
+
   /** 「今天」的切片：页面读到的 `planItems` / `waterLog` / `meals` 语义不变，只表示今天。 */
   const todayPlanItems = useMemo(() => planItemsForDate(planItems, today), [planItems, today])
   const todayWaterLog = useMemo(() => waterForDate(waterLog, today), [waterLog, today])
@@ -202,11 +236,14 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   )
 
   /** 把已完成的训练会话归档进历史；返回生成的记录，方便调用方立即用到 id。 */
-  const archiveFitnessSession = useCallback((session: FitnessSessionState, now: Date = new Date()) => {
-    const record = createFitnessSessionRecord(session, now)
-    setFitnessHistory((current) => sortFitnessHistoryDesc([record, ...current]))
-    return record
-  }, [])
+  const archiveFitnessSession = useCallback(
+    (session: FitnessSessionState, now: Date = new Date()) => {
+      const record = createFitnessSessionRecord(session, now)
+      setFitnessHistory((current) => sortFitnessHistoryDesc([record, ...current]))
+      return record
+    },
+    [],
+  )
 
   const updateGoal = useCallback((id: string, patch: Partial<Goal>) => {
     setGoals((current) => current.map((goal) => (goal.id === id ? { ...goal, ...patch } : goal)))
@@ -331,6 +368,66 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     persistEnabledRef.current = true
   }, [replaceMockData])
 
+  /**
+   * 同步引擎只在挂载 effect 里创建，实例放 ref：渲染期间不读 ref，
+   * 页面操作（事件回调）里再通过 `requireSyncEngine` 取。
+   * 它不直接读写 React 状态：读最新数据走 `latestStateRef`，应用远端数据走 `replaceMockData`，
+   * 本地写入 → outbox 的差分由下面的持久化 effect 统一触发。
+   * 默认关闭：未开启时 `noteDataChange` 直接返回，不产生网络请求。
+   */
+  const syncEngineRef = useRef<SyncEngine | null>(null)
+
+  const requireSyncEngine = useCallback(() => {
+    const engine = syncEngineRef.current
+    if (!engine) throw new Error('同步引擎尚未准备好，请稍后重试。')
+    return engine
+  }, [])
+
+  /** 恢复码/设备名不随每次状态推送变化，只在绑定类操作后刷新。 */
+  const refreshSyncInfo = useCallback((engine: SyncEngine) => {
+    setSyncInfo({ recoveryCode: engine.recoveryCode, deviceLabel: engine.deviceLabel })
+  }, [])
+
+  const enableSync = useCallback(
+    async (label?: string) => {
+      const engine = requireSyncEngine()
+      try {
+        await engine.enable(label?.trim() || defaultSyncDeviceLabel())
+      } finally {
+        refreshSyncInfo(engine)
+      }
+    },
+    [refreshSyncInfo, requireSyncEngine],
+  )
+
+  const disableSync = useCallback(async () => {
+    const engine = requireSyncEngine()
+    await engine.disable()
+    refreshSyncInfo(engine)
+  }, [refreshSyncInfo, requireSyncEngine])
+
+  const restoreSync = useCallback(
+    async (recoveryCode: string, label?: string) => {
+      const engine = requireSyncEngine()
+      try {
+        await engine.restore(recoveryCode.trim(), label?.trim() || defaultSyncDeviceLabel())
+      } finally {
+        refreshSyncInfo(engine)
+      }
+    },
+    [refreshSyncInfo, requireSyncEngine],
+  )
+
+  const revokeSync = useCallback(async () => {
+    const engine = requireSyncEngine()
+    await engine.revokeDevice()
+    refreshSyncInfo(engine)
+  }, [refreshSyncInfo, requireSyncEngine])
+
+  const syncNow = useCallback(async () => {
+    await requireSyncEngine().flush('manual')
+  }, [requireSyncEngine])
+
   const createMockSnapshot = useCallback(() => {
     const next: MockSnapshot = {
       id: `snapshot-${Date.now()}`,
@@ -431,6 +528,41 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     latestStateRef.current = { data: persistableData, snapshot }
   }, [persistableData, snapshot])
 
+  /** 引擎初始化：只读本机同步元数据（不联网），随后绑定在线/离线与兜底轮询。 */
+  useEffect(() => {
+    const engine = new SyncEngine({
+      client: createSyncClient(),
+      metaStorage: createSyncStore(),
+      queueStorage: createSyncStore(),
+      getData: () => latestStateRef.current?.data ?? createInitialMockData(),
+      applyData: (data) => replaceMockData(data),
+      onChange: (status) => setSyncStatus(status),
+      isOnline: () => (typeof navigator === 'undefined' ? true : navigator.onLine),
+    })
+    syncEngineRef.current = engine
+    let cancelled = false
+    void engine.init().then((status) => {
+      if (cancelled) return
+      setSyncStatus(status)
+      setSyncInfo({ recoveryCode: engine.recoveryCode, deviceLabel: engine.deviceLabel })
+      engine.start()
+    })
+    return () => {
+      cancelled = true
+      engine.stop()
+      if (syncEngineRef.current === engine) syncEngineRef.current = null
+    }
+  }, [replaceMockData])
+
+  /**
+   * 本地数据变化时通知同步引擎：它自己算差分并在 5 秒后合并推送。
+   * 同步关闭时这里只做一次早退，不产生任何请求。
+   */
+  useEffect(() => {
+    if (!hydrated) return
+    syncEngineRef.current?.noteDataChange()
+  }, [hydrated, persistableData])
+
   /** 交互后防抖写入，把连续操作合并成一次事务；严格模式重复执行也只是多写一次同样的数据。 */
   useEffect(() => {
     if (!hydrated || !persistEnabledRef.current) return
@@ -520,6 +652,15 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       appendStudyRecords,
       replaceMockData,
       clearLocalData,
+      /** 同步状态与操作（默认关闭；页面只通过这里触发网络）。 */
+      syncStatus,
+      syncRecoveryCode: syncInfo.recoveryCode,
+      syncDeviceLabel: syncInfo.deviceLabel,
+      enableSync,
+      disableSync,
+      restoreSync,
+      revokeSync,
+      syncNow,
       longTermPlans,
       addLongTermPlan,
       updateLongTermPlan,
@@ -536,7 +677,9 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       archiveLongTermPlan,
       clearLocalData,
       createMockSnapshot,
+      disableSync,
       dietDays,
+      enableSync,
       eveningReview,
       fitnessHistory,
       fitnessSession,
@@ -549,12 +692,17 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       replaceMockData,
       reports,
       resetSettings,
+      restoreSync,
+      revokeSync,
       setAiConsent,
       setMeals,
       setPlanItems,
       settings,
       snapshot,
       studyRecords,
+      syncInfo,
+      syncNow,
+      syncStatus,
       today,
       todayPlanItems,
       todayWaterLog,

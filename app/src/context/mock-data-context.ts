@@ -1,5 +1,6 @@
 import { createContext, useContext, type Dispatch, type SetStateAction } from 'react'
 import type { LongTermPlanDraft } from '../lib/long-term-plan'
+import type { SyncStatusSnapshot } from '../lib/sync-engine'
 import type {
   DietDay,
   EveningReviewPayload,
@@ -76,6 +77,22 @@ export interface MockDataContextValue {
   replaceMockData: (data: ImportableMockData) => void
   /** 删除本机 IndexedDB 记录并把内存态还原到首次启动基线（设置页「清空本机数据」）。 */
   clearLocalData: () => Promise<void>
+  /** 同步状态：默认关闭，未开启时全部页面只展示「未开启」，不发任何请求。 */
+  syncStatus: SyncStatusSnapshot
+  /** 本机绑定后展示的恢复码（32 位十六进制）；未绑定为 null。 */
+  syncRecoveryCode: string | null
+  /** 当前绑定的设备名。 */
+  syncDeviceLabel: string
+  /** 打开同步：首次会注册账号并全量上传，之后只增量同步。 */
+  enableSync: (label?: string) => Promise<void>
+  /** 关闭同步：停网络、保留本机数据与凭据。 */
+  disableSync: () => Promise<void>
+  /** 用恢复码把本机绑定到已有账号（服务端数据为准）。 */
+  restoreSync: (recoveryCode: string, label?: string) => Promise<void>
+  /** 吊销本机令牌并关闭同步。 */
+  revokeSync: () => Promise<void>
+  /** 立刻同步一次（不等待 5 秒防抖）。 */
+  syncNow: () => Promise<void>
   longTermPlans: LongTermPlan[]
   addLongTermPlan: (draft: LongTermPlanDraft) => LongTermPlan | null
   updateLongTermPlan: (id: string, patch: Partial<LongTermPlan>) => void
