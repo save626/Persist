@@ -1,6 +1,6 @@
 # Server
 
-Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**：步骤 12 的 12a–12f（服务端数据层与接口、共享契约、前端同步层、设置页「数据同步」卡片）**已于 2026-11-05 在本机完成并验收，但未部署、未推送**；步骤 13 的 AI 综合分析、步骤 14 的备份/导出/删除账号尚未开始。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
+Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**：步骤 12 的 12a–12f（服务端数据层与接口、共享契约、前端同步层、设置页「数据同步」卡片）**已于 2026-11-05 在本机完成并验收并推送，但未部署**；步骤 13 的 AI 综合分析、步骤 14 的备份/导出/删除账号尚未开始。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
 
 ## 约束（不要破坏）
 
@@ -333,4 +333,4 @@ $env:DEEPSEEK_API_KEY='<临时粘贴>'; $env:PORT='3102'; node dist/index.js
 - 结构说明：chat/report 的请求响应类型仍在 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），迁移 `shared/` 另排期；**同步契约已迁完**（`shared/src/contract/sync.ts`），前端 12d 直接经由 `app/src/lib/sync-contract.ts` 引用，不再另抄。
 - ✅ 步骤 12d（2026-11-05，`9abd8bb`）前端同步层：`app/src/lib/` 新增 `sync-client.ts`（`/api/v1/*` 客户端、错误分类、指数退避）、`sync-store.ts`（`persist-sync` IndexedDB：元数据 + outbox）、`sync-queue.ts`（opId 批次与合并）、`sync-entities.ts`（8 切片摊平 / 差分 / pull 合并 LWW + 墓碑）、`sync-engine.ts`（bootstrap、5 s 防抖增量、60 s 兜底、`online`/`visibility` 触发）。设置页开关默认关闭，关闭时不发任何同步请求。
 - ✅ 步骤 12e（2026-11-05，`f09c3da`）设置页「数据同步」卡片：开关（`aria-label="跨设备同步"`）、注册后展示 32 位恢复码（4×8 大写）、「用恢复码绑定已有账号」、本机设备与最近同步时间、立即同步、吊销本机（`alertdialog` 二次确认）。E2E 增加 2 条用例（mock `**/api/v1/**`）。
-- ✅ 步骤 12f（2026-11-05，`e9c29a0`）收尾：pull 合并前的形状守卫 `matchesRecordShape`（形状不合规 / body id 与信封 id 不一致的实体计 `skipped`，不写本地存档）；**本机验收** P4 §7.4 六项 19/19、app 单测 292/292（21 文件）、server 112/112（13 文件）、E2E 110、`vite build` JS 606.08 kB / CSS 140.20 kB；13 张视觉基线 png 差异待用户验收。**未部署、未推送**（本地 8 个提交领先 `origin/main`（12a–12f + 文档修正））。
+- ✅ 步骤 12f（2026-11-05，`e9c29a0`）收尾：pull 合并前的形状守卫 `matchesRecordShape`（形状不合规 / body id 与信封 id 不一致的实体计 `skipped`，不写本地存档）；**本机验收** P4 §7.4 六项 19/19、app 单测 292/292（21 文件）、server 112/112（13 文件）、E2E 110、`vite build` JS 606.08 kB / CSS 140.20 kB；13 张视觉基线 png 差异已随 `4d3edcf` 入库。**已推送、未部署**（视觉基线 13 张已随 `4d3edcf` 入库）。
