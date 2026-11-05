@@ -51,15 +51,15 @@ export const MIGRATIONS: Migration[] = [
     name: 'sync_core',
     statements: [
       `CREATE TABLE users (
-  id         TEXT PRIMARY KEY,
-  created_at INTEGER NOT NULL,
-  deleted_at INTEGER
+  id            TEXT PRIMARY KEY,
+  created_at    INTEGER NOT NULL,
+  deleted_at    INTEGER,
+  recovery_hash TEXT UNIQUE
 )`,
       `CREATE TABLE devices (
   id            TEXT PRIMARY KEY,
   user_id       TEXT NOT NULL REFERENCES users(id),
   token_hash    TEXT NOT NULL UNIQUE,
-  recovery_hash TEXT UNIQUE,
   label         TEXT,
   created_at    INTEGER NOT NULL,
   last_seen_at  INTEGER,

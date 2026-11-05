@@ -18,6 +18,8 @@ export interface ServerConfig {
   aiMaxRetries: number
   rateLimitMax: number
   rateLimitWindowMs: number
+  /** 同步 / 账号接口单独计数：客户端每 60 s 轮询一次，不能吃掉 AI 接口的额度。 */
+  syncRateLimitMax: number
   maxTurns: number
   maxTurnChars: number
   maxPromptChars: number
@@ -62,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     aiMaxRetries: readInt(env, 'AI_MAX_RETRIES', 1, 0, 3),
     rateLimitMax: readInt(env, 'RATE_LIMIT_MAX', 20, 1, 1_000),
     rateLimitWindowMs: readInt(env, 'RATE_LIMIT_WINDOW_MS', 5 * 60_000, 1_000, 3_600_000),
+    syncRateLimitMax: readInt(env, 'SYNC_RATE_LIMIT_MAX', 240, 1, 10_000),
     maxTurns: 20,
     maxTurnChars: 2_000,
     maxPromptChars: 12_000,
@@ -70,7 +73,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   }
 }
 
-/** 打日志用：绝不包含 API Key。 */
+/** 打日志用：绝不包含 API Key。库路径与 schema 版本由调用方补（要等库打开后才准）。 */
 export function describeConfig(config: ServerConfig) {
   return {
     host: config.host,
@@ -79,7 +82,6 @@ export function describeConfig(config: ServerConfig) {
     model: config.deepseekModel,
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
-    db: 'sqlite',
-    schemaVersion: 'v1',
+    syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
   }
 }
