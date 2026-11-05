@@ -17,19 +17,22 @@ function tableNames(db: Db): string[] {
 }
 
 describe('migrate', () => {
-  it('空库跑完 v1：返回版本 1，记账一行', () => {
+  it('空库跑完全部迁移：返回最新版本，按顺序记账', () => {
     const db = fresh()
     try {
       const result = migrate(db, { now: () => 1_700_000_000_000 })
       expect(result.version).toBe(SCHEMA_VERSION)
-      expect(result.applied).toEqual([1])
+      expect(result.applied).toEqual([1, 2])
       expect(
         db
           .prepare<{ version: number; applied_at: number }>(
-            'SELECT version, applied_at FROM schema_migrations',
+            'SELECT version, applied_at FROM schema_migrations ORDER BY version',
           )
-          .get(),
-      ).toEqual({ version: 1, applied_at: 1_700_000_000_000 })
+          .all(),
+      ).toEqual([
+        { version: 1, applied_at: 1_700_000_000_000 },
+        { version: 2, applied_at: 1_700_000_000_000 },
+      ])
     } finally {
       db.close()
     }
@@ -44,21 +47,23 @@ describe('migrate', () => {
       expect(second.version).toBe(SCHEMA_VERSION)
       expect(
         db.prepare<{ total: number }>('SELECT COUNT(*) AS total FROM schema_migrations').get(),
-      ).toEqual({ total: 1 })
+      ).toEqual({ total: 2 })
     } finally {
       db.close()
     }
   })
 
-  it('建出 v1 全部表：身份 / 单行 / 六类记录 + 计划 / 幂等', () => {
+  it('建出全部表：身份 / 单行 / 六类记录 + 计划 / 报告与任务 / 迁移记账', () => {
     const db = fresh()
     try {
       migrate(db)
       expect(tableNames(db)).toEqual([
+        'analysis_reports',
         'devices',
         'diet_entries',
         'fitness_sessions',
         'goals',
+        'job_runs',
         'long_term_plans',
         'plan_items',
         'profiles',
@@ -121,6 +126,10 @@ describe('migrate', () => {
       }
       expect(indexes).toContain('idx_devices_user')
       expect(indexes).toContain('idx_sync_ops_applied')
+      expect(indexes).toContain('idx_analysis_reports_cache')
+      expect(indexes).toContain('idx_analysis_reports_user_created')
+      expect(indexes).toContain('idx_analysis_reports_created')
+      expect(indexes).toContain('idx_job_runs_name_started')
     } finally {
       db.close()
     }

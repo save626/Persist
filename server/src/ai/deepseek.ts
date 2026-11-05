@@ -26,11 +26,19 @@ export class AiError extends Error {
   }
 }
 
+export interface AiJsonOptions {
+  signal?: AbortSignal
+  /** 本次调用覆盖默认 max_tokens（综合分析正文比简报长，需要更大额度）。 */
+  maxTokens?: number
+  /** 本次调用覆盖默认超时（长事实包生成更慢）。 */
+  timeoutMs?: number
+}
+
 export interface AiClient {
   /** 逐块产出模型可见回复文本。 */
   streamChat(messages: ChatMessage[], options?: { signal?: AbortSignal }): AsyncGenerator<string>
   /** 非流式 JSON 调用，返回已解析的对象（未校验结构）。 */
-  completeJson(messages: ChatMessage[], options?: { signal?: AbortSignal }): Promise<unknown>
+  completeJson(messages: ChatMessage[], options?: AiJsonOptions): Promise<unknown>
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
@@ -229,13 +237,13 @@ export function createDeepSeekClient(
       const outer = options?.signal
       let lastError: unknown = new AiError('upstream', '模型服务不可用。')
       for (let attempt = 0; attempt < attempts; attempt += 1) {
-        const session = openSession(outer, config.aiTimeoutMs)
+        const session = openSession(outer, options?.timeoutMs ?? config.aiTimeoutMs)
         try {
           const response = await postChat(session, {
             messages,
             stream: false,
             temperature: 0,
-            max_tokens: 1_600,
+            max_tokens: options?.maxTokens ?? 1_600,
             response_format: { type: 'json_object' },
           })
           const payload = (await response.json()) as {

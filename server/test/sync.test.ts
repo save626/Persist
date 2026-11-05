@@ -4,6 +4,7 @@ import { buildApp } from '../src/app.js'
 import { loadConfig } from '../src/config.js'
 import type { PersistDatabase } from '../src/db/index.js'
 import { countSyncOps, openPersistDatabase } from '../src/db/index.js'
+import { SCHEMA_VERSION } from '../src/db/migrations.js'
 
 /**
  * 同步接口测试：push 幂等 / LWW / 非法实体、bootstrap 事务、pull 游标翻页、鉴权与限流。
@@ -424,7 +425,7 @@ describe('GET /api/health', () => {
       expect(body.status).toBe('ok')
       expect(body.service).toBe('persist-server')
       expect(body.db).toBe('ok')
-      expect(body.version).toBe(1)
+      expect(body.version).toBe(SCHEMA_VERSION)
       expect(body.ai).toBe('disabled')
     } finally {
       await close(env)

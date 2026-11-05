@@ -6,6 +6,9 @@ import type { Db } from './driver.js'
  * v1 只建步骤 12 用得到的表：身份（users / devices）、单行档案与设置、六类记录 + 计划、
  * 全局 rev 序列、同步幂等表。报告 / 备份 / 审计表属于步骤 13、14，各自加 v2 / v3，
  * 避免一次建一堆当前没有读写路径、也没测试覆盖的表。
+ *
+ * v2（步骤 13）：分析报告归档 + 每日简报任务台账。报告内容、指标、事实包都存全文，
+ * 方便「报告里的每个数字都能回溯到当时的聚合结果」；缓存键是 (用户, 类型, 窗口, data_rev)。
  */
 
 export interface Migration {
@@ -15,7 +18,7 @@ export interface Migration {
 }
 
 /** 当前代码期望的 schema 版本；`/api/health` 会带出去，方便对比线上库。 */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 const PULL_COLUMNS = `
   payload_json TEXT NOT NULL,
@@ -147,6 +150,48 @@ export const MIGRATIONS: Migration[] = [
       dateIndex('diet_entries', 'date'),
       dateIndex('water_logs', 'date'),
       dateIndex('goals', 'date'),
+    ],
+  },
+  {
+    version: 2,
+    name: 'analysis_reports',
+    statements: [
+      `CREATE TABLE analysis_reports (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users(id),
+  type         TEXT NOT NULL,
+  range_days   INTEGER NOT NULL,
+  data_rev     INTEGER NOT NULL,
+  origin       TEXT NOT NULL,
+  model        TEXT,
+  start_date   TEXT NOT NULL,
+  end_date     TEXT NOT NULL,
+  title        TEXT NOT NULL,
+  status       TEXT NOT NULL,
+  content_json TEXT NOT NULL,
+  metrics_json TEXT NOT NULL,
+  facts_json   TEXT NOT NULL,
+  created_at   INTEGER NOT NULL
+)`,
+      // 缓存键：同一份数据（data_rev 相同）不重复花模型额度；force 时先删后插仍落这一行。
+      `CREATE UNIQUE INDEX idx_analysis_reports_cache
+  ON analysis_reports (user_id, type, range_days, data_rev)`,
+      'CREATE INDEX idx_analysis_reports_user_created ON analysis_reports (user_id, created_at DESC)',
+      // 保留期清理：按 created_at 扫过期报告，不需要把 user_id 带上。
+      'CREATE INDEX idx_analysis_reports_created ON analysis_reports (created_at)',
+      `CREATE TABLE job_runs (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  run_key     TEXT NOT NULL,
+  status      TEXT NOT NULL,
+  user_id     TEXT,
+  report_id   TEXT,
+  started_at  INTEGER NOT NULL,
+  finished_at INTEGER,
+  error       TEXT,
+  UNIQUE (name, run_key)
+)`,
+      'CREATE INDEX idx_job_runs_name_started ON job_runs (name, started_at)',
     ],
   },
 ]

@@ -3,9 +3,11 @@ import type { ServerConfig } from './config.js'
 import { errorBody } from './contract.js'
 import { openPersistDatabase, type PersistDatabase } from './db/index.js'
 import { createRateLimiter } from './rate-limit.js'
+import { registerAnalysisRoutes } from './routes/analysis.js'
 import { registerChatRoute } from './routes/chat.js'
 import { registerDeviceRoutes } from './routes/devices.js'
 import { registerHealthRoute } from './routes/health.js'
+import { registerReportArchiveRoutes } from './routes/reports.js'
 import { registerReportRoute } from './routes/report.js'
 import { registerSyncRoutes } from './routes/sync.js'
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify'
@@ -49,6 +51,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     windowMs: options.config.rateLimitWindowMs,
     ...(options.now ? { now: options.now } : {}),
   })
+  // 综合分析单独计数：一次生成可能跑 45 s，不能挤掉聊天与同步的额度。
+  const analysisLimiter = createRateLimiter({
+    max: options.config.analysisRateLimitMax,
+    windowMs: options.config.rateLimitWindowMs,
+    ...(options.now ? { now: options.now } : {}),
+  })
 
   const ownsDatabase = !options.db
   const db = options.db ?? openPersistDatabase({ path: ':memory:' })
@@ -71,6 +79,14 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   registerHealthRoute(app, { config: options.config, db })
   registerChatRoute(app, { config: options.config, ai, limiter })
   registerReportRoute(app, { config: options.config, ai, limiter })
+  registerAnalysisRoutes(app, {
+    db: db.db,
+    ai,
+    config: options.config,
+    limiter: analysisLimiter,
+    now,
+  })
+  registerReportArchiveRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerDeviceRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerSyncRoutes(app, { db: db.db, limiter: syncLimiter, now })
 

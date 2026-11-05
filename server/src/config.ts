@@ -6,6 +6,8 @@
  * 仓库里只有 .env.example（无真实密钥）。
  */
 
+import { DEFAULT_DAILY_BRIEF_AT, parseDailyBriefAt } from '@persist/shared/contract/analysis'
+
 export interface ServerConfig {
   host: string
   port: number
@@ -20,6 +22,15 @@ export interface ServerConfig {
   rateLimitWindowMs: number
   /** 同步 / 账号接口单独计数：客户端每 60 s 轮询一次，不能吃掉 AI 接口的额度。 */
   syncRateLimitMax: number
+  /** 综合分析单独计数：一次生成可能跑 20–40 s，不能和聊天共用窗口。 */
+  analysisRateLimitMax: number
+  /** 综合分析单次模型调用超时；长事实包比聊天慢，允许单独放宽。 */
+  analysisTimeoutMs: number
+  /** 综合分析单次模型调用的 max_tokens（2–5 段正文 + 结论/建议）。 */
+  analysisMaxTokens: number
+  /** 每日简报的兜底开关与时间；用户设置里的 dailyBrief 优先。 */
+  dailyBriefEnabled: boolean
+  dailyBriefAt: string
   maxTurns: number
   maxTurnChars: number
   maxPromptChars: number
@@ -65,6 +76,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     rateLimitMax: readInt(env, 'RATE_LIMIT_MAX', 20, 1, 1_000),
     rateLimitWindowMs: readInt(env, 'RATE_LIMIT_WINDOW_MS', 5 * 60_000, 1_000, 3_600_000),
     syncRateLimitMax: readInt(env, 'SYNC_RATE_LIMIT_MAX', 240, 1, 10_000),
+    analysisRateLimitMax: readInt(env, 'ANALYSIS_RATE_LIMIT_MAX', 6, 1, 120),
+    analysisTimeoutMs: readInt(env, 'ANALYSIS_TIMEOUT_MS', 45_000, 1_000, 180_000),
+    analysisMaxTokens: readInt(env, 'ANALYSIS_MAX_TOKENS', 2_600, 600, 8_000),
+    dailyBriefEnabled: readBool(env, 'DAILY_BRIEF_ENABLED', false),
+    dailyBriefAt: parseDailyBriefAt(env.DAILY_BRIEF_AT?.trim()) ?? DEFAULT_DAILY_BRIEF_AT,
     maxTurns: 20,
     maxTurnChars: 2_000,
     maxPromptChars: 12_000,
@@ -83,5 +99,7 @@ export function describeConfig(config: ServerConfig) {
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
+    analysisRateLimit: `${config.analysisRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
+    dailyBrief: `${config.dailyBriefEnabled ? 'on' : 'off'}@${config.dailyBriefAt}`,
   }
 }
