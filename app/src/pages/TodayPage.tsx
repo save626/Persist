@@ -357,7 +357,7 @@ export function TodayPage() {
       return {
         time: meal.time,
         title: meal.label,
-        detail: `${foods} · 蛋白质 ${totals.protein} g · 碳水 ${totals.carbs} g${meal.photoName ? ' · 含照片附件' : ''}`,
+        detail: `${foods} · 蛋白质 ${totals.protein} g · 碳水 ${totals.carbs} g`,
         value: `${totals.calories} kcal`,
         tone: 'food',
       }

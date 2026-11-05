@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { EvidenceSheet } from '../components/EvidenceSheet'
 import { Icon } from '../components/Icon'
 import { useMockData } from '../context/mock-data-context'
@@ -19,6 +19,12 @@ const MEAL_LABELS: Record<MealId, string> = {
   lunch: '午餐',
   dinner: '晚餐',
   snack: '加餐',
+}
+
+/** AI 登记默认写晚餐；当天没有晚餐时（异常数据）退回第一个可用餐次。 */
+function defaultMealId(meals: Meal[]): MealId {
+  if (meals.some((meal) => meal.id === 'dinner')) return 'dinner'
+  return meals[0]?.id ?? 'dinner'
 }
 
 const TARGETS = {
@@ -73,13 +79,11 @@ function MealEditor({
   onClose,
   onAdd,
   onRemove,
-  onPhotoChange,
 }: {
   meal: Meal
   onClose: () => void
   onAdd: (entry: FoodEntry) => void
   onRemove: (entryId: string) => void
-  onPhotoChange: (photoName: string) => void
 }) {
   const [name, setName] = useState('')
   const [portion, setPortion] = useState('1 份')
@@ -125,11 +129,6 @@ function MealEditor({
     setFat('')
   }
 
-  const handlePhoto = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) onPhotoChange(file.name)
-  }
-
   return (
     <div
       className="backdrop open"
@@ -150,27 +149,6 @@ function MealEditor({
           <button className="icon-btn" type="button" aria-label="关闭餐次编辑" onClick={onClose}>
             <Icon name="close" className="icon-sm" />
           </button>
-        </div>
-
-        <div className="diet-photo-row">
-          <label className="diet-photo-pick" htmlFor={`meal-photo-${meal.id}`}>
-            <span className="diet-photo-icon">
-              <Icon name="camera" className="icon-sm" />
-            </span>
-            <span>
-              <strong>{meal.photoName ? '已添加餐次照片' : '拍照或选择照片'}</strong>
-              <small>{meal.photoName ?? '作为附件保存，本版不自动识别'}</small>
-            </span>
-          </label>
-          <input
-            className="diet-file-input"
-            id={`meal-photo-${meal.id}`}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            aria-label="拍照或选择餐次照片"
-            onChange={handlePhoto}
-          />
         </div>
 
         {meal.entries.length > 0 ? (
@@ -309,7 +287,7 @@ function AiNutritionSheet({
   onRegister: (mealId: MealId, entry: FoodEntry) => void
 }) {
   const [sourceText, setSourceText] = useState('')
-  const [mealId, setMealId] = useState<MealId>('dinner')
+  const [mealId, setMealId] = useState<MealId>(() => defaultMealId(meals))
   const [draft, setDraft] = useState<ParsedNutrition>(EMPTY_NUTRITION)
   const [parsed, setParsed] = useState(false)
   const [parseError, setParseError] = useState('')
@@ -555,7 +533,6 @@ export function DietPage() {
   const chartValues = [...WATER_TREND.slice(0, -1), waterLiters]
   const chartMax = Math.max(...chartValues, TARGETS.waterLiters)
   const foodEntryCount = meals.reduce((total, meal) => total + meal.entries.length, 0)
-  const photoAttachmentCount = meals.filter((meal) => meal.photoName).length
 
   const recordWater = (milliliters: number) => {
     addWater(milliliters)
@@ -600,13 +577,6 @@ export function DietPage() {
       ),
     )
     if (removed) showToast(`已移除 ${removed.name}`)
-  }
-
-  const updateMealPhoto = (mealId: MealId, photoName: string) => {
-    setMeals((current) =>
-      current.map((meal) => (meal.id === mealId ? { ...meal, photoName } : meal)),
-    )
-    showToast('已添加餐次照片附件')
   }
 
   const registerAiFood = (mealId: MealId, entry: FoodEntry) => {
@@ -720,12 +690,16 @@ export function DietPage() {
                   </h2>
                   <span className="badge">{mealCount} / 4</span>
                 </div>
-                <p className="panel-sub">每餐可以添加多项食物，也可以只保留一张照片。</p>
+                <p className="panel-sub">每餐可以添加多项食物，热量与营养按你的核对结果登记。</p>
               </div>
               <button
                 className="btn quiet"
                 type="button"
-                onClick={() => setEditingMealId(nextMeal.id)}
+                onClick={() => {
+                  // 正常情况下今天一定有四个餐次（Provider 会补空骨架）；这里再兜一层，
+                  // 避免异常数据把点击变成一次静默的 TypeError。
+                  if (nextMeal) setEditingMealId(nextMeal.id)
+                }}
               >
                 记录下一餐
                 <Icon name="chev" className="icon-sm" />
@@ -774,7 +748,7 @@ export function DietPage() {
                         </span>
                         <span>
                           <strong>{meal.label}还没有记录</strong>
-                          <small>可以直接登记食物，或先添加今天的餐次照片。</small>
+                          <small>可以直接登记食物，或用 AI 热量登记粘贴解析。</small>
                         </span>
                       </div>
                     ) : (
@@ -803,12 +777,6 @@ export function DietPage() {
                         蛋白质 {Math.round(mealProtein)} g · 碳水 {Math.round(mealCarbs)} g · 脂肪{' '}
                         {Math.round(mealFat)} g
                       </span>
-                      {meal.photoName && (
-                        <span className="diet-photo-chip" title={meal.photoName}>
-                          <Icon name="camera" className="icon-sm" />
-                          {meal.photoName}
-                        </span>
-                      )}
                       <button
                         className="diet-edit-meal"
                         type="button"
@@ -1027,7 +995,7 @@ export function DietPage() {
             <div className="diet-guidance-list">
               <div>
                 <span>01</span>
-                <p>照片只作餐次附件，不在此版本自动识别热量。</p>
+                <p>餐食只登记文字与营养数据，热量以你的核对结果为准。</p>
               </div>
               <div>
                 <span>02</span>
@@ -1049,7 +1017,6 @@ export function DietPage() {
           onClose={() => setEditingMealId(null)}
           onAdd={(entry) => addFood(editingMeal.id, entry)}
           onRemove={(entryId) => removeFood(editingMeal.id, entryId)}
-          onPhotoChange={(photoName) => updateMealPhoto(editingMeal.id, photoName)}
         />
       )}
 
@@ -1064,7 +1031,7 @@ export function DietPage() {
       {evidenceOpen && (
         <EvidenceSheet
           title="饮食分析依据"
-          subtitle="按今日已登记的餐次与饮水记录汇总，照片不会参与热量计算。"
+          subtitle="按今日已登记的餐次与饮水记录汇总。"
           metrics={[
             {
               label: '今日热量',
@@ -1105,17 +1072,12 @@ export function DietPage() {
               value: '已确认后写入',
             },
             {
-              title: '照片附件',
-              detail: `当前有 ${photoAttachmentCount} 顿餐食附有照片。照片仅保留为本地附件，不参与营养估算或发送给分析服务。`,
-              value: `${photoAttachmentCount} 张`,
-            },
-            {
               title: '饮水记录',
               detail: `饮水由全局记录同步，当前累计 ${waterMilliliters} ml，撤销只影响最后一条快捷记录。`,
               value: `${waterMilliliters} ml`,
             },
           ]}
-          note="当前为前端 Mock 依据。接入 DeepSeek 后，仍只会发送已授权的营养摘要，不会上传原始餐食照片。"
+          note="当前为前端 Mock 依据。接入 DeepSeek 后，仍只会发送已授权的营养摘要。"
           onClose={() => setEvidenceOpen(false)}
         />
       )}

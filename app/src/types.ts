@@ -59,7 +59,6 @@ export interface Meal {
   label: string
   time: string
   entries: FoodEntry[]
-  photoName?: string
 }
 
 export type ExerciseKind = 'strength' | 'duration' | 'distance'

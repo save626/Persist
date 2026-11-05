@@ -132,7 +132,6 @@ export function collectLocalEntities(data: ImportableMockData): LocalEntity[] {
             meal: meal.id,
             mealLabel: meal.label,
             mealTime: meal.time,
-            ...(meal.photoName ? { photoName: meal.photoName } : {}),
           },
         })
       }
@@ -239,19 +238,10 @@ function upsertDietEntry(dietDays: DietDay[], data: Record<string, unknown>): Di
       label: typeof data.mealLabel === 'string' ? data.mealLabel : mealId,
       time: typeof data.mealTime === 'string' ? data.mealTime : '',
       entries: [entry],
-      ...(typeof data.photoName === 'string' ? { photoName: data.photoName } : {}),
     })
   }
 
-  const photoName = baseMeals.map((meal) => meal.photoName).find((name) => Boolean(name))
   const day: DietDay = { date, meals: baseMeals }
-  if (photoName) {
-    // 照片名在服务端只是条目标签，pull 回来时补到当天第一个有照片的餐次上。
-    day.meals = baseMeals.map((meal) =>
-      meal.photoName ? meal : meal.id === mealId ? { ...meal, photoName } : meal,
-    )
-  }
-
   const others = dietDays.filter((dayItem) => dayItem.date !== date)
   const hasAnyEntry = day.meals.some((meal) => meal.entries.length > 0)
   return hasAnyEntry ? [...others, day] : others

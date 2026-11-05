@@ -291,7 +291,6 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
       id: 'breakfast',
       label: '早餐',
       time: '08:05',
-      photoName: 'complete-demo-breakfast.jpg',
       entries: [
         {
           id: 'demo-breakfast-oats',
@@ -317,7 +316,6 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
       id: 'lunch',
       label: '午餐',
       time: '12:30',
-      photoName: 'complete-demo-lunch.jpg',
       entries: [
         {
           id: 'demo-lunch-chicken',
@@ -593,7 +591,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
       conclusions: [
         '训练会话同时包含力量、跳绳和骑行，可以验证容量、时长与距离的跨页面汇总。',
         '学习记录覆盖英语与高数、今天与过去 6 天，可以验证新增、编辑、筛选和报告引用。',
-        '四个餐次、餐照附件和多个饮水事件均已准备，可以直接验证营养与饮水联动。',
+        '四个餐次、完整的营养明细和多个饮水事件均已准备，可以直接验证营养与饮水联动。',
       ],
       actions: [
         '把高数练习提前到晚饭前，避免与疲劳叠加。',
@@ -699,7 +697,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
       updatedAt: reportDateTime(dateAtOffset(-3, now), '20:40'),
       period: '今日饮食记录',
       summary:
-        '早餐、午餐、晚餐和加餐都已记录，其中两餐附有照片。当前数据可以验证热量、宏量营养、餐次编辑和饮水补录。',
+        '早餐、午餐、晚餐和加餐都已记录。当前数据可以验证热量、宏量营养、餐次编辑和饮水补录。',
       status: '结构可验证',
       metric: [
         {
@@ -713,7 +711,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
       ],
       conclusions: [
         '四个餐次均有食物，可以直接验证编辑、删除和 AI 热量登记流程。',
-        '照片附件只作为本地元数据展示，不参与营养计算。',
+        '食物条目按餐次记录，编辑或删除后立即汇总。',
         '饮水已达到目标，仍可通过快捷按钮验证新增、撤销和自定义补录。',
       ],
       actions: [
@@ -723,7 +721,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
       ],
       evidence: [
         '早餐、午餐、晚餐和加餐均已记录食物',
-        `食物条目共 ${foodEntryCount} 个，2 个餐次含照片附件`,
+        `食物条目共 ${foodEntryCount} 个，分布在 4 个餐次`,
         `总热量 ${totalCalories.toLocaleString('zh-CN')} kcal，蛋白质 ${totalProtein} g`,
         `饮水 ${totalWaterLiters.toFixed(2)} L，含 3 段新增饮水事件`,
       ],

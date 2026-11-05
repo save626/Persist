@@ -63,7 +63,7 @@ describe('collectLocalEntities', () => {
     expect(profile?.data.aiConsent).toBe(false)
   })
 
-  it('饮食实体带上日期、餐次与照片名；照片只跟随对应餐次的条目', () => {
+  it('饮食实体带上日期与餐次，不再带照片字段', () => {
     const data = sampleData()
     const entries = collectLocalEntities(data).filter((entity) => entity.kind === 'diet_entry')
     const breakfast = entries.filter((entity) => entity.data.meal === 'breakfast')
@@ -71,9 +71,7 @@ describe('collectLocalEntities', () => {
     expect(breakfast).toHaveLength(2)
     expect(breakfast[0]?.data.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(breakfast[0]?.data.mealLabel).toBe('早餐')
-    expect(breakfast[0]?.data.photoName).toBe('complete-demo-breakfast.jpg')
-    const dinner = entries.find((entity) => entity.data.meal === 'dinner')
-    expect(dinner?.data.photoName).toBeUndefined()
+    expect(entries.every((entity) => entity.data.photoName === undefined)).toBe(true)
   })
 })
 

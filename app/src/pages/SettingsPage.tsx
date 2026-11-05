@@ -515,7 +515,7 @@ export function SettingsPage() {
               <label className="toggle-row">
                 <span className="toggle-copy">
                   <strong>仅发送聚合摘要</strong>
-                  <small>不发送餐次照片、原始备注或完整历史明细</small>
+                  <small>不发送原始备注或完整历史明细</small>
                 </span>
                 <input
                   className="toggle-input"
@@ -826,10 +826,6 @@ export function SettingsPage() {
                 <Icon name="check" className="icon-sm" />
                 你可以随时撤销 AI 数据授权
               </li>
-              <li>
-                <Icon name="check" className="icon-sm" />
-                照片只作为餐次附件，不发送给分析服务
-              </li>
             </ul>
             <button type="button" onClick={() => setInfoSheet('privacy')}>
               查看数据使用说明
@@ -980,9 +976,9 @@ export function SettingsPage() {
               </p>
             </div>
             <div className="info-sheet-block">
-              <h3>照片与备注按最小范围处理</h3>
+              <h3>备注按最小范围处理</h3>
               <p>
-                饮食照片只作为餐次本地附件，不参与热量估算，也不随分析摘要上传。原始备注默认排除，除非你在未来版本中单独授权。
+                原始备注默认排除，除非你在未来版本中单独授权。饮食餐次只记录文字与营养数据。
               </p>
             </div>
           </div>

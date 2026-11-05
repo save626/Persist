@@ -298,7 +298,7 @@ test('diet evidence sheet reflects recorded nutrition and water', async ({ page 
   const dialog = page.getByRole('dialog', { name: '饮食分析依据' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('热量与宏量营养')).toBeVisible()
-  await expect(dialog.getByText('照片附件')).toBeVisible()
+  await expect(dialog.getByText('外部 AI 文本登记')).toBeVisible()
   await expect(dialog.getByText('饮水记录', { exact: true })).toBeVisible()
 })
 

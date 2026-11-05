@@ -78,7 +78,6 @@ describe('complete mock data', () => {
     const todayMeals = mealsOfToday(data)
     expect(todayMeals).toHaveLength(4)
     expect(todayMeals.every((meal) => meal.entries.length > 0)).toBe(true)
-    expect(todayMeals.filter((meal) => meal.photoName).length).toBeGreaterThanOrEqual(1)
     expect(data.dietDays).toHaveLength(1)
 
     expect(data.fitnessSession?.sessionStatus).toBe('active')

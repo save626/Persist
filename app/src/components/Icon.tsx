@@ -13,7 +13,6 @@ export type IconName =
   | 'check'
   | 'clock'
   | 'edit'
-  | 'camera'
   | 'undo'
   | 'lock'
   | 'close'
@@ -68,10 +67,6 @@ export function IconSprite() {
       </symbol>
       <symbol id="edit" viewBox="0 0 24 24">
         <path d="M13.5 5.5l5 5M5 19l3.7-.8L19 7.9a2.1 2.1 0 0 0-3-3L5.8 15.2z" />
-      </symbol>
-      <symbol id="camera" viewBox="0 0 24 24">
-        <path d="M4.5 7.5h3l1.4-2h6.2l1.4 2h3A1.5 1.5 0 0 1 21 9v8.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5V9a1.5 1.5 0 0 1 1.5-1.5z" />
-        <circle cx="12" cy="13" r="3.5" />
       </symbol>
       <symbol id="undo" viewBox="0 0 24 24">
         <path d="M8 7H4v-4M4.5 7.5A8 8 0 1 1 5 16" />
