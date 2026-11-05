@@ -7,7 +7,7 @@ type MockBackup = {
   }
 }
 
-async function mainNav(page: Page, label: '今日' | '健身' | '饮食' | '学习') {
+async function mainNav(page: Page, label: '今日' | '健身' | '饮食' | '学习' | 'AI 报告') {
   const mobile = (page.viewportSize()?.width ?? 1280) <= 900
   const nav = mobile ? page.locator('.bottom-nav') : page.locator('.side-nav')
   await nav.getByRole('link', { name: label, exact: true }).click()
@@ -56,6 +56,39 @@ test('generated daily brief enters history and applies its plan suggestion', asy
   const hydrationPlan = page.locator('.plan-item').filter({ hasText: '下午分两次补水' })
   await expect(hydrationPlan).toContainText('15:30')
   await expect(hydrationPlan).toContainText('每次 250 ml')
+})
+
+test('generated daily brief stays visible after leaving and reopening the reports page', async ({
+  page,
+}) => {
+  await page.goto('/reports')
+  await expect(page.locator('.reports-history-count')).toHaveText('4 份')
+  await page.getByRole('button', { name: '生成今日简报', exact: true }).click()
+  await expect(page.getByText('今日简报已生成')).toBeVisible()
+  const summaryAfterGenerate = await page
+    .locator('.reports-generation-copy p')
+    .first()
+    .textContent()
+
+  // 跳到今日页再回来：报告实体在，顶部状态也不该退回「尚未生成」（否则看起来像报告丢了）。
+  await mainNav(page, '今日')
+  await expect(page).toHaveURL(/\/$/)
+  await page.waitForTimeout(450)
+  await mainNav(page, 'AI 报告')
+  await expect(page).toHaveURL(/\/reports$/)
+
+  await expect(page.locator('.reports-generation-copy')).toContainText('今日简报已生成')
+  await expect(page.locator('.reports-generation-copy p').first()).toHaveText(
+    summaryAfterGenerate ?? '',
+  )
+  await expect(page.locator('.reports-history-count')).toHaveText('5 份')
+
+  // 整页刷新后（IndexedDB 回填）同样保持「已生成」，并且还能直接重新查看这份简报。
+  await page.reload()
+  await expect(page.locator('.reports-history-count')).toHaveText('5 份')
+  await expect(page.locator('.reports-generation-copy')).toContainText('今日简报已生成')
+  await page.getByRole('button', { name: '查看简报', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '先把训练安排好，再收住晚间学习' })).toBeVisible()
 })
 
 test('report range selector updates the displayed period', async ({ page }) => {

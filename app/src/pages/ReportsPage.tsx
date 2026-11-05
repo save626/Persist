@@ -131,6 +131,13 @@ function formatReportDate(date: Date) {
   return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(date)
 }
 
+/** 报告记录的 date 是本地化的「月/日」，这里把 provider 的日期键（YYYY-MM-DD）换成同一口径。 */
+function reportDateFromKey(dateKey: string) {
+  const [, month, day] = dateKey.split('-')
+  if (!month || !day) return dateKey
+  return `${Number(month)}/${Number(day)}`
+}
+
 function defaultUpdatedAt() {
   return new Intl.DateTimeFormat('zh-CN', {
     month: 'numeric',
@@ -265,6 +272,19 @@ export function ReportsPage() {
     setReports,
   } = useMockData()
   const navigate = useNavigate()
+  // 顶部「生成状态」原本只是本页的临时状态：跳到别的页面再回来会重置为「尚未生成」，
+  // 看上去像刚生成的报告丢了。这里按「今天是否已经生成过今日简报」派生展示状态；
+  // 报告实体本身仍存放在 reports（随 IndexedDB 持久化），这里只负责别把已生成误报成未生成。
+  // 用派生值而不是 effect 回写 state：刷新时 reports 要等 IndexedDB 回填，用 effect 同步
+  // 会多一轮渲染，也违反 react(set-state-in-effect)。
+  const todayReportDate = reportDateFromKey(today)
+  // 只认「最新一份报告就是今天生成的今日简报」：这样顶部成功态与下面的 LATEST SYNTHESIS
+  // 卡片指向同一份记录，不会出现「顶部说已生成、卡片却是另一份」的分裂。
+  const todayBriefReport = useMemo(() => {
+    const latest = reports[0]
+    if (!latest || latest.type !== '今日简报' || latest.date !== todayReportDate) return null
+    return latest
+  }, [reports, todayReportDate])
   const [range, setRange] = useState<RangeKey>('7')
   const [generation, setGeneration] = useState<GenerationState>('idle')
   const [probeState, setProbeState] = useState<ReportSource>('probing')
@@ -278,6 +298,10 @@ export function ReportsPage() {
   const [pendingReport, setPendingReport] = useState<ReportRecord | null>(null)
   const [confirmApply, setConfirmApply] = useState(false)
   const [generatedReport, setGeneratedReport] = useState<ReportRecord | null>(null)
+  // 本页没有正在生成/报错时，以「今天已生成的今日简报」作为成功态展示。
+  const generationDisplay: GenerationState =
+    generation === 'idle' && todayBriefReport ? 'success' : generation
+  const displayReport = generatedReport ?? todayBriefReport
 
   const sourceEnabled = (source: DataSource) => aiConsent && settings.sources[source]
 
@@ -685,18 +709,24 @@ export function ReportsPage() {
       </header>
 
       <section
-        className={`reports-generation ${generation}`}
+        className={`reports-generation ${generationDisplay}`}
         aria-live="polite"
         aria-label="AI 报告生成状态"
       >
         <div className="reports-generation-mark">
           <Icon
-            name={generation === 'error' ? 'close' : generation === 'success' ? 'check' : 'spark'}
+            name={
+              generationDisplay === 'error'
+                ? 'close'
+                : generationDisplay === 'success'
+                  ? 'check'
+                  : 'spark'
+            }
           />
         </div>
         <div className="reports-generation-copy">
           <span>AI REPORT ENGINE</span>
-          {generation === 'idle' && (
+          {generationDisplay === 'idle' && (
             <>
               <h2>今日简报尚未生成</h2>
               <p>
@@ -712,7 +742,7 @@ export function ReportsPage() {
               </p>
             </>
           )}
-          {generation === 'loading' && (
+          {generationDisplay === 'loading' && (
             <>
               <h2>正在整理今天的记录</h2>
               <p>
@@ -722,10 +752,10 @@ export function ReportsPage() {
               </p>
             </>
           )}
-          {generation === 'success' && (
+          {generationDisplay === 'success' && (
             <>
               <h2>今日简报已生成</h2>
-              <p>{generatedReport?.summary ?? latestReport.summary}</p>
+              <p>{displayReport?.summary ?? latestReport.summary}</p>
               {fallbackNote && (
                 <p className="reports-fallback-note" role="status">
                   {fallbackNote}
@@ -733,7 +763,7 @@ export function ReportsPage() {
               )}
             </>
           )}
-          {generation === 'error' && (
+          {generationDisplay === 'error' && (
             <>
               <h2>这次生成没有完成</h2>
               <p>{generationError ?? '报告服务返回了错误。记录本身没有受影响，可以直接重试。'}</p>
@@ -741,23 +771,23 @@ export function ReportsPage() {
           )}
         </div>
         <div className="reports-generation-actions">
-          {generation === 'loading' && (
+          {generationDisplay === 'loading' && (
             <span className="reports-loading-dots">
               <i />
               <i />
               <i />
             </span>
           )}
-          {generation === 'success' && (
+          {generationDisplay === 'success' && (
             <button
               className="btn primary"
               type="button"
-              onClick={() => setSelectedReport(generatedReport ?? latestReport)}
+              onClick={() => setSelectedReport(displayReport ?? latestReport)}
             >
               查看简报
             </button>
           )}
-          {generation === 'error' && (
+          {generationDisplay === 'error' && (
             <button
               className="btn primary"
               type="button"
