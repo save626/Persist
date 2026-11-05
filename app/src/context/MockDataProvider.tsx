@@ -424,9 +424,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     refreshSyncInfo(engine)
   }, [refreshSyncInfo, requireSyncEngine])
 
-  const syncNow = useCallback(async () => {
-    await requireSyncEngine().flush('manual')
-  }, [requireSyncEngine])
+  const syncNow = useCallback(async () => requireSyncEngine().flush('manual'), [requireSyncEngine])
 
   const createMockSnapshot = useCallback(() => {
     const next: MockSnapshot = {

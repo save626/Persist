@@ -339,6 +339,64 @@ test('settings privacy and self-hosting guidance open as sheets', async ({ page 
   await page.getByRole('button', { name: '返回设置' }).click()
 })
 
+test('settings keeps data sync off by default and validates recovery codes', async ({ page }) => {
+  await page.goto('/settings')
+
+  const syncCard = page.locator('.settings-sync-card')
+  await expect(syncCard.getByRole('heading', { name: '数据同步' })).toBeVisible()
+  await expect(syncCard.getByRole('checkbox', { name: '跨设备同步' })).not.toBeChecked()
+  await expect(syncCard.getByText('数据副本会存到自建服务器', { exact: false })).toBeVisible()
+  await expect(syncCard.getByRole('button', { name: '立即同步' })).toHaveCount(0)
+
+  await syncCard.getByRole('button', { name: '用恢复码绑定已有账号' }).click()
+  await syncCard.getByLabel('恢复码').fill('1234')
+  await syncCard.getByRole('button', { name: '绑定到本机' }).click()
+  await expect(syncCard.getByRole('alert')).toContainText('恢复码应为 32 位十六进制字符')
+})
+
+test('settings can enable sync against a mocked device API and show the recovery code', async ({
+  page,
+}) => {
+  const recoveryCode = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
+  await page.route('**/api/v1/**', (route) => {
+    const url = route.request().url()
+    if (url.endsWith('/devices')) {
+      return route.fulfill({
+        json: { userId: 'u-e2e', deviceId: 'd-e2e', token: 'token-e2e', recoveryCode },
+      })
+    }
+    if (url.includes('/devices/revoke')) {
+      return route.fulfill({ json: { revoked: true, deviceId: 'd-e2e' } })
+    }
+    if (url.includes('/sync/bootstrap') || url.includes('/sync/push')) {
+      return route.fulfill({ json: { applied: 1, skipped: [], serverRev: 1 } })
+    }
+    if (url.includes('/sync/pull')) {
+      return route.fulfill({ json: { entities: [], nextSince: 1, hasMore: false } })
+    }
+    return route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'x' } } })
+  })
+
+  await page.goto('/settings')
+  const syncCard = page.locator('.settings-sync-card')
+  const toggle = syncCard.getByRole('checkbox', { name: '跨设备同步' })
+
+  await toggle.click()
+  await expect(syncCard.locator('.settings-sync-code code')).toHaveText(
+    'A1B2C3D4 E5F60718 293A4B5C 6D7E8F90',
+  )
+  await expect(toggle).toBeChecked()
+
+  await syncCard.getByRole('button', { name: '立即同步' }).click()
+  await expect(page.locator('.toast.show')).toContainText('已同步到自建服务器')
+
+  await syncCard.getByRole('button', { name: '吊销本机' }).click()
+  await expect(page.getByRole('alertdialog', { name: '吊销本机同步？' })).toBeVisible()
+  await page.getByRole('button', { name: '确认吊销' }).click()
+  await expect(toggle).not.toBeChecked()
+  await expect(syncCard.getByText('数据副本会存到自建服务器', { exact: false })).toBeVisible()
+})
+
 test('report type cards open the matching reports', async ({ page }) => {
   await page.goto('/reports')
 

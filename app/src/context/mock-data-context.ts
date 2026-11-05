@@ -91,8 +91,8 @@ export interface MockDataContextValue {
   restoreSync: (recoveryCode: string, label?: string) => Promise<void>
   /** 吊销本机令牌并关闭同步。 */
   revokeSync: () => Promise<void>
-  /** 立刻同步一次（不等待 5 秒防抖）。 */
-  syncNow: () => Promise<void>
+  /** 立刻同步一次（不等待 5 秒防抖）；返回本次同步后的状态，便于页面提示成功/失败。 */
+  syncNow: () => Promise<SyncStatusSnapshot>
   longTermPlans: LongTermPlan[]
   addLongTermPlan: (draft: LongTermPlanDraft) => LongTermPlan | null
   updateLongTermPlan: (id: string, patch: Partial<LongTermPlan>) => void

@@ -1,4 +1,4 @@
-﻿/* Settings: local-first preferences, service boundary, data and privacy. */
+/* Settings: local-first preferences, service boundary, data and privacy. */
 .settings-page {
   display: grid;
   min-width: 0;
@@ -790,6 +790,165 @@
   font-size: 7px;
 }
 
+.settings-sync-body {
+  display: grid;
+  gap: 14px;
+  padding: 4px 22px 20px;
+}
+
+.settings-sync-body .toggle-row {
+  min-height: 58px;
+  padding: 2px 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-sync-body .surface-error {
+  margin: 0;
+}
+
+.settings-sync-code {
+  display: grid;
+  gap: 8px;
+  padding: 14px 15px;
+  border: 1px solid rgba(109, 159, 189, 0.2);
+  border-radius: 12px;
+  background: rgba(233, 242, 247, 0.5);
+}
+
+.settings-sync-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--faint);
+  font-size: 8px;
+}
+
+.settings-sync-code-head .btn {
+  min-height: 26px;
+  padding: 0 9px;
+  font-size: 8px;
+}
+
+.settings-sync-code code {
+  color: var(--deep);
+  font-family: var(--num);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  word-break: break-all;
+}
+
+.settings-sync-code small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.6;
+}
+
+.settings-sync-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--line);
+}
+
+.settings-sync-meta > div {
+  display: grid;
+  min-height: 52px;
+  align-content: center;
+  gap: 4px;
+  padding: 9px 11px;
+  background: var(--surface);
+}
+
+.settings-sync-meta span {
+  color: var(--faint);
+  font-size: 8px;
+}
+
+.settings-sync-meta strong {
+  overflow: hidden;
+  color: var(--soft);
+  font-size: 9px;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sync-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-sync-disclosure {
+  margin: 0;
+  padding: 12px 13px;
+  border: 1px dashed rgba(109, 159, 189, 0.25);
+  border-radius: 11px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.65;
+}
+
+.settings-sync-restore {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-sync-restore-body {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(244, 247, 249, 0.5);
+}
+
+.settings-sync-restore-body label {
+  display: grid;
+  gap: 6px;
+}
+
+.settings-sync-restore-body label span {
+  color: var(--faint);
+  font-size: 8px;
+}
+
+.settings-sync-restore-body input {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--line2);
+  border-radius: 9px;
+  color: var(--soft);
+  background: var(--surface);
+  font-family: var(--num);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.settings-sync-restore-body input:focus {
+  outline: none;
+  border-color: rgba(109, 159, 189, 0.5);
+}
+
+.settings-sync-restore-body .btn {
+  justify-self: start;
+}
+
+.settings-sync-restore-body small {
+  color: var(--faint);
+  font-size: 8px;
+  line-height: 1.6;
+}
+
 @keyframes settings-pulse {
   0%,
   100% {
@@ -1019,6 +1178,26 @@
   .settings-source-grid {
     padding-right: 15px;
     padding-left: 15px;
+  }
+
+  .settings-sync-body {
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+
+  .settings-sync-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-sync-actions .btn,
+  .settings-sync-actions .settings-danger-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .settings-sync-meta {
+    grid-template-columns: 1fr;
   }
 
   .settings-service-panel,

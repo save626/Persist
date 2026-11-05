@@ -49,6 +49,16 @@ function snapshotTimeLabel(value: string) {
   return `${new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(date)} ${time}`
 }
 
+/** 32 位恢复码按 4 组 × 8 位展示，便于抄写；存储与传输始终是不带空格的原始值。 */
+function recoveryCodeLabel(code: string | null) {
+  if (!code) return '尚未生成'
+  return code.toUpperCase().replace(/(.{8})(?=.)/g, '$1 ')
+}
+
+function syncErrorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '同步操作失败，请稍后重试。'
+}
+
 export function SettingsPage() {
   const { showToast } = useUI()
   const {
@@ -73,6 +83,14 @@ export function SettingsPage() {
     appendStudyRecords,
     replaceMockData,
     clearLocalData: clearAllLocalData,
+    syncStatus,
+    syncRecoveryCode,
+    syncDeviceLabel,
+    enableSync,
+    disableSync,
+    restoreSync,
+    revokeSync,
+    syncNow,
   } = useMockData()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { reminders, summaryOnly, sources } = settings
@@ -84,6 +102,12 @@ export function SettingsPage() {
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmClearAll, setConfirmClearAll] = useState(false)
   const [infoSheet, setInfoSheet] = useState<InfoSheet>(null)
+  const [syncBusy, setSyncBusy] = useState<null | 'toggle' | 'sync' | 'restore' | 'revoke'>(null)
+  const [restoreOpen, setRestoreOpen] = useState(false)
+  const [restoreCode, setRestoreCode] = useState('')
+  const [restoreError, setRestoreError] = useState('')
+  const [copiedCode, setCopiedCode] = useState(false)
+  const [confirmRevoke, setConfirmRevoke] = useState(false)
 
   const enabledReminderCount = reminders.filter((reminder) => reminder.enabled).length
   const sourceCount = useMemo(() => Object.values(sources).filter(Boolean).length, [sources])
@@ -235,6 +259,89 @@ export function SettingsPage() {
       })
   }
 
+  /** 开关同步：开启后由引擎先全量上传，再按 5 秒防抖增量同步。 */
+  const toggleSync = (next: boolean) => {
+    if (syncBusy) return
+    setSyncBusy('toggle')
+    void (next ? enableSync() : disableSync())
+      .then(() => {
+        setSavedAt(next ? '同步已开启' : '同步已关闭')
+        showToast(next ? '数据同步已开启 · 正在保存第一份副本' : '数据同步已关闭 · 本机数据保留')
+      })
+      .catch((error: unknown) => showToast(`同步操作失败：${syncErrorMessage(error)}`))
+      .finally(() => setSyncBusy(null))
+  }
+
+  const copyRecoveryCode = () => {
+    if (!syncRecoveryCode) return
+    const markCopied = () => {
+      setCopiedCode(true)
+      window.setTimeout(() => setCopiedCode(false), 1600)
+    }
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard
+        .writeText(syncRecoveryCode.toUpperCase())
+        .then(markCopied)
+        .catch(() => showToast('复制失败，请手动抄写恢复码'))
+    } else {
+      showToast('当前环境不支持自动复制，请手动抄写恢复码')
+    }
+  }
+
+  const bindWithRecoveryCode = () => {
+    if (syncBusy) return
+    const code = restoreCode.replace(/\s+/g, '').toLowerCase()
+    if (!/^[0-9a-f]{32}$/.test(code)) {
+      setRestoreError('恢复码应为 32 位十六进制字符，可在已绑定设备的设置页查看。')
+      return
+    }
+    setRestoreError('')
+    setSyncBusy('restore')
+    void restoreSync(code)
+      .then(() => {
+        setRestoreOpen(false)
+        setRestoreCode('')
+        setSavedAt('已绑定同步账号')
+        showToast('已用恢复码绑定本机 · 正在拉取服务器副本')
+      })
+      .catch((error: unknown) => setRestoreError(syncErrorMessage(error)))
+      .finally(() => setSyncBusy(null))
+  }
+
+  const syncImmediately = () => {
+    if (syncBusy) return
+    setSyncBusy('sync')
+    void syncNow()
+      .then((status) => {
+        if (status.needsAttention) {
+          showToast('同步失败：设备令牌已失效，请用恢复码重新绑定本机')
+        } else if (status.error) {
+          showToast(`同步失败：${status.error}`)
+        } else if (!status.online) {
+          showToast('当前离线，联网后会自动补传')
+        } else if (status.pending > 0) {
+          showToast(`仍有 ${status.pending} 条待同步，稍后再试`)
+        } else {
+          showToast('已同步到自建服务器')
+        }
+      })
+      .catch((error: unknown) => showToast(`同步失败：${syncErrorMessage(error)}`))
+      .finally(() => setSyncBusy(null))
+  }
+
+  const revokeThisDevice = () => {
+    setConfirmRevoke(false)
+    if (syncBusy) return
+    setSyncBusy('revoke')
+    void revokeSync()
+      .then(() => {
+        setSavedAt('本机同步已吊销')
+        showToast('本机同步已吊销 · 本机数据保留')
+      })
+      .catch((error: unknown) => showToast(`吊销失败：${syncErrorMessage(error)}`))
+      .finally(() => setSyncBusy(null))
+  }
+
   return (
     <form className="settings-page" onSubmit={saveSettings}>
       <header className="head settings-head">
@@ -266,8 +373,8 @@ export function SettingsPage() {
             <span className="settings-kicker">LOCAL-FIRST RECORD</span>
             <h2>记录保存在设备端，敏感密钥不进入浏览器。</h2>
             <p>
-              当前为前端 Mock：记录已保存在本机浏览器（IndexedDB），AI 请求仍由你的小型服务器代理
-              DeepSeek。
+              记录默认保存在本机浏览器（IndexedDB），AI 请求仍由你的小型服务器代理
+              DeepSeek；只有手动开启数据同步后，增量副本才会写入你的自建服务器。
             </p>
           </div>
         </div>
@@ -284,8 +391,8 @@ export function SettingsPage() {
           </div>
           <div>
             <span>存储方式</span>
-            <strong>设备本地</strong>
-            <small>云同步预留</small>
+            <strong>{syncStatus.enabled ? '本机 + 自建服务器' : '设备本地'}</strong>
+            <small>{syncStatus.enabled ? syncStatus.state : '同步默认关闭'}</small>
           </div>
         </div>
       </section>
@@ -524,6 +631,175 @@ export function SettingsPage() {
               </button>
             </div>
           </section>
+
+          <section className="panel settings-card settings-sync-card" aria-labelledby="syncTitle">
+            <div className="settings-card-head">
+              <div>
+                <span className="settings-section-index">04</span>
+                <h2 id="syncTitle">数据同步</h2>
+                <p>关掉就是纯本机；打开后只在你的自建服务器留一份增量副本。</p>
+              </div>
+              <span
+                className={`settings-service-pill ${syncStatus.enabled ? 'connected' : 'idle'}`}
+              >
+                <span className="dot" />
+                {syncStatus.state === '待同步' && syncStatus.pending > 0
+                  ? `待同步 ${syncStatus.pending}`
+                  : syncStatus.state}
+              </span>
+            </div>
+
+            <div className="settings-sync-body">
+              <label className="toggle-row">
+                <span className="toggle-copy">
+                  <strong>跨设备同步</strong>
+                  <small>默认关闭；开启后本机仍是主要数据源，服务器只做增量备份</small>
+                </span>
+                <input
+                  className="toggle-input"
+                  type="checkbox"
+                  checked={syncStatus.enabled}
+                  disabled={syncBusy !== null}
+                  aria-label="跨设备同步"
+                  onChange={(event) => toggleSync(event.target.checked)}
+                />
+                <span className="toggle-ui" />
+              </label>
+
+              {syncStatus.needsAttention && (
+                <p className="surface-error" role="alert">
+                  设备令牌已失效，本机数据不会被清空。请用恢复码重新绑定本机。
+                </p>
+              )}
+              {syncStatus.error && !syncStatus.needsAttention && (
+                <p className="surface-error" role="alert">
+                  {syncStatus.error}
+                </p>
+              )}
+              {syncStatus.enabled && !syncStatus.online && (
+                <p className="settings-inline-note">
+                  <Icon name="clock" className="icon-sm" />
+                  当前处于离线状态，恢复网络后会自动补传；本机记录不受影响。
+                </p>
+              )}
+
+              {syncStatus.enabled ? (
+                <>
+                  <div className="settings-sync-code">
+                    <div className="settings-sync-code-head">
+                      <span>恢复码</span>
+                      <button
+                        className="btn quiet"
+                        type="button"
+                        disabled={!syncRecoveryCode}
+                        onClick={copyRecoveryCode}
+                      >
+                        <Icon name={copiedCode ? 'check' : 'today'} className="icon-sm" />
+                        {copiedCode ? '已复制' : '复制'}
+                      </button>
+                    </div>
+                    <code>{recoveryCodeLabel(syncRecoveryCode)}</code>
+                    <small>
+                      在新设备上用恢复码找回同一账号。服务端只保存哈希，请自行抄写保存，不要截图外发。
+                    </small>
+                  </div>
+
+                  <div className="settings-sync-meta">
+                    <div>
+                      <span>本机设备</span>
+                      <strong>{syncDeviceLabel || '未命名设备'}</strong>
+                    </div>
+                    <div>
+                      <span>最近同步</span>
+                      <strong>{syncStatus.lastSyncAt ?? '尚未同步'}</strong>
+                    </div>
+                    <div>
+                      <span>待发变更</span>
+                      <strong>{syncStatus.pending > 0 ? `${syncStatus.pending} 条` : '无'}</strong>
+                    </div>
+                  </div>
+
+                  <div className="settings-sync-actions">
+                    <button
+                      className="btn secondary"
+                      type="button"
+                      disabled={syncBusy !== null || syncStatus.syncing || !syncStatus.online}
+                      onClick={syncImmediately}
+                    >
+                      {syncBusy === 'sync' || syncStatus.syncing ? '同步中…' : '立即同步'}
+                    </button>
+                    <button
+                      className="settings-danger-button"
+                      type="button"
+                      disabled={syncBusy !== null}
+                      onClick={() => setConfirmRevoke(true)}
+                    >
+                      吊销本机
+                    </button>
+                  </div>
+
+                  <p className="settings-inline-note">
+                    <Icon name="lock" className="icon-sm" />
+                    服务器只保存增量副本：记录内容、更新时间与删除标记；不保存恢复码明文，也不保存
+                    AI 对话内容。关闭同步不会删除本机记录。
+                  </p>
+                </>
+              ) : (
+                <p className="settings-sync-disclosure">
+                  数据副本会存到自建服务器（当前为内网调试环境，尚未备案完成）。开启后本机每次写入会在
+                  5 秒内增量上传；关闭后不再发起任何同步请求。
+                </p>
+              )}
+
+              <div className="settings-sync-restore">
+                <button
+                  className="settings-outline-button"
+                  type="button"
+                  aria-expanded={restoreOpen}
+                  onClick={() => {
+                    setRestoreOpen((open) => !open)
+                    setRestoreError('')
+                  }}
+                >
+                  {restoreOpen ? '收起恢复码绑定' : '用恢复码绑定已有账号'}
+                  <Icon name="chev" className="icon-sm" />
+                </button>
+                {restoreOpen && (
+                  <div className="settings-sync-restore-body">
+                    <label>
+                      <span>恢复码（32 位十六进制）</span>
+                      <input
+                        value={restoreCode}
+                        maxLength={39}
+                        placeholder="例如 0A1B2C3D 4E5F6A7B…"
+                        aria-label="恢复码"
+                        onChange={(event) => {
+                          setRestoreCode(event.target.value)
+                          setRestoreError('')
+                        }}
+                      />
+                    </label>
+                    {restoreError && (
+                      <p className="surface-error" role="alert">
+                        {restoreError}
+                      </p>
+                    )}
+                    <button
+                      className="btn primary"
+                      type="button"
+                      disabled={syncBusy === 'restore'}
+                      onClick={bindWithRecoveryCode}
+                    >
+                      {syncBusy === 'restore' ? '绑定中…' : '绑定到本机'}
+                    </button>
+                    <small>
+                      绑定后以服务器副本为准合并到本机；不会清空本机已有记录。换账号时会丢弃旧账号未发出的变更。
+                    </small>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
 
         <aside className="settings-side-column">
@@ -653,6 +929,17 @@ export function SettingsPage() {
           danger
           onClose={() => setConfirmClearAll(false)}
           onConfirm={clearEverything}
+        />
+      )}
+
+      {confirmRevoke && (
+        <ConfirmDialog
+          title="吊销本机同步？"
+          description="本机令牌会立即失效并停止后续同步，本机数据不会被删除。再次开启会创建新账号；若想继续使用原账号，请在那之前抄好恢复码。"
+          confirmLabel="确认吊销"
+          danger
+          onClose={() => setConfirmRevoke(false)}
+          onConfirm={revokeThisDevice}
         />
       )}
 
