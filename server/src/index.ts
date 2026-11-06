@@ -39,6 +39,7 @@ try {
     {
       ...describeConfig(config),
       dbPath: database.path,
+      backupDir: config.backupDir,
       schemaVersion: database.schemaVersion,
     },
     'persist-server started',

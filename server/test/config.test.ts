@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_DEEPSEEK_BASE_URL, loadConfig } from '../src/config.js'
 
@@ -55,5 +56,31 @@ describe('loadConfig', () => {
 
   it('空密钥视为未配置', () => {
     expect(loadConfig(env({ DEEPSEEK_API_KEY: '   ' })).deepseekApiKey).toBe(null)
+  })
+
+  it('备份目录默认跟着库走，保留策略与磁盘阈值可覆盖', () => {
+    const defaults = loadConfig(env({}))
+    expect(defaults.backupDir).toBe(join('data', 'backups'))
+    expect(defaults.backupKeepDays).toBe(7)
+    expect(defaults.backupKeepWeeks).toBe(4)
+    expect(defaults.backupKeepMonths).toBe(3)
+    expect(defaults.diskWarnPercent).toBe(85)
+
+    const custom = loadConfig(
+      env({
+        DB_PATH: '/var/lib/persist/persist.sqlite',
+        BACKUP_KEEP_DAYS: '14',
+        BACKUP_KEEP_WEEKS: '0',
+        BACKUP_KEEP_MONTHS: '0',
+        DISK_WARN_PERCENT: '90',
+      }),
+    )
+    expect(custom.backupDir).toBe(join('/var/lib/persist', 'backups'))
+    expect(custom.backupKeepDays).toBe(14)
+    expect(custom.backupKeepWeeks).toBe(0)
+    expect(custom.backupKeepMonths).toBe(0)
+    expect(custom.diskWarnPercent).toBe(90)
+
+    expect(loadConfig(env({ DB_BACKUP_DIR: '/srv/backups' })).backupDir).toBe('/srv/backups')
   })
 })

@@ -6,6 +6,7 @@
  * 仓库里只有 .env.example（无真实密钥）。
  */
 
+import { dirname, join } from 'node:path'
 import { DEFAULT_DAILY_BRIEF_AT, parseDailyBriefAt } from '@persist/shared/contract/analysis'
 
 export interface ServerConfig {
@@ -37,6 +38,14 @@ export interface ServerConfig {
   /** SQLite 单文件库路径；生产由 server.env 指到 /var/lib/persist/persist.sqlite。 */
   dbPath: string
   dbBusyTimeoutMs: number
+  /** 每日快照目录；默认与库同级的 backups/（生产即 /var/lib/persist/backups）。 */
+  backupDir: string
+  /** 保留策略：近 N 天全留 + 近 N 周每周一份 + 近 N 月每月一份。 */
+  backupKeepDays: number
+  backupKeepWeeks: number
+  backupKeepMonths: number
+  /** 库所在分区使用率到达该百分比时，/api/health 报 storage.warn（P4 §11.3：85）。 */
+  diskWarnPercent: number
 }
 
 export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -60,6 +69,7 @@ function readBool(env: NodeJS.ProcessEnv, key: string, fallback: boolean) {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const apiKey = env.DEEPSEEK_API_KEY?.trim() ?? ''
+  const dbPath = env.DB_PATH?.trim() || 'data/persist.sqlite'
   return {
     host: env.HOST?.trim() || '127.0.0.1',
     port: readInt(env, 'PORT', 3000, 1, 65_535),
@@ -84,8 +94,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     maxTurns: 20,
     maxTurnChars: 2_000,
     maxPromptChars: 12_000,
-    dbPath: env.DB_PATH?.trim() || 'data/persist.sqlite',
+    dbPath,
     dbBusyTimeoutMs: readInt(env, 'DB_BUSY_TIMEOUT_MS', 5_000, 100, 60_000),
+    // 备份目录默认跟着库走：DB_PATH=/var/lib/persist/persist.sqlite 时
+    // 默认就是 /var/lib/persist/backups，不需要在 server.env 里重复写一遍。
+    backupDir: env.DB_BACKUP_DIR?.trim() || join(dirname(dbPath), 'backups'),
+    backupKeepDays: readInt(env, 'BACKUP_KEEP_DAYS', 7, 1, 365),
+    // 周/月可以配 0：等于只保留日备份。
+    backupKeepWeeks: readInt(env, 'BACKUP_KEEP_WEEKS', 4, 0, 52),
+    backupKeepMonths: readInt(env, 'BACKUP_KEEP_MONTHS', 3, 0, 120),
+    diskWarnPercent: readInt(env, 'DISK_WARN_PERCENT', 85, 50, 100),
   }
 }
 
