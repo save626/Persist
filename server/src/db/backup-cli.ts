@@ -1,9 +1,9 @@
 import { loadConfig } from '../config.js'
+import { parseBackupArgs } from './backup-args.js'
 import {
   createBackup,
   previewBackups,
   type BackupPolicy,
-  type BackupReason,
   type BackupResult,
   type BackupPreview,
 } from './backup.js'
@@ -20,14 +20,6 @@ import {
  * 任何失败都以退出码 1 结束——systemd 会把 oneshot 标成 failed，能被 `systemctl --failed` 看到。
  */
 
-function readReason(argv: string[]): BackupReason {
-  const raw = argv.find((arg) => arg.startsWith('--reason='))
-  if (!raw) return 'scheduled'
-  const value = raw.slice('--reason='.length)
-  if (value === 'scheduled' || value === 'manual' || value === 'pre-restore') return value
-  throw new Error(`--reason 只支持 scheduled / manual / pre-restore，收到：${value}`)
-}
-
 function policyOf(config: ReturnType<typeof loadConfig>): BackupPolicy {
   return {
     keepDays: config.backupKeepDays,
@@ -37,13 +29,12 @@ function policyOf(config: ReturnType<typeof loadConfig>): BackupPolicy {
 }
 
 function main(): number {
-  const argv = process.argv.slice(2)
-  const dryRun = argv.includes('--dry-run')
+  const args = parseBackupArgs(process.argv.slice(2))
   const config = loadConfig()
   const policy = policyOf(config)
   const nowMs = Date.now()
 
-  if (dryRun) {
+  if (args.dryRun) {
     const preview: BackupPreview = previewBackups(config.backupDir, nowMs, policy)
     console.log(JSON.stringify({ ok: true, dryRun: true, ...preview }, null, 0))
     return 0
@@ -53,7 +44,7 @@ function main(): number {
     dbPath: config.dbPath,
     backupDir: config.backupDir,
     now: nowMs,
-    reason: readReason(argv),
+    reason: args.reason,
     policy,
   })
   console.log(JSON.stringify(result, null, 0))
