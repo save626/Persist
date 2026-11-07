@@ -104,7 +104,7 @@
 │   /api/v1/reports*                          报告归档查询                                │
 │   /api/v1/backups*、/export、/account       备份 / 导出 / 删除                            │
 │  服务层：repository（SQL）→ facts builder（确定性聚合）→ AI（仅文字）/ rules 降级         │
-│  存储：/var/lib/persist/persist.sqlite（WAL），备份 /var/backups/persist/                 │
+│  存储：/var/lib/persist/persist.sqlite（WAL），备份 /var/lib/persist/backups/            │
 │  定时：每日简报（可选）、每日备份、墓碑清理（均单进程内，重启跳过已执行任务）              │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -578,8 +578,8 @@ interface ReportContentV2 {
 ### 11.1 顺序
 
 - 步骤 9（IP 直连）**先部署当前 8c 版本**，验证 Nginx / 反代 / SSE / 静态缓存 / 进程守护；不引入数据库。
-- P4a 开始前，服务器需完成：Node 版本决策（§4.1）、`/var/lib/persist` 与 `/var/backups/persist` 目录与属主、磁盘水位检查；这些作为步骤 9 的「预留项」写进部署文档，避免部署完再改系统。
-- P4a/b/c 各自一次发布：`git pull` → 本机构建产物上传（或 CI）→ 服务器 `npm ci --omit=dev` + `node dist/db/migrate.js` → 重启 systemd → 健康检查。**永不在服务器上构建前端**（2C2G 硬规则）。
+- P4a 开始前，服务器需完成：Node 版本决策（§4.1，已选 A 并于 2026-11-06 落地）、`/var/lib/persist`（含 `backups/` 子目录）目录与属主、磁盘水位检查；这些作为步骤 9 的「预留项」写进部署文档，避免部署完再改系统。
+- P4a/b/c 各自一次发布：`git pull` → 本机构建产物上传（或 CI）→ 服务器 `npm ci --omit=dev` → 重启 systemd（迁移由 `src/index.ts` 启动时自动执行，**没有独立 `migrate.js`**）→ 健康检查。**永不在服务器上构建前端**（2C2G 硬规则）。
 
 ### 11.2 运行配置（`/etc/persist/server.env`，600，仅 root 可改）
 
@@ -593,23 +593,28 @@ AI_MAX_RETRIES=1
 RATE_LIMIT_MAX=20
 RATE_LIMIT_WINDOW_MS=300000
 DB_PATH=/var/lib/persist/persist.sqlite
-DB_BACKUP_DIR=/var/backups/persist
-BACKUP_RETENTION_DAYS=7
-BACKUP_RETENTION_WEEKS=4
-DAILY_REPORT_ENABLED=false
-DAILY_REPORT_AT=21:00
+DB_BUSY_TIMEOUT_MS=5000
+DB_BACKUP_DIR=/var/lib/persist/backups
+BACKUP_KEEP_DAYS=7
+BACKUP_KEEP_WEEKS=4
+BACKUP_KEEP_MONTHS=3
+DISK_WARN_PERCENT=85
+DAILY_BRIEF_ENABLED=false
+DAILY_BRIEF_AT=21:00
 ```
+
+> 上为设计期口径；**实际部署值（2026-11-06）**：`DB_BACKUP_DIR=/var/lib/persist/backups`、`BACKUP_KEEP_DAYS=7` / `WEEKS=4` / `MONTHS=3`、`DISK_WARN_PERCENT=85`、`DAILY_BRIEF_ENABLED=false` / `DAILY_BRIEF_AT=21:00`；env 文件共 24 个键、`600 root:root`。备份**不是**应用内定时器，而是 systemd `persist-backup.timer` 调 `node dist/db/backup-cli.js --reason scheduled`。
 
 ### 11.3 systemd / 权限
 
-- `User=persist`、`Group=persist`；`ReadWritePaths=/var/lib/persist /var/backups/persist`；`ProtectSystem=strict`、`ProtectHome=true`、`PrivateTmp=true`、`NoNewPrivileges=true`。
-- 库目录 `750`、文件 `640`；备份文件 `640`；`server.env` `600 root:persist`。
-- 迁移用独立命令（`node dist/db/migrate.js`）在有备份的前提下执行；迁移失败不启动服务（fail fast），保留旧库副本。
-- 备份：每日 03:00 `VACUUM INTO` 快照 + `PRAGMA integrity_check` + sha256；保留 7 日 + 4 周 + 3 月；磁盘水位 > 85% 时在 `/api/health` 报 `warn`。
+- `User=persist`、`Group=persist`；**实配（2026-11-06）`ReadWritePaths=/var/lib/persist`**（备份目录在库目录内 `/var/lib/persist/backups`，不必单列）；`ProtectSystem=strict`、`ProtectHome=true`、`PrivateTmp=true`、`NoNewPrivileges=true`、`UMask=0027`（unit 原文见 `docs/部署与服务器现状.md` §6.1）。
+- **实配**：库目录 `0700`，库文件 / WAL / SHM、快照与 `*.sha256` 旁车均 `640`；`/etc/persist/server.env` `600 root:root`（24 键，靠 unit 的 `EnvironmentFile` 以 root 读取，因此不需要 `root:persist`）。
+- **实配**：没有独立 `migrate.js`；迁移在 `src/db/migrate.ts`，由 `src/index.ts` 启动时自动执行（`schemaVersion` 1→2）。**没有「迁移前自动备份」**——生产首次启动属建库而非迁移。要改这段逻辑前先补备份。
+- **已落地（14a，2026-11-06）**：`VACUUM INTO` 快照 + `PRAGMA integrity_check` + sha256 旁车（`<name>.sha256`）；保留瀑布 7 日 / 4 周 / 3 月，**只有旁车校验通过的快照才允许删**，校验失败转 `protected` 并写 `warnings`；调度用 systemd timer（`OnCalendar=*-*-* 03:00:00`、`Persistent=true`、`RandomizedDelaySec=120`），**不是应用内定时器**；磁盘水位超 `DISK_WARN_PERCENT`（默认 85，范围 50–100）时只改 `/api/health` 的 `storage.status` 与 `warnings`，**绝不动顶层 `status`**（前端把 `status !== 'ok'` 当 AI 不可用）。
 
 ### 11.4 数据库驱动带来的部署差异
 
-**已选 A**（2026-11-05）：步骤 10 把服务器升到 Node 22 LTS，用内置 `node:sqlite`；B/C 仅作记录。
+**已选 A**（2026-11-05）：步骤 10 把服务器升到 Node 22 LTS，用内置 `node:sqlite`；B/C 仅作记录。**已落地（2026-11-06）**：服务器并行装 `/opt/node22`（v22.19.0），系统 `/usr/bin/node` 仍 20.20.2 未动；服务改为 `/opt/node22/bin/node /opt/persist-next/server/dist/index.js`。
 
 | 选项 | 部署动作 | 风险 |
 |---|---|---|
@@ -622,8 +627,9 @@ DAILY_REPORT_AT=21:00
 ## 12. 备份、恢复、导出与删除（步骤 14 / P4c）
 
 - **快照**：`POST /api/v1/backups`（手动）与每日定时；`VACUUM INTO` 生成一致副本，记录 `bytes/sha256/created_at/reason`。
+  - **已落地范围（14a，2026-11-06）**：`server/src/db/backup.ts`（保留计划 + 快照生成 + 旁车校验）、`dist/db/backup-cli.js`（`--dry-run`、`--reason scheduled|manual|pre-restore`）、systemd `persist-backup.service` + `.timer`、`/api/health` 磁盘水位。**HTTP 接口（`POST/GET /api/v1/backups`）尚未实现**，手工备份目前只能 SSH 跑 CLI。
 - **恢复**：先校验 sha256 + `integrity_check`；对比当前库行数给出预览（各实体条数、报告数）；要求显式 `confirm: true`；恢复前自动备份当前库（reason=`pre-restore`）；恢复用「新库写入 + 原子替换 + 重开连接」，失败回滚。
-- **滚动**：7 日 + 4 周 + 3 月；删除最旧前确认文件存在且校验通过。
+- **滚动**：7 日 + 4 周 + 3 月（env 名 `BACKUP_KEEP_DAYS` / `WEEKS` / `MONTHS`）；删除前确认文件存在且旁车 sha256 校验通过，不通过的一律 `protected` 不删；最新一份永远保留。
 - **导出**：`GET /api/v1/export` → 与客户端 0.3.0 同构 JSON（含 history/outbox 之外的业务数据）；用于用户搬走数据与跨设备恢复兜底。
 - **删除**：`DELETE /api/v1/account`：先备份（可选）→ 删业务行/报告/设备/备份文件 → 审计（无正文）；客户端二次确认并清空本地。
 - **离线兜底**：即使服务端全丢，客户端 IndexedDB + JSON 导出仍可恢复；这是「本地优先」的底线。

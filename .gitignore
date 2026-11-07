@@ -43,3 +43,6 @@ Water intake record/
 # Logs
 *.log
 npm-debug.log*
+
+# 步骤 13 评审截图（与基线逐字节相同，仅本地验收用，不入库）
+.step13-review/
