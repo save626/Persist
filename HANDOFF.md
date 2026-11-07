@@ -119,9 +119,9 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | AI 引导式建档并可修改 | ✅ 已完成（8b 起可走真实 DeepSeek） | 档案页「AI 建档」→ `/plans?onboard=1`；确认后才写回档案并启用计划；服务端不可用时回退本地规则并如实标注 |
 | 今日计划可创建、调整、完成 | ✅ 已完成 | 记录写入本机 IndexedDB，刷新不重置；计划项带 `date` 按日台账，今日页只读写当天（8d 已完成） |
 | 健身/饮食/饮水/学习可记录 | ✅ 已完成 | 可跨页联动并持久化到本机 |
-| 关闭并重新打开后数据仍存在 | ✅ 已完成（本机浏览器级） | IndexedDB 持久化；换浏览器 / 清站点数据会丢，线上无跨设备同步（步骤 12 已本机完成，未部署） |
+| 关闭并重新打开后数据仍存在 | ✅ 已完成（本机浏览器级） | IndexedDB 持久化；换浏览器 / 清站点数据会丢，线上页面仍无跨设备同步（步骤 12 代码已完成、服务端 2026-11-06 已部署，但前端同步卡片未上传） |
 | 晚间状态与 AI 复盘 | ✅ 已完成（8c 起文字可来自真实模型） | 指标与依据仍由前端按本地记录确定性生成，模型只写文字；不可用时回退 Mock 并标注 |
-| 近 7 天和月度统计 | ✅ 已完成（本机） | 报告页本地块按近 7 / 30 / 90 天窗口汇总真实历史（8d）；步骤 13 起 `/reports` 增加「服务端综合分析」块：事实包由服务端 SQL 聚合（7 / 30 / 90 天，30 天给逐日 + 周汇总、90 天只给周汇总），模型只写文字，跨月趋势叙述已可如实生成（**未部署**，本机验证） |
+| 近 7 天和月度统计 | ✅ 已完成（本机） | 报告页本地块按近 7 / 30 / 90 天窗口汇总真实历史（8d）；步骤 13 起 `/reports` 增加「服务端综合分析」块：事实包由服务端 SQL 聚合（7 / 30 / 90 天，30 天给逐日 + 周汇总、90 天只给周汇总），模型只写文字，跨月趋势叙述已可如实生成（**后端已部署、前端块未上传**；本机与服务器均已用真实 Key 验证） |
 | 完整导出并在空环境恢复 | 🟡 本机 JSON 导出导入 0.3.0 已完成 | 含历史字段，兼容 0.2.0 / 0.1.0；无服务端备份与真实空库恢复（P4 步骤 14） |
 | Android APK 可安装 | ⬜ 未开始 | 尚未接 Capacitor |
 | DeepSeek 不可用时可降级 | ✅ 已完成 | 8b/8c 已实现探活 + 回退 + 如实标注；`/reports` 契约错误显式报错，不伪造报告 |
@@ -412,7 +412,7 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 - 8c：授权 + `/api/health` 可用时走同源 `/api/report`（DeepSeek），展示「DeepSeek · 经本站服务端代理」；失败分流为可读错误并回退 Mock，绝不伪装成真实模型。
 - 指标卡、结论、行动建议由确定性代码按窗口事实生成（`report-window.ts` + `report-digest.ts`），模型只写分析文字；服务端不可用时仍可看到本地简报。
 - 历史报告保存/查看、应用建议到今日计划（复制计划项）、Mock 报告导出。
-- 步骤 13c：页面末尾新增「服务端综合分析」块（与上面的本地简报并存）——窗口 7 / 30 / 90 天、生成 / 重新生成（`force`）、来源标记（`DeepSeek 经本站服务端代理` vs `规则降级`）、`cached:true` 缓存标记、归档列表与详情（`GET /api/v1/reports`）。服务端结果**只存在页面状态与服务端归档**里，不写本地 `reports`。**依赖 `/api/v1/analysis/*`，本机可用、线上未部署**。
+- 步骤 13c：页面末尾新增「服务端综合分析」块（与上面的本地简报并存）——窗口 7 / 30 / 90 天、生成 / 重新生成（`force`）、来源标记（`DeepSeek 经本站服务端代理` vs `规则降级`）、`cached:true` 缓存标记、归档列表与详情（`GET /api/v1/reports`）。服务端结果**只存在页面状态与服务端归档**里，不写本地 `reports`。**依赖 `/api/v1/analysis/*`：该接口已于 2026-11-06 随部署上线，但这块前端产物还没上传，所以线上页面看不到**。
 
 已知边界：
 
@@ -440,8 +440,8 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 - 生成当前内存快照元信息。
 - 清空本地 Mock 设置。
 - 隐私和服务端自托管说明弹层。
-- 数据同步卡片（步骤 12e）：跨设备同步开关（默认关）、注册后展示恢复码（4×8 大写）、「用恢复码绑定已有账号」、本机设备 / 最近同步、立即同步、吊销本机（`alertdialog` 二次确认）。**依赖服务端 `/api/v1/*` 与 SQLite，目前只在本机可用，线上未部署**。
-- 每日简报卡片（步骤 13c）：开关（默认**关**）、时间输入（默认 `21:00`）、非法时间回退到默认值并给提示；卡片明确写「需先开启数据同步并把设置同步到服务端才生效」。**同样的本机可用、线上未部署**。
+- 数据同步卡片（步骤 12e）：跨设备同步开关（默认关）、注册后展示恢复码（4×8 大写）、「用恢复码绑定已有账号」、本机设备 / 最近同步、立即同步、吊销本机（`alertdialog` 二次确认）。**依赖服务端 `/api/v1/*` 与 SQLite：服务端已于 2026-11-06 部署（`/var/lib/persist`，schema 2），但这张卡片所在的前端产物还没上传，线上页面看不到**。
+- 每日简报卡片（步骤 13c）：开关（默认**关**）、时间输入（默认 `21:00`）、非法时间回退到默认值并给提示；卡片明确写「需先开启数据同步并把设置同步到服务端才生效」。**同样是「服务端已部署、前端未上传」**（服务端 job 默认关闭）。
 
 重要边界：
 
@@ -557,10 +557,10 @@ Persist 是一款个人自用、长期记录、本地优先的计划与复盘工
 | Lint | Oxlint |
 | 格式化 | Prettier（`prettier-plugin-tailwindcss` 已于 2026-11-03 移除） |
 | 当前数据层 | React Context 内存状态（已由 IndexedDB 持久化，§6.6） |
-| 当前后端 | Fastify 5（P3 8a+8b+8c + P4a 12a–12c + P4b 13a–13d 已实现，`server/`，监听 `127.0.0.1:3000`；本机 `npm test` 175/175（18 文件），前端 AI 建档、报告与综合分析都已在**本机用真实 DeepSeek Key** 联调（2026-11-05；综合分析首次 5.7 s、缓存命中、`force` 重生成均通过）；**脚本不读 `.env`，真实 Key 启动用 `node --env-file=.env dist/index.js`**；**2026-11-04 部署的是步骤 9 版本**，systemd `persist-server` 常驻，步骤 12、13 的服务端改动**均未部署**） |
-| 部署/托管 | Nginx 1.24（阿里云 ECS / Alibaba Cloud Linux 3 / Node.js v20.20.2），前端纯静态托管 + `/api` 反代 `127.0.0.1:3000`，详见 `docs/部署与服务器现状.md` |
+| 当前后端 | Fastify 5（P3 8a+8b+8c + P4a 12a–12c + P4b 13a–13d 已实现，`server/`，监听 `127.0.0.1:3000`；本机 `npm test` 197/197（21 文件，含 14a 备份），前端 AI 建档、报告与综合分析都已在**本机用真实 DeepSeek Key** 联调（2026-11-05；综合分析首次 5.7 s、缓存命中、`force` 重生成均通过）；**脚本不读 `.env`，真实 Key 启动用 `node --env-file=.env dist/index.js`**；**服务端已于 2026-11-06 切到步骤 12/13**：systemd `persist-server` 常驻，`ExecStart=/opt/node22/bin/node /opt/persist-next/server/dist/index.js`（Node v22.19.0），`/var/lib/persist/persist.sqlite` schema 2，`persist-backup.timer` 每日 03:00 且已实跑成功；**前端静态包仍是步骤 9 版本**） |
+| 部署/托管 | Nginx 1.24（阿里云 ECS / Alibaba Cloud Linux 3；系统 Node.js v20.20.2，服务实际跑并行安装的 `/opt/node22/bin/node` v22.19.0），前端纯静态托管 + `/api` 反代 `127.0.0.1:3000`，详见 `docs/部署与服务器现状.md` |
 | AI 供应商 | DeepSeek（`deepseek-chat`；Key 只在服务端 `/etc/persist/server.env`。前端 AI 建档走 `/api/chat`，报告文字走 `/api/report`） |
-| 数据库 | SQLite **单文件库**（步骤 12a 已引入）：驱动**已定**内置 `node:sqlite`（2026-11-05，P4 §11.4，要求 Node ≥ 22.5；服务器在步骤 10 一并升级）。本机默认 `server/data/persist.sqlite`（`DB_PATH` 可覆盖），生产目标 `/var/lib/persist/persist.sqlite`（**待部署**）；**明确不装 MySQL/MariaDB**，不用 ORM，驱动差异隔离在 `server/src/db/driver.ts` |
+| 数据库 | SQLite **单文件库**（步骤 12a 已引入）：驱动**已定**内置 `node:sqlite`（2026-11-05，P4 §11.4，要求 Node ≥ 22.5；服务器在步骤 10 一并升级）。本机默认 `server/data/persist.sqlite`（`DB_PATH` 可覆盖），生产库 `/var/lib/persist/persist.sqlite`（2026-11-06 已建，schema 2，WAL）；**明确不装 MySQL/MariaDB**，不用 ORM，驱动差异隔离在 `server/src/db/driver.ts` |
 | 当前共享层 | `@persist/shared`（步骤 12c 建包，步骤 13a 扩到综合分析）：`contract/{sync,entities,parse,analysis}.ts`，`app` 与 `server` 以 `file:../shared` 同源引用（`shared/dist` 由 `npm run shared:build` 产出、已 gitignore）；chat/report 的请求响应类型与校验仍暂放 `server/src/contract.ts`（镜像 `app/src/lib/chat-types.ts` 与 `app/src/lib/report-types.ts`），迁 `shared/` 另排期 |
 
 开发环境实测：
@@ -983,15 +983,15 @@ D:\Persist\app\src\lib\mock-data-transfer.ts
 - 失败与授权分流（底部说明按状态如实切换，绝不把规则文案标成 AI）：未授权 → 不发请求、不发数据，直接本机规则；没有任何打开的数据来源 → 同样不发请求；503 / 429 / 网络失败 → 回退本机规则并写明「已回退到本机规则，未使用模型输出」；结构不合契约 → 回退并写明「不符合契约」；只有真正拿到通过 `parseReportContent` 校验的内容才显示「文字由 DeepSeek 生成 · 经本站服务端代理」与点亮图标。
 - 请求进行中先展示本地规则 + 「正在请求 DeepSeek…」说明，不空等、不闪烁；关闭面板会 `AbortController` 取消请求。
 
-**服务端综合分析（步骤 13，本机完成，已推送未部署）**
+**服务端综合分析（步骤 13：服务端已部署，前端块未上传）**
 
 - 服务端 `POST /api/v1/analysis/reports` 走**单次、非流式**模型调用（`deepseek-chat`，`timeout` 45 s、`max_tokens` 2600），事实包由 SQL 聚合后拼进提示词；模型只输出结构化文字，正文数字必须全部出现在事实包 JSON 里，否则 502 `invalid_response` 且不入档。
-- **真实 DeepSeek Key 本机验证（2026-11-05，`server/.env` + `node --env-file=.env dist/index.js`，健康检查 `ai:"deepseek"`）**：`POST /api/v1/analysis/reports`（7 天）200 / 5.7 s、`origin:"ai"`、`model:"deepseek-chat"`；同 `dataRev` 再请求 `cached:true` 且 `reportId` 相同；`force:true` 200 / 5.4 s 生成新 `reportId`、归档列表与 `/:id` 详情标题一致；正文无英文字段名、数字都能在事实包里找到。**联调发现并已修（`18d5f77`）**：模型偶尔写 6 段（契约 2–5 段）导致 502、正文夹带 `daysWithAnyRecord` / `trend` 等内部标识符——现在内容不合规时带失败原因**重试一次**（总预算 30 s），提示词明确「analysis 固定 3 段、不出现英文字段名/JSON 键名/内部标识符」。修复前那版假客户端验证仍保留在单测里（`analysis-routes` 两条：首次不合规重试后落库 / 两次都不合规 502 不落库）。**线上服务器仍是步骤 9 版本，综合分析未部署。**
+- **真实 DeepSeek Key 本机验证（2026-11-05，`server/.env` + `node --env-file=.env dist/index.js`，健康检查 `ai:"deepseek"`）**：`POST /api/v1/analysis/reports`（7 天）200 / 5.7 s、`origin:"ai"`、`model:"deepseek-chat"`；同 `dataRev` 再请求 `cached:true` 且 `reportId` 相同；`force:true` 200 / 5.4 s 生成新 `reportId`、归档列表与 `/:id` 详情标题一致；正文无英文字段名、数字都能在事实包里找到。**联调发现并已修（`18d5f77`）**：模型偶尔写 6 段（契约 2–5 段）导致 502、正文夹带 `daysWithAnyRecord` / `trend` 等内部标识符——现在内容不合规时带失败原因**重试一次**（总预算 30 s），提示词明确「analysis 固定 3 段、不出现英文字段名/JSON 键名/内部标识符」。修复前那版假客户端验证仍保留在单测里（`analysis-routes` 两条：首次不合规重试后落库 / 两次都不合规 502 不落库）。**2026-11-06 起该接口已在生产可用**（`/api/v1/analysis/*`，服务器上也用真实 Key 验过一次）；**但前端综合分析块没上传，线上页面仍看不到**。
 - 降级与错误分流（都有单测）：无 Key / 超时 / 上游错 → 200 + 规则降级；`aiConsent === false` → 403 `ai_consent_off`；窗口无记录 → 409 `insufficient_data`；分析限流 → 429；请求体或 `rangeDays` 非法 → 422 `invalid_request`；缺令牌 → 401。
 
 **服务端当前边界（8c 后仍成立）**
 
-- 服务端只有按 IP 限流（`/api/chat` 与 `/api/report` 共用 20 次 / 5 分钟），**线上没有账号鉴权**；Key 只在服务端环境变量，前端/构建产物已扫描确认无 Key。步骤 12 新增的 `/api/v1/devices*`、`/api/v1/sync/*` 走设备令牌鉴权，**但未部署**（线上仍只有上述三个 P3 接口）。
+- 服务端只有按 IP 限流（`/api/chat` 与 `/api/report` 共用 20 次 / 5 分钟），**线上没有账号鉴权**；Key 只在服务端环境变量，前端/构建产物已扫描确认无 Key。步骤 12 新增的 `/api/v1/devices*`、`/api/v1/sync/*` 走设备令牌鉴权，**且已于 2026-11-06 部署到生产**（线上现有 P3 三接口 + `/api/v1/*`；前端还没上传同步卡片）。
 - 真实 AI 的 token/费用/延迟数据只在本机联调与 IP 直连部署后实测中观察（chat 约 3.5 s、report 约 2.7 s），仍没有额度上限与费用统计。
 - **Nginx 反代下已复验（2026-11-04）**：SSE 增量到达（`proxy_buffering off` 生效，188 事件 / 首包 0.118 s / 末包 4.215 s）、`/api/report` 长请求 2.78 s 返回（`proxy_read_timeout 300s`）、按 IP 限流真实命中（第 2 次 `429` + `Retry-After: 298`）。
 
@@ -1136,6 +1136,13 @@ dist/assets/index-<hash>.js     628.24 kB（gzip 186.67 kB）
 12. 步骤 12（12c–12f）后：主 JS **606.08 kB**（`index-UkB7XkZI.js`，606,086 B；gzip 171.41 → 180.91 kB，+9.50 kB）：`shared/` 契约包、客户端同步层（`sync-contract` / `sync-client` / `sync-queue` / `sync-store` / `sync-entities` / `sync-engine`）与 12f 的 pull 形状守卫；CSS 变为 `index-7YbMuqJW.css`（140.20 kB，+2.50 kB：设置页「数据同步」卡片与恢复码/吊销对话框样式）。**注意：步骤 12 的产物含服务端同步所需代码但服务端未部署，前端也不得单独发版**；看到 `index-UkB7XkZI.js` + `index-7YbMuqJW.css` 即代表构建产物已含 12f 收尾。
 13. 饮食照片附件下线 + 跨日空餐次修复（`fbab985` / `50d90ef`）后：主 JS **604.31 kB**（`index-Diy7Ja9h.js`，606,086 → 604,310 B 量级，gzip 180.91 → 180.26 kB：删掉附件行、图标与同步字段，新增 `createEmptyMeals` / `dayMeals` 骨架逻辑），CSS 变为 `index-BNFgRy0R.css`（138.98 kB，−1.22 kB：删除 97 行附件相关样式）。看到 `index-Diy7Ja9h.js` + `index-BNFgRy0R.css` 即代表产物已含本次两项改动；该产物**仍未部署**（服务器仍是步骤 9 的旧包）。
 14. 步骤 13（13a–13d）后（**已推送、未部署**）：主 JS **628.24 kB**（gzip 186.67 kB，+23.93 kB / +6.41 kB gzip）：`analysis-contract`（转出 `@persist/shared/contract/analysis`）、`analysis-client`（四个接口 + 四态标签 + 9 类错误分流）、`/reports` 综合分析块与归档列表、设置页「每日简报」卡片；CSS **145.40 kB**（gzip 24.89 kB，+6.42 kB）：综合分析块、归档列表与简报卡片样式。**主 JS 已过 500 kB 提示线且 `/plans` 仍未拆包**；产物已随 `40d2bf4` 提交推送，但**未部署**（服务器仍是步骤 9 的旧包）。
+
+> 部署状态更新（2026-11-06）：**服务端已切到步骤 12/13**（`/opt/node22` v22.19.0 +
+> `/opt/persist-next`，实测停机 482 ms，14a 备份 timer 已无人值守跑通），但**前端静态包
+> 仍是步骤 9 后那版**（`index-DVS7rlR_.js` 567,592 B + `index-CrJgYfMj.css`）——所以上面
+> 第 9–14 条里「该产物仍未部署」对前端依然成立，只是服务端不再落后。本地 `app/dist` 现为
+> `index-F8XZrWTT.js`（628,242 B）+ `index-DgJduU5l.css`（145,404 B），待上传
+> （步骤 10 第 8 项）；上传前线上页面看不到同步、综合分析与每日简报卡片。
 
 > 更正：清理后的 CSS 体积实测为 137.64 kB（早期摘要曾误记为 134.42 kB，以 §18.1 变更史为准）。
 
@@ -1792,7 +1799,7 @@ npm run visual:check
 | 健身动作 | 名称自由输入，预设仅辅助 |
 | 运动类型 | 力量、时长、距离 |
 | 非专业运动 | 跑步、跳绳、骑行、足球、爬山等均可记录 |
-| 数据策略 | 本地优先：先写本机 IndexedDB，服务端不可用不影响记录；**跨设备同步的代码已在步骤 12 本机完成并验收，但未部署**（线上仍无同步） |
+| 数据策略 | 本地优先：先写本机 IndexedDB，服务端不可用不影响记录；**跨设备同步的代码已在步骤 12 完成并验收、服务端 2026-11-06 已部署，但前端产物未上传**（线上页面仍无同步） |
 | AI 服务 | 计划使用 DeepSeek，通过服务端代理 |
 | API Key | 只能保存在服务端 |
 | 部署形态 | 阿里云 ECS（Alibaba Cloud Linux 3，`dnf`）+ Nginx 静态托管前端 + Fastify 反代 `/api`；**不在服务器构建前端**，本地 `build` 后上传 `app/dist` |
