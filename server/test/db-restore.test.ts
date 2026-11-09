@@ -121,6 +121,7 @@ describe('恢复预览与执行：', () => {
       expect(preview.restored.counts.waterLogs).toBe(1)
       expect(preview.backup.id).toBe(created.file)
       expect(preview.backup.sha256).toBe(created.sha256)
+      expect(preview.backup.createdAt).toBe(NOW)
       // 只读预览不能改动快照本身，否则旁车 sha256 会失效。
       expect(sha256File(created.path)).toBe(created.sha256)
 

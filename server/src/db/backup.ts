@@ -59,8 +59,8 @@ export interface BackupEntry {
 }
 
 /**
- * 从文件名解析出时间桶。文件名本身由本模块生成（服务器本地时区），
- * 解析时按 UTC 解释——保留策略的最小粒度是「日」，几小时的时区差不会改变结论。
+ * 从文件名解析出时间桶。文件名由 backupStamp 按服务器本地时区生成，
+ * 这里也按本地时区反解，保证 createdAt 与运行环境时区一致。
  */
 export function parseBackupName(name: string): BackupEntry | null {
   const match = BACKUP_NAME.exec(name)
@@ -79,11 +79,23 @@ export function parseBackupName(name: string): BackupEntry | null {
   ) {
     return null
   }
-  const createdAt = Date.UTC(y, mo - 1, d, h, mi, s)
-  if (Number.isNaN(createdAt)) return null
-  const weekday = new Date(createdAt).getUTCDay()
+  const createdAt = new Date(y, mo - 1, d, h, mi, s).getTime()
+  const local = new Date(createdAt)
+  if (
+    Number.isNaN(createdAt) ||
+    local.getFullYear() !== y ||
+    local.getMonth() !== mo - 1 ||
+    local.getDate() !== d ||
+    local.getHours() !== h ||
+    local.getMinutes() !== mi ||
+    local.getSeconds() !== s
+  ) {
+    return null
+  }
+  const weekday = local.getDay()
   const mondayOffset = (weekday + 6) % 7
-  const weekKey = new Date(createdAt - mondayOffset * DAY_MS).toISOString().slice(0, 10)
+  const weekStart = new Date(y, mo - 1, d - mondayOffset)
+  const weekKey = `${weekStart.getFullYear()}-${pad(weekStart.getMonth() + 1)}-${pad(weekStart.getDate())}`
   return {
     name,
     path: name,
@@ -125,8 +137,10 @@ export interface RetentionPlan {
   reasons: Record<string, string>
 }
 
-function startOfUtcDay(ms: number): number {
-  return Math.floor(ms / DAY_MS) * DAY_MS
+function startOfLocalDay(ms: number): number {
+  const date = new Date(ms)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
 }
 
 /**
@@ -143,7 +157,7 @@ export function planRetention(
   const keep: BackupEntry[] = []
   const drop: BackupEntry[] = []
   const reasons: Record<string, string> = {}
-  const today = startOfUtcDay(nowMs)
+  const today = startOfLocalDay(nowMs)
   const keptWeeks = new Set<string>()
   const weeklyCandidates = new Set<string>()
   const keptMonths = new Set<string>()
@@ -152,7 +166,7 @@ export function planRetention(
   // 第一轮：近 N 天全留（daily）。
   const rest: BackupEntry[] = []
   for (const entry of sorted) {
-    const ageDays = Math.round((today - startOfUtcDay(entry.createdAt)) / DAY_MS)
+    const ageDays = Math.round((today - startOfLocalDay(entry.createdAt)) / DAY_MS)
     if (ageDays < policy.keepDays) {
       keep.push(entry)
       reasons[entry.name] = 'daily'
@@ -164,7 +178,7 @@ export function planRetention(
   // 第二轮：每周最新的那一份（weekly），边界按「周一起算」。
   const weekly: BackupEntry[] = []
   for (const entry of rest) {
-    const ageDays = Math.round((today - startOfUtcDay(entry.createdAt)) / DAY_MS)
+    const ageDays = Math.round((today - startOfLocalDay(entry.createdAt)) / DAY_MS)
     if (!weeklyCandidates.has(entry.weekKey) && ageDays < policy.keepWeeks * 7) {
       weeklyCandidates.add(entry.weekKey)
       keep.push(entry)
@@ -178,7 +192,7 @@ export function planRetention(
   // 第三轮：每月最新的那一份（monthly），按 31 天/月的上限保守估算年龄。
   const monthly: BackupEntry[] = []
   for (const entry of weekly) {
-    const ageDays = Math.round((today - startOfUtcDay(entry.createdAt)) / DAY_MS)
+    const ageDays = Math.round((today - startOfLocalDay(entry.createdAt)) / DAY_MS)
     if (!monthlyCandidates.has(entry.monthKey) && ageDays < policy.keepMonths * 31) {
       monthlyCandidates.add(entry.monthKey)
       keep.push(entry)
@@ -410,7 +424,7 @@ export function previewBackups(
 ): BackupPreview {
   const entries = listBackups(backupDir)
   const plan = planRetention(entries, nowMs, policy)
-  const today = startOfUtcDay(nowMs)
+  const today = startOfLocalDay(nowMs)
   return {
     backupDir,
     count: entries.length,
@@ -418,7 +432,7 @@ export function previewBackups(
     entries: entries.map((entry) => ({
       name: entry.name,
       bytes: entry.bytes,
-      ageDays: Math.round((today - startOfUtcDay(entry.createdAt)) / DAY_MS),
+      ageDays: Math.round((today - startOfLocalDay(entry.createdAt)) / DAY_MS),
       action: plan.drop.some((candidate) => candidate.name === entry.name) ? 'drop' : 'keep',
     })),
   }

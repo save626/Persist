@@ -45,7 +45,7 @@ function pad(value: number): string {
 /** 造一个「N 天前 03:00」的规范文件名，走真实解析而不是手搓 BackupEntry。 */
 function entryFor(daysAgo: number, reason = 'scheduled'): BackupEntry {
   const date = new Date(NOW - daysAgo * DAY_MS)
-  const name = `persist-${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}-030000-${reason}.sqlite`
+  const name = `persist-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-030000-${reason}.sqlite`
   const parsed = parseBackupName(name)
   if (!parsed) throw new Error(`测试文件名解析失败：${name}`)
   return parsed
@@ -75,7 +75,7 @@ describe('备份文件名解析：', () => {
   it('能解出时间、周桶与月桶：', () => {
     const entry = parseBackupName('persist-20261106-030000-scheduled.sqlite')
     expect(entry).not.toBeNull()
-    expect(entry?.createdAt).toBe(Date.UTC(2026, 10, 6, 3, 0, 0))
+    expect(entry?.createdAt).toBe(new Date(2026, 10, 6, 3, 0, 0).getTime())
     expect(entry?.weekKey).toBe('2026-11-02')
     expect(entry?.monthKey).toBe('2026-11')
   })
@@ -87,6 +87,7 @@ describe('备份文件名解析：', () => {
       'persist-2026-11-06-030000-scheduled.sqlite',
       'persist-20261106-030000-scheduled.sqlite.sha256',
       'persist-20261106-030000-scheduled.sqlite.tmp',
+      'persist-20260230-030000-scheduled.sqlite',
       'note.txt',
     ]) {
       expect(parseBackupName(name)).toBeNull()
