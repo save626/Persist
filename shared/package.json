@@ -26,6 +26,10 @@
     "./contract/analysis": {
       "types": "./dist/contract/analysis.d.ts",
       "default": "./dist/contract/analysis.js"
+    },
+    "./contract/backup": {
+      "types": "./dist/contract/backup.d.ts",
+      "default": "./dist/contract/backup.js"
     }
   },
   "files": [

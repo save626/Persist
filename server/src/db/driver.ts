@@ -28,6 +28,11 @@ export interface Db {
    * 嵌套调用不报错，用 SAVEPOINT 兜住——只回滚内层，外层仍可继续。
    */
   transaction<T>(run: () => T): T
+  /**
+   * 关闭当前连接后用同一包装对象重开另一条路径（步骤 14b 原子恢复用）。
+   * 包装对象身份不变，所以已经拿到 Db 引用的路由 / 定时任务会自动使用新连接。
+   */
+  reopen(options: OpenDbOptions): void
   close(): void
 }
 
@@ -35,20 +40,45 @@ export interface OpenDbOptions {
   /** 文件路径，或测试用的 `:memory:`。 */
   path: string
   busyTimeoutMs?: number
+  /** 只读校验快照时使用：不切换 journal_mode，也不产生 WAL / SHM。 */
+  readOnly?: boolean
 }
 
 const DEFAULT_BUSY_TIMEOUT_MS = 5_000
 
-export function openDatabase(options: OpenDbOptions): Db {
-  const db = new DatabaseSync(options.path)
-
-  // 外键让 SQLite 自己校验；WAL 让读写不互相阻塞；NORMAL 在 WAL 下已足够安全且更快。
+function configureConnection(db: DatabaseSync, options: OpenDbOptions): void {
   db.exec('PRAGMA foreign_keys = ON')
   db.exec(`PRAGMA busy_timeout = ${Math.trunc(options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS)}`)
+  if (options.readOnly) {
+    db.exec('PRAGMA query_only = ON')
+    return
+  }
+  // WAL 让读写不互相阻塞；NORMAL 在 WAL 下已足够安全且更快。
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA synchronous = NORMAL')
+}
 
+function openConnection(options: OpenDbOptions): DatabaseSync {
+  const db = new DatabaseSync(options.path, options.readOnly ? { readOnly: true } : {})
+  try {
+    configureConnection(db, options)
+    return db
+  } catch (error) {
+    db.close()
+    throw error
+  }
+}
+
+export function openDatabase(options: OpenDbOptions): Db {
+  let db = openConnection(options)
+  let closed = false
   let depth = 0
+
+  function closeCurrent(): void {
+    if (closed) return
+    db.close()
+    closed = true
+  }
 
   return {
     exec(sql) {
@@ -89,8 +119,14 @@ export function openDatabase(options: OpenDbOptions): Db {
         throw error
       }
     },
+    reopen(nextOptions) {
+      if (depth !== 0) throw new Error('事务进行中不能重开数据库连接。')
+      closeCurrent()
+      db = openConnection(nextOptions)
+      closed = false
+    },
     close() {
-      db.close()
+      closeCurrent()
     },
   }
 }

@@ -239,7 +239,8 @@ export function readChecksumSidecar(path: string, name: string): string | null {
 
 /** 打开快照库跑 `PRAGMA integrity_check`，返回 'ok' 或具体问题描述。 */
 export function integrityCheck(path: string): string {
-  const db = openDatabase({ path })
+  // 只读打开：校验不得切换快照的 journal_mode，否则会改写文件并让旁车 sha256 失效。
+  const db = openDatabase({ path, readOnly: true })
   try {
     const rows = db.prepare<{ integrity_check: string }>('PRAGMA integrity_check').all()
     const values = rows.map((row) => String(row.integrity_check))

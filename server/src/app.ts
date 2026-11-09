@@ -4,6 +4,7 @@ import { errorBody } from './contract.js'
 import { openPersistDatabase, type PersistDatabase } from './db/index.js'
 import { createRateLimiter } from './rate-limit.js'
 import { registerAnalysisRoutes } from './routes/analysis.js'
+import { registerBackupRoutes } from './routes/backups.js'
 import { registerChatRoute } from './routes/chat.js'
 import { registerDeviceRoutes } from './routes/devices.js'
 import { registerHealthRoute } from './routes/health.js'
@@ -87,6 +88,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     now,
   })
   registerReportArchiveRoutes(app, { db: db.db, limiter: syncLimiter, now })
+  registerBackupRoutes(app, { database: db, config: options.config, limiter: syncLimiter, now })
   registerDeviceRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerSyncRoutes(app, { db: db.db, limiter: syncLimiter, now })
 
