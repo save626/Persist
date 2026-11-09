@@ -1,7 +1,7 @@
 # P4 数据层与 AI 综合分析设计方案（终态架构）
 
-> 版本：v1.1（2026-11-05 更新实施状态）
-> 状态：**步骤 11（数据历史化）、步骤 12（账号 + 增量同步）、步骤 13（AI 综合分析）已实施，服务端 2026-11-06 已部署到生产；步骤 14 只做了 14a（数据库备份），14b–14d 仍为设计**（本文件主体仍只做设计，不含代码改动）
+> 版本：v1.2（2026-11-09 更新实施状态）
+> 状态：**步骤 11（数据历史化）、步骤 12（账号 + 增量同步）、步骤 13（AI 综合分析）已实施，服务端 2026-11-06 已部署到生产；步骤 14 已完成 14a（数据库备份，已在生产启用）与 14b（恢复端点，本机实现并验证、尚未部署），14c–14d 仍为设计**（本文件主体仍只做设计，不含代码改动）
 > 实施记录：步骤 11 = 11a/11b/11c（2026-11-04，`schemaVersion` 2 + 备份 0.3.0）；步骤 12 = 12a–12f（2026-11-05，`ca02250` / `6fe6b3d` / `c6a65fd` / `9abd8bb` / `f09c3da` + 12f 收尾），**本机完成并推送；服务端 2026-11-06、前端产物 2026-11-07 均已部署到生产**（见 `docs/部署与服务器现状.md` §6.1）。各节状态标记见 §15 对照表。
 > 决策来源：用户在「本地组装摘要上传（路线 1）」与「本地优先 + 服务端可检索副本（路线 2）」之间选定**路线 2 作为终态方向**，本文件即为该方向的落地方案。
 > 关系：本文件是 `HANDOFF.md` §13.4「P4」的展开，也是对 `docs/Persist-项目开发规划.md` 旧版（v1.2 §7，2026-11-04 已被重写为 v2.0）在服务端与数据层的收敛稿；与 `HANDOFF.md` 冲突时以源码与 `HANDOFF.md` 为准，本文件负责「终态怎么走」。
@@ -18,7 +18,7 @@
    - 步骤 11（8d）：数据历史化（前端，`schemaVersion` 1 → 2，备份格式 0.2.0 → 0.3.0）—— ✅ 2026-11-04 完成
    - 步骤 12（P4a）：设备令牌 + 增量同步（SQLite 数据层 + `/api/v1/sync/*` + 设置页同步区块）—— ✅ 2026-11-05 本机完成并推送；服务端 2026-11-06、前端同步卡片 2026-11-07 均已部署
    - 步骤 13（P4b）：服务端聚合 + AI 综合分析（`/api/v1/analysis/*`，报告归档、缓存、规则降级）—— ✅ 2026-11-05 本机完成；服务端 2026-11-06、前端综合分析块 2026-11-07 均已部署
-   - 步骤 14（P4c）：备份 / 恢复 / 导出 / 删除账号（PIPL 闭环）—— 🟡 14a 数据库备份已完成（2026-11-07，`c6ed57e` / `7d6ef32`，systemd timer 已实跑）；14b 恢复 / 14c 导出 / 14d 删除账号未开始
+   - 步骤 14（P4c）：备份 / 恢复 / 导出 / 删除账号（PIPL 闭环）—— 🟡 14a 数据库备份已在生产启用（2026-11-07，`c6ed57e` / `7d6ef32`，systemd timer 已实跑）；14b 恢复端点已在本机实现并验证（2026-11-09，`821eabb`，尚未部署）；14c 导出 / 14d 删除账号未开始
    - 步骤 15（P5）：Capacitor Android（原计划不变）
    - 步骤 9（IP 直连部署）/ 步骤 10（备案后域名 HTTPS）**顺序不变**，且可以在备案等待期并行开发 8d/P4（服务器未部署时也能本地开发 + 单测）。步骤 12/13 的服务端已于 2026-11-06 随步骤 10 A 段（升 Node 22）部署。
 5. **数字可信原则不变**：AI 只写 `title/status/summary/analysis/conclusions/actions/warnings` 这些文字字段；所有指标、趋势、依据由服务端确定性代码计算并随响应返回，前端只渲染、不做二次算术。模型输出一律过 schema + 白名单净化，不合格就失败，不用编造的兜底。
@@ -627,8 +627,8 @@ DAILY_BRIEF_AT=21:00
 ## 12. 备份、恢复、导出与删除（步骤 14 / P4c）
 
 - **快照**：`POST /api/v1/backups`（手动）与每日定时；`VACUUM INTO` 生成一致副本，记录 `bytes/sha256/created_at/reason`。
-  - **已落地范围（14a，2026-11-06）**：`server/src/db/backup.ts`（保留计划 + 快照生成 + 旁车校验）、`dist/db/backup-cli.js`（`--dry-run`、`--reason scheduled|manual|pre-restore`）、systemd `persist-backup.service` + `.timer`、`/api/health` 磁盘水位。**HTTP 接口（`POST/GET /api/v1/backups`）尚未实现**，手工备份目前只能 SSH 跑 CLI。
-- **恢复**：先校验 sha256 + `integrity_check`；对比当前库行数给出预览（各实体条数、报告数）；要求显式 `confirm: true`；恢复前自动备份当前库（reason=`pre-restore`）；恢复用「新库写入 + 原子替换 + 重开连接」，失败回滚。
+  - **已落地范围（14a，2026-11-06）**：`server/src/db/backup.ts`（保留计划 + 快照生成 + 旁车校验）、`dist/db/backup-cli.js`（`--dry-run`、`--reason scheduled|manual|pre-restore`）、systemd `persist-backup.service` + `.timer`、`/api/health` 磁盘水位。**快照列表 / 手动创建 HTTP 接口（`POST/GET /api/v1/backups`）尚未实现**，手工备份目前只能 SSH 跑 CLI；恢复端点已由 14b 落地。
+- **恢复（14b 已在本机实现并验证，尚未部署）**：`POST /api/v1/backups/:id/restore`（设备令牌鉴权、共用 `/api/v1` 限流、全部 `no-store`）。不带 `confirm` 或 `confirm:false` 只返回当前库与快照的账号级计数预览；`confirm:true` 才执行。先校验规范快照 id / sha256 旁车 / `integrity_check` / schema 与必要表 / 当前账号存在，再自动生成 `pre-restore` 快照；复制到同目录临时文件并复验，WAL checkpoint 后关闭连接、原子替换、原地重开并迁移，失败回滚旧库。恢复对象是整个 SQLite 文件（当前单用户部署），不是只替换某个账号。
 - **滚动**：7 日 + 4 周 + 3 月（env 名 `BACKUP_KEEP_DAYS` / `WEEKS` / `MONTHS`）；删除前确认文件存在且旁车 sha256 校验通过，不通过的一律 `protected` 不删；最新一份永远保留。
 - **导出**：`GET /api/v1/export` → 与客户端 0.3.0 同构 JSON（含 history/outbox 之外的业务数据）；用于用户搬走数据与跨设备恢复兜底。
 - **删除**：`DELETE /api/v1/account`：先备份（可选）→ 删业务行/报告/设备/备份文件 → 审计（无正文）；客户端二次确认并清空本地。
@@ -655,15 +655,15 @@ DAILY_BRIEF_AT=21:00
 
 ## 14. 测试与验收策略
 
-### 14.1 服务端（`server/test/`）—— 步骤 12 部分已落地（**112 条 / 13 个文件**）
+### 14.1 服务端（`server/test/`）—— 当前 208 条 / 23 个文件
 
 - **repository / migration** ✅ 已落地：`:memory:` SQLite；迁移幂等、`sync_seq` 单调、LWW、墓碑、pull 游标、幂等 op（`db-driver` 5 / `db-migrate` 7 / `db-repositories` 16 条）。
 - **鉴权与限流** ✅ 同步部分已落地：无 token、吊销 token、恢复码换 token、同步接口独立限流（`devices` 10 / `sync` 16 条）。
 - **facts builder** ⬜ 步骤 13：fixture 注入 7/30/90 天数据（含缺失模块、空窗口、授权关闭、跨月、时钟乱序），快照断言；数字与手写 SQL 对照。
 - **报告** ⬜ 步骤 13：净化白名单、缓存命中/失效、rules 降级、403/409/422/502/503 分支。
-- **备份/恢复/删除** ⬜ 步骤 14：快照 sha256、恢复预览与二次确认、删除后无残留行。
+- **备份 / 恢复 / 删除** 🟡 14a（快照 sha256、保留瀑布）与 14b（恢复预览、二次确认、schema / 账号校验、原子替换与失败回滚）已落地并有单测；14d 删除账号待做。
 
-### 14.2 客户端（`app`）—— 步骤 11/12 部分已落地（app 单测 **292 条 / 21 个文件**）
+### 14.2 客户端（`app`）—— 当前 app 单测 334 条 / 24 个文件
 
 - **迁移** ✅ 步骤 11：v1 → v2（训练历史归档、日期补齐、演示数据不入库）；备份 0.1.0/0.2.0 → 0.3.0 导入。
 - **同步层** ✅ 步骤 12d/12f：outbox 幂等、批次合并、LWW 合并、墓碑移除、形状守卫与失败标记；用 mock fetch，不连真实服务端（`sync-*` 共 62 条）。
@@ -691,7 +691,7 @@ DAILY_BRIEF_AT=21:00
 | **11（8d）** | 数据历史化（前端） | `types.ts`、`persist-state.ts` v2 迁移、`MockDataProvider`、`FitnessPage` 历史列表、饮食/饮水/计划按日、备份 0.3.0 | §6.3 | 无（可与备案等待并行） | ✅ 2026-11-04 |
 | **12（P4a）** | 账号 + 增量同步 | `server/src/db/*`（驱动/repo/migrate）、`/api/v1/devices*`、`/api/v1/sync/*`、客户端 `sync-*`、设置页同步区块 | §7.4 | 11 + Node 版本决策（§18-1，已定） | ✅ 2026-11-05 本机完成并推送；**服务端 2026-11-06、前端同步卡片 2026-11-07 均已部署** |
 | **13（P4b）** | 服务端聚合 + AI 综合分析 | facts builder、`ANALYSIS_SYSTEM_PROMPT`、`/api/v1/analysis/*`、`/api/v1/reports*`、报告页改造、缓存与可选定时 | §8.5 | 12 | ✅ 2026-11-05 本机完成并验证、已推送；**服务端 2026-11-06、前端综合分析块 2026-11-07 均已部署**（13a–13d） |
-| **14（P4c）** | 备份/恢复/导出/删除 | `/api/v1/backups*`、`/api/v1/export`、`DELETE /api/v1/account`、定时备份、隐私区块文案 | §12 | 12 | 🟡 14a 备份 ✅ 2026-11-07／14b–14d ⬜ |
+| **14（P4c）** | 备份/恢复/导出/删除 | `/api/v1/backups*`、`/api/v1/export`、`DELETE /api/v1/account`、定时备份、隐私区块文案 | §12 | 12 | 🟡 14a 备份已在生产启用 ✅ 2026-11-07／14b 恢复本机实现并验证 ✅ 2026-11-09（`821eabb`，未部署）／14c–14d ⬜ |
 | 9 / 10 | 部署与域名（2026-11-06 拆分） | 部署 8c 版本 ✅ → 步骤 10 A 段（升 Node 22 + 建库目录 + 备份 + 部署步骤 12/13，**不等备案号**）→ 步骤 10 B 段（域名 + 443 + 证书 + 页脚备案号，等备案号） | HANDOFF §13.3 | 备案号**仅**卡 B 段 | 9 ✅ 2026-11-04；10 A 段 ✅ 2026-11-06（只剩第 8 项前端产物上传）；10 B 段 ⬜ 等备案号 |
 
 说明：11–14 均可在服务器未部署时本地开发（SQLite 本地文件、单测 `:memory:`）；真正影响线上的是步骤 9 之后的每次发布。**步骤 12/13 的服务端已于 2026-11-06 随步骤 10 A 段部署**（服务器升到 Node v22.19.0，`node:sqlite` 可用）——这一步**不需要备案号**。
@@ -745,7 +745,9 @@ DAILY_BRIEF_AT=21:00
 ## 19. 附录：本方案新增/改动的文件清单（✅ = 已落地，⬜ = 待实施）
 
 ```text
-server/src/db/driver.ts          ✅ Db 抽象（prepare/run/all/get/exec/transaction；node:sqlite）
+server/src/db/driver.ts          ✅ Db 抽象（prepare/run/all/get/exec/transaction/reopen；只读校验；node:sqlite）
+server/src/db/backup.ts          ✅ 14a 快照 / sha256 / 保留瀑布
+server/src/db/restore.ts         ✅ 14b 恢复预览 / 校验 / 原子替换 / 回滚
 server/src/db/migrations.ts      ✅ schema_migrations + DDL（schema v1，14 张表）
 server/src/db/entities.ts        ✅ 实体 kind → 表/列映射、字段校验
 server/src/db/repositories/*.ts  ✅ entities / sync-seq / sync-ops / devices 的 SQL
@@ -757,6 +759,7 @@ server/src/routes/sync.ts        ✅ bootstrap / push / pull
 server/src/sync/accounts.ts      ✅ 注册 / 恢复 / 吊销业务动作
 server/src/sync/service.ts       ✅ 认证、push 幂等、bootstrap 事务、pull 整形
 shared/src/contract/sync.ts      ✅ 同步契约（@persist/shared，12c）
+shared/src/contract/backup.ts    ✅ 14b 备份恢复契约
 shared/src/contract/entities.ts  ✅ 实体契约
 shared/src/contract/parse.ts     ✅ 契约解析/校验
 app/src/lib/sync-contract.ts     ✅ 前端契约唯一入口（转出共享包）
@@ -767,18 +770,18 @@ app/src/lib/sync-entities.ts     ✅ 切片摊平 / diff / pull 合并 + 形状�
 app/src/lib/sync-engine.ts       ✅ bootstrap / 防抖增量 / 兜底轮询 / 三态
 app/src/pages/SettingsPage.tsx   ✅ 「数据同步」卡片（12e）
 app/src/lib/history*.ts          ✅ 8d 历史归档工具
-app/src/types.ts                 ✅ 8d 历史结构（报告 v2 类型 ⬜ 步骤 13）
+app/src/types.ts                 ✅ 8d 历史结构 + 报告 v2 类型（步骤 13）
 app/src/lib/persist-state.ts     ✅ schemaVersion 2 + 迁移
 app/src/lib/mock-data-transfer.ts ✅ 备份 0.3.0
 app/src/pages/FitnessPage.tsx    ✅ 历史列表改真实数据
-server/src/routes/analysis.ts    ⬜ facts / reports（步骤 13）
-server/src/analysis/facts.ts     ⬜ 事实包构建（纯函数 + SQL）
-server/src/analysis/rules.ts     ⬜ 规则降级模板
-server/src/ai/analysis.ts        ⬜ 调用模型 + v2 净化 + schema 校验
-server/src/ai/prompts.ts         ⬜ 新增 ANALYSIS_SYSTEM_PROMPT
-server/src/routes/backups.ts     ⬜ 快照 / 恢复 / 导出 / 删除（步骤 14）
-server/src/jobs/*.ts             ⬜ 定时简报 / 备份 / 墓碑清理
-app/src/pages/ReportsPage.tsx    ⬜ 服务端报告渲染 + 降级（步骤 13）
+server/src/routes/analysis.ts    ✅ facts / reports（步骤 13）
+server/src/analysis/facts.ts     ✅ 事实包构建（纯函数 + SQL）
+server/src/analysis/rules.ts     ✅ 规则降级模板
+server/src/ai/analysis.ts        ✅ 调用模型 + v2 净化 + schema 校验
+server/src/ai/prompts.ts         ✅ 新增 ANALYSIS_SYSTEM_PROMPT
+server/src/routes/backups.ts     ✅ 14b 恢复端点（POST /api/v1/backups/:id/restore；列表 / 手动创建待补）
+server/src/jobs/*.ts             🟡 每日简报 / 备份已落地；墓碑清理待做
+app/src/pages/ReportsPage.tsx    ✅ 服务端报告渲染 + 降级（步骤 13）
 docs/*.md、README、HANDOFF       每步完成后同步
 ```
 
