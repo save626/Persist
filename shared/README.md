@@ -8,17 +8,18 @@ Web（`app/`）、服务端（`server/`）以及将来的移动端共用的**纯
 
 ```
 src/
-├─ index.ts               入口（转出 sync、analysis、backup 与 export 契约）
+├─ index.ts               入口（转出 sync、analysis、backup、export 与 account 契约）
 └─ contract/
    ├─ sync.ts             账号与增量同步的请求 / 响应契约与校验（唯一一份）
    ├─ entities.ts         同步实体信封：ENTITY_KINDS / EntityCandidate / SINGLE_ROW_KINDS
    ├─ analysis.ts         步骤 13：综合分析请求 / 事实包 v2 / 报告内容与响应契约（唯一一份）
    ├─ backup.ts           步骤 14b：备份恢复请求 / 预览 / 响应契约（唯一一份）
    ├─ export.ts           步骤 14c：账号导出信封 / 0.3.0 数据切片 / 下载文件名契约（唯一一份）
+   ├─ account.ts          步骤 14d：账号删除请求 / 响应 / 逐表计数契约与 confirm 校验
    └─ parse.ts            ParseResult<T>（ok/value 或 ok:false/message）
 ```
 
-`package.json` 的 `exports` 按子路径暴露：`.`、`./contract/sync`、`./contract/entities`、`./contract/parse`、`./contract/analysis`、`./contract/backup`、`./contract/export`。
+`package.json` 的 `exports` 按子路径暴露：`.`、`./contract/sync`、`./contract/entities`、`./contract/parse`、`./contract/analysis`、`./contract/backup`、`./contract/export`、`./contract/account`。
 
 ## 谁在用
 
@@ -28,6 +29,7 @@ src/
 | 服务端           | `import ... from '@persist/shared/contract/analysis'`   | 步骤 13：`/api/v1/analysis/*`、`/api/v1/reports*` 的入参校验与响应整形 |
 | 服务端           | `import ... from '@persist/shared/contract/backup'`     | 步骤 14b：`POST /api/v1/backups/:id/restore` 的请求 / 预览 / 响应类型 |
 | 服务端           | `import ... from '@persist/shared/contract/export'`     | 步骤 14c：`GET /api/v1/export` 的信封 / 数据切片 / 下载文件名契约 |
+| 服务端           | `import ... from '@persist/shared/contract/account'`    | 步骤 14d：`DELETE /api/v1/account` 的 `confirm:true` 校验与删除计数响应 |
 | 前端             | `app/src/lib/sync-contract.ts`                          | 前端唯一入口，12d 的 `sync-client` / `sync-queue` 经由它取类型与校验 |
 | 前端             | `app/src/lib/analysis-contract.ts`                      | 步骤 13：`analysis-client` 与报告页/设置页经由它取类型与常量         |
 | 移动端（未开始） | 预留                                                    | 同一包名与子路径                                                     |
@@ -38,6 +40,7 @@ src/
 - 与旧接口的差别要在代码里看清：`POST /api/report` 是 `{ report, model }` 包裹，`POST /api/v1/analysis/reports` 是平铺——历史教训见 `HANDOFF.md` §18.3（客户端曾按 `{ report }` 解包，导致整块显示不可用）。
 - 列表接口是 `{ reports, nextCursor }`，详情接口是单个对象，404 走 `{ error: { code: 'not_found' } }`。
 - 步骤 14c 的导出信封是 `{ app: 'Persist', version: '0.3.0', mode: 'server-export', schemaVersion: 2, exportedAt, data }`；`data` 必须与客户端 0.3.0 备份同构，客户端导入不得按 `mode` 拒收。
+- 步骤 14d 的删除成功响应是平铺 `{ deleted: true, deletedAt, counts }`；`counts` 同时给出账号行、分析归档、任务、同步台账、设备与已清理备份文件数。失败使用统一 `{ error: { code, message } }`，其中缺失确认是 `422 confirmation_required`。
 
 ## 构建与消费
 
