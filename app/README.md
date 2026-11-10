@@ -23,7 +23,7 @@ npm run build        # 生产构建
 - AI 报告已接服务端（步骤 8c）：`src/lib/ai-report-client.ts` 的 `probeAiReport()` 要求 `/api/health` 返回 `ai:'deepseek'`，`requestAiReport()` POST 同源 `/api/report`；`src/lib/report-types.ts` 镜像服务端契约。**报告只有文字字段来自模型**（`title/status/summary/conclusions/actions/warnings`），指标数字、依据条目、统计区间仍由 `ReportsPage.tsx` 的 `buildDailyReport()` 按本地记录确定性生成；请求只含「已授权 + 设置来源开关打开」的摘要，未授权模块发 `null` 而不是 0/[]。不可用时回退本地 Mock 并显示回退提示、徽标降级；响应不合契约抛 `ReportContractError`、明确报错不伪造报告。**只有「今日简报」走服务端**，`训练建议` / `学习观察` 仍打开本地已有报告；`ReportRecord.origin` 区分 AI / Mock。
 - 今日页晨间简报也接服务端（2026-11-04）：摘要构造统一到 `src/lib/report-digest.ts`（报告页与简报共用同一份授权/来源规则），`src/lib/morning-brief.ts` 负责「未授权/无来源不发请求 → `sessionStorage` 按天 + 摘要指纹缓存 → `POST /api/report`（`今日简报` / 7 天）→ `parseReportContent` 校验」；模型只覆盖面板标题与摘要，三个 KPI 与建议节奏仍是本地确定性生成。失败按状态回退并如实标注（「已回退到本机规则，未使用模型输出」），只有拿到合规内容才显示 DeepSeek 来源。
 - 跨设备同步（步骤 12d/12e）：`src/lib/sync-*.ts` 六个文件——`sync-contract.ts`（转出 `@persist/shared` 契约）、`sync-client.ts`（`/api/v1/*` 请求与退避）、`sync-queue.ts`（outbox 合并/批次）、`sync-store.ts`（`persist-sync` IndexedDB）、`sync-entities.ts`（切片摊平 / diff / pull LWW + 墓碑 + 形状守卫）、`sync-engine.ts`（bootstrap、5 s 防抖、60 s 兜底、`online`/`visibility` 触发）。**默认关闭，关闭时不发任何同步请求**；开关与恢复码在设置页「数据同步」卡片。服务端 `/api/v1/*` 只在同源可用时生效，**服务端 2026-11-06、前端静态包 2026-11-07 均已部署**，但同步默认关闭，默认路径仍是纯本地。
-- 服务端账号导出兼容（步骤 14c，2026-11-10）：`GET /api/v1/export` 返回 `mode: "server-export"` 的 0.3.0 同构信封；`src/lib/mock-data-transfer.ts` 的导入校验已允许空 `reports` 数组，因此空账号导出也能被当前客户端重新导入。该改动不改页面或视觉；端点尚未部署。14d 的服务端删除端点同样未接前端 UI，设置页不改视觉。
+- 服务端账号导出兼容（步骤 14c，2026-11-10）：`GET /api/v1/export` 返回 `mode: "server-export"` 的 0.3.0 同构信封；`src/lib/mock-data-transfer.ts` 的导入校验已允许空 `reports` 数组，因此空账号导出也能被当前客户端重新导入。该改动不改页面或视觉；端点已于 2026-11-10 部署到生产。14d 的服务端删除端点同样未接前端 UI，设置页不改视觉。
 - 服务端综合分析（步骤 13）：`src/lib/analysis-contract.ts` 是前端唯一入口（转出 `@persist/shared/contract/analysis` 的类型与常量，**不另抄一份**），`src/lib/analysis-client.ts` 负责 `/api/v1/analysis/*` 与 `/api/v1/reports*` 请求、四态（模型 / 缓存 / 规则降级 / 未请求）与错误分类（`network|timeout|unauthorized|consent-off|insufficient|invalid|rate-limited|server|invalid-response`）。**服务端分析结果只存在于页面状态与服务端归档，不写进本机 `reports` 数组**，`schemaVersion` 仍是 2、备份仍是 0.3.0。设置页「每日简报」卡片（默认关闭、默认 21:00）写的是本机 `settings.dailyBrief`，**必须开启同步并同步设置后服务端 job 才会读到**；时间非法时回退并提示。
 - 改 `MockDataProvider` 的状态切片时必须同步维护持久化记录（`schemaVersion` + 迁移），否则老数据会被判为损坏或丢失；未来版本记录只读不覆盖。
 - API Key 不得进入 Web 客户端或 Android 包，后续只能通过 `server/` 代理使用。
@@ -51,7 +51,7 @@ npm run build        # 生产构建
 2. **步骤 11（8d）数据历史化** —— ✅ 已完成（2026-11-04）：`schemaVersion` 2、训练真实历史、饮食/饮水/计划按日台账、备份 0.3.0。
 3. **步骤 12（P4a）账号 + 增量同步** —— ✅ 本机完成并验收（2026-11-05，12a–12f）：客户端同步层 + 设置页「数据同步」卡片；**已推送；服务端 2026-11-06 已部署、前端「数据同步」卡片 2026-11-07 已上传**（服务器已升 Node v22.19.0）。
 4. **步骤 13（P4b）服务端聚合 + AI 综合分析** —— ✅ 本机完成并验证（2026-11-05，**已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**）：服务端 SQL 聚合事实包 + 四个 `/api/v1` 接口 + 每日简报 job；前端 `/reports`「服务端综合分析」块（7/30/90 天、四态、归档列表）与设置页「每日简报」卡片（默认关闭、21:00）。**已随 2026-11-06 切换部署**（步骤 10 A 段升 Node v22.19.0）。
-5. 步骤 14（备份 / 恢复 / 导出 / 删除账号）：14a 每日备份已在生产启用；14b 恢复、14c 导出与 14d 删除账号端点均已在本机实现并验证（2026-11-10，尚未部署）。14d 当前只做服务端履约，**前端「本机 + 服务端」两段式删除入口尚未接线**，设置页视觉未改；本机「清空本机数据」仍是现有独立入口。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §12。
+5. 步骤 14（备份 / 恢复 / 导出 / 删除账号）：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号与备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产。14d 当前只做服务端履约，**前端「本机 + 服务端」两段式删除入口尚未接线**，设置页视觉未改；本机「清空本机数据」仍是现有独立入口。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §12。
 
 已完成（2026-11-05）：
 
