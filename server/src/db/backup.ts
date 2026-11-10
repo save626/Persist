@@ -30,6 +30,17 @@ import { openDatabase } from './driver.js'
 
 export type BackupReason = 'scheduled' | 'manual' | 'pre-restore'
 
+/** 路由层需要区分的可预期创建失败；消息仍保留给 CLI / 日志使用。 */
+export class BackupCreateError extends Error {
+  constructor(
+    readonly code: 'memory_database' | 'backup_exists',
+    message: string,
+  ) {
+    super(message)
+    this.name = 'BackupCreateError'
+  }
+}
+
 export interface BackupPolicy {
   keepDays: number
   keepWeeks: number
@@ -44,7 +55,7 @@ export const DEFAULT_BACKUP_POLICY: BackupPolicy = {
 
 const DAY_MS = 86_400_000
 const BACKUP_NAME =
-  /^persist-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-([a-z][a-z-]{2,19})\.sqlite$/
+  /^persist-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-(scheduled|manual|pre-restore)\.sqlite$/
 
 export interface BackupEntry {
   name: string
@@ -56,6 +67,7 @@ export interface BackupEntry {
   weekKey: string
   /** 月桶：YYYY-MM。 */
   monthKey: string
+  reason: BackupReason
 }
 
 /**
@@ -65,8 +77,8 @@ export interface BackupEntry {
 export function parseBackupName(name: string): BackupEntry | null {
   const match = BACKUP_NAME.exec(name)
   if (!match) return null
-  const [, year, month, day, hour, minute, second] = match
-  if (!year || !month || !day || !hour || !minute || !second) return null
+  const [, year, month, day, hour, minute, second, reason] = match
+  if (!year || !month || !day || !hour || !minute || !second || !reason) return null
   const numbers = [year, month, day, hour, minute, second].map((part) => Number(part))
   const [y, mo, d, h, mi, s] = numbers
   if (
@@ -103,6 +115,7 @@ export function parseBackupName(name: string): BackupEntry | null {
     createdAt,
     weekKey,
     monthKey: `${year}-${month}`,
+    reason: reason as BackupReason,
   }
 }
 
@@ -356,7 +369,7 @@ export function backupStamp(nowMs: number): string {
 export function createBackup(options: CreateBackupOptions): BackupResult {
   const { dbPath, backupDir } = options
   if (!dbPath || dbPath === ':memory:') {
-    throw new Error('DB_PATH 指向内存库，无法生成文件快照。')
+    throw new BackupCreateError('memory_database', 'DB_PATH 指向内存库，无法生成文件快照。')
   }
   if (!existsSync(dbPath)) {
     throw new Error(`数据库文件不存在：${dbPath}`)
@@ -369,7 +382,7 @@ export function createBackup(options: CreateBackupOptions): BackupResult {
   const name = `persist-${backupStamp(nowMs)}-${reason}.sqlite`
   const target = join(backupDir, name)
   if (existsSync(target)) {
-    throw new Error(`快照文件已存在，拒绝覆盖：${target}`)
+    throw new BackupCreateError('backup_exists', `快照文件已存在，拒绝覆盖：${target}`)
   }
 
   // 源库用同一驱动打开；VACUUM INTO 会包含 WAL 里尚未 checkpoint 的内容，

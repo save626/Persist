@@ -35,6 +35,27 @@ export interface BackupSnapshotInfo {
   schemaVersion: number
 }
 
+/** 规范快照文件名里允许出现的 reason。客户端只能查看，不能指定。 */
+export type BackupReason = 'scheduled' | 'manual' | 'pre-restore'
+
+/** 快照列表 / 手动创建接口的公开形状：只给稳定 id，不暴露服务端绝对路径。 */
+export interface BackupListItem {
+  id: string
+  bytes: number
+  createdAt: number
+  reason: BackupReason
+  /** 旁车缺失或校验不通过时为 null；文件本身仍会列出，是否可恢复由 restore 再校验。 */
+  sha256: string | null
+}
+
+export interface BackupListResponse {
+  backups: BackupListItem[]
+}
+
+export interface BackupCreateResponse {
+  backup: BackupListItem
+}
+
 export interface RestorePreview {
   backup: BackupSnapshotInfo
   current: BackupDatabaseSummary
