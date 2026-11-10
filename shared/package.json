@@ -30,6 +30,10 @@
     "./contract/backup": {
       "types": "./dist/contract/backup.d.ts",
       "default": "./dist/contract/backup.js"
+    },
+    "./contract/export": {
+      "types": "./dist/contract/export.d.ts",
+      "default": "./dist/contract/export.js"
     }
   },
   "files": [

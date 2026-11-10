@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { createCompleteMockData } from '../data/complete-mock-data'
+import {
+  PERSIST_EXPORT_MODE,
+  PERSIST_EXPORT_SCHEMA_VERSION,
+  PERSIST_EXPORT_VERSION,
+} from '@persist/shared/contract/export'
 import type { ImportableMockData, LongTermPlan } from '../types'
 import { createLongTermPlan } from './long-term-plan'
 import {
@@ -135,6 +140,21 @@ describe('serializeMockBackup 序列化', () => {
 })
 
 describe('导出 → 导入 往返', () => {
+  it('接受服务端 0.3.0 导出信封，并允许空报告数组', () => {
+    const data: ImportableMockData = { ...createCompleteMockData(DATA_NOW), reports: [] }
+    const parsed = parseMockBackupValue({
+      app: 'Persist',
+      version: PERSIST_EXPORT_VERSION,
+      mode: PERSIST_EXPORT_MODE,
+      schemaVersion: PERSIST_EXPORT_SCHEMA_VERSION,
+      exportedAt: EXPORTED_AT.toISOString(),
+      data,
+    })
+
+    expect(parsed.reports).toEqual([])
+    expect(parsed.profile).toEqual(data.profile)
+    expect(parsed.longTermPlans).toEqual(data.longTermPlans ?? [])
+  })
   it('整份备份往返后所有切片、计划状态与记录计数保持一致', () => {
     const data = dataWithPlans()
     const parsed = parseMockBackupJson(JSON.stringify(serializeMockBackup(data, EXPORTED_AT)))

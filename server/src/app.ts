@@ -7,6 +7,7 @@ import { registerAnalysisRoutes } from './routes/analysis.js'
 import { registerBackupRoutes } from './routes/backups.js'
 import { registerChatRoute } from './routes/chat.js'
 import { registerDeviceRoutes } from './routes/devices.js'
+import { registerExportRoutes } from './routes/export.js'
 import { registerHealthRoute } from './routes/health.js'
 import { registerReportArchiveRoutes } from './routes/reports.js'
 import { registerReportRoute } from './routes/report.js'
@@ -90,6 +91,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   registerReportArchiveRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerBackupRoutes(app, { database: db, config: options.config, limiter: syncLimiter, now })
   registerDeviceRoutes(app, { db: db.db, limiter: syncLimiter, now })
+  registerExportRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerSyncRoutes(app, { db: db.db, limiter: syncLimiter, now })
 
   return app

@@ -6,3 +6,4 @@
 export * from './contract/sync.js'
 export * from './contract/analysis.js'
 export * from './contract/backup.js'
+export * from './contract/export.js'
