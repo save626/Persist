@@ -13,7 +13,7 @@ src/
    ├─ sync.ts             账号与增量同步的请求 / 响应契约与校验（唯一一份）
    ├─ entities.ts         同步实体信封：ENTITY_KINDS / EntityCandidate / SINGLE_ROW_KINDS
    ├─ analysis.ts         步骤 13：综合分析请求 / 事实包 v2 / 报告内容与响应契约（唯一一份）
-   ├─ backup.ts           步骤 14b：备份恢复请求 / 预览 / 响应契约（唯一一份）
+   ├─ backup.ts           步骤 14：快照列表 / 手动创建 / 恢复请求与响应契约（唯一一份）
    ├─ export.ts           步骤 14c：账号导出信封 / 0.3.0 数据切片 / 下载文件名契约（唯一一份）
    ├─ account.ts          步骤 14d：账号删除请求 / 响应 / 逐表计数契约与 confirm 校验
    └─ parse.ts            ParseResult<T>（ok/value 或 ok:false/message）
@@ -27,7 +27,7 @@ src/
 | ---------------- | ------------------------------------------------------- | -------------------------------------------------------------------- |
 | 服务端           | `import ... from '@persist/shared/contract/sync'`       | 路由校验入参、组装响应；`server/src/db/entities.ts` 只做转出         |
 | 服务端           | `import ... from '@persist/shared/contract/analysis'`   | 步骤 13：`/api/v1/analysis/*`、`/api/v1/reports*` 的入参校验与响应整形 |
-| 服务端           | `import ... from '@persist/shared/contract/backup'`     | 步骤 14b：`POST /api/v1/backups/:id/restore` 的请求 / 预览 / 响应类型 |
+| 服务端           | `import ... from '@persist/shared/contract/backup'`     | 步骤 14：`GET/POST /api/v1/backups` 与 `POST /api/v1/backups/:id/restore` 的列表 / 创建 / 恢复类型 |
 | 服务端           | `import ... from '@persist/shared/contract/export'`     | 步骤 14c：`GET /api/v1/export` 的信封 / 数据切片 / 下载文件名契约 |
 | 服务端           | `import ... from '@persist/shared/contract/account'`    | 步骤 14d：`DELETE /api/v1/account` 的 `confirm:true` 校验与删除计数响应 |
 | 前端             | `app/src/lib/sync-contract.ts`                          | 前端唯一入口，12d 的 `sync-client` / `sync-queue` 经由它取类型与校验 |
@@ -41,6 +41,7 @@ src/
 - 列表接口是 `{ reports, nextCursor }`，详情接口是单个对象，404 走 `{ error: { code: 'not_found' } }`。
 - 步骤 14c 的导出信封是 `{ app: 'Persist', version: '0.3.0', mode: 'server-export', schemaVersion: 2, exportedAt, data }`；`data` 必须与客户端 0.3.0 备份同构，客户端导入不得按 `mode` 拒收。
 - 步骤 14d 的删除成功响应是平铺 `{ deleted: true, deletedAt, counts }`；`counts` 同时给出账号行、分析归档、任务、同步台账、设备与已清理备份文件数。失败使用统一 `{ error: { code, message } }`，其中缺失确认是 `422 confirmation_required`。
+- 备份列表响应是平铺 `{ backups: BackupListItem[] }`，手动创建响应是 `{ backup: BackupListItem }`；列表项只含 `id / bytes / createdAt / reason / sha256`，`sha256` 可为 `null`，**绝不暴露服务端绝对路径**。
 
 ## 构建与消费
 

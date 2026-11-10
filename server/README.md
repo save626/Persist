@@ -1,6 +1,6 @@
 # Server
 
-Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**：步骤 12 的 12a–12f（服务端数据层与接口、共享契约、前端同步层、设置页「数据同步」卡片）**已于 2026-11-05 在本机完成并验收并推送，2026-11-06 已部署到生产**（Node v22.19.0，`/opt/persist-next`）；步骤 13（服务端 SQL 聚合 + AI 综合分析、每日简报 job、报告归档与 365 天保留）**已于 2026-11-05 在本机完成并验证，2026-11-06 随同一次切换部署**；步骤 14 的每日备份（14a）2026-11-06 已在生产启用；恢复端点（14b）2026-11-09、导出端点（14c）2026-11-10、删除账号端点（14d，`ca10b42`）均已在本机实现并验证，尚未部署。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
+Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**：步骤 12 的 12a–12f（服务端数据层与接口、共享契约、前端同步层、设置页「数据同步」卡片）**已于 2026-11-05 在本机完成并验收并推送，2026-11-06 已部署到生产**（Node v22.19.0，`/opt/persist-next`）；步骤 13（服务端 SQL 聚合 + AI 综合分析、每日简报 job、报告归档与 365 天保留）**已于 2026-11-05 在本机完成并验证，2026-11-06 随同一次切换部署**；步骤 14 的每日备份（14a）2026-11-06 已在生产启用；恢复端点（14b）2026-11-09、导出端点（14c）2026-11-10、删除账号端点（14d，`ca10b42`）与备份列表/手动创建端点（`c309001`，2026-11-10）均已在本机实现并验证，尚未部署。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
 
 ## 约束（不要破坏）
 
@@ -29,7 +29,7 @@ server/
 │  ├─ routes/guards.ts  /api/v1 的限流与设备鉴权前置
 │  ├─ routes/devices.ts POST /api/v1/devices{,/restore,/revoke}
 │  ├─ routes/sync.ts    POST /api/v1/sync/{push,bootstrap} + GET /api/v1/sync/pull
-│  ├─ routes/backups.ts POST /api/v1/backups/:id/restore（14b；预览 / 二次确认恢复）
+│  ├─ routes/backups.ts GET/POST /api/v1/backups + POST /api/v1/backups/:id/restore（备份列表 / 手动创建 / 14b 恢复）
 │  ├─ routes/export.ts GET /api/v1/export（14c；当前账号 0.3.0 JSON 下载）
 │  ├─ routes/account.ts DELETE /api/v1/account（14d；显式确认 + 事务硬删除）
 │  ├─ routes/analysis.ts POST /api/v1/analysis/reports + GET /api/v1/analysis/facts（独立限流）
@@ -60,10 +60,10 @@ server/
 │     ├─ analysis.ts    综合分析提示词与响应解析、数字白名单校验
 │     ├─ extract.ts     结构化结果净化（问题/档案增量/计划草案/warnings）
 │     └─ report.ts      报告内容净化（字数/条数/重复项/代码块，拒绝就报契约错误）
-└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / analysis-* / jobs / db-* / devices / sync / export / account-delete（25 个文件 / 219 条）
+└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / analysis-* / jobs / db-* / devices / sync / backups / export / account-delete（25 个文件 / 226 条）
 ```
 
-> **`@persist/shared`（仓库根 `shared/`）**：同步契约（`contract/sync.ts`、`contract/entities.ts`、`contract/parse.ts`）与**综合分析契约**（`contract/analysis.ts`：事实包 v2 / 报告内容 / 错误码 / 保留期 / 每日简报时间）只有这一份，服务端与前端同源引用；14b 新增 `contract/backup.ts` 备份恢复契约，14c 新增 `contract/export.ts` 导出信封与下载文件名契约，14d 新增 `contract/account.ts` 删除请求 / 响应计数契约。`shared/` 是独立 TS 项目，需先编译出 `shared/dist`：`npm run shared:build`（`prebuild` / `pretest` / `typecheck` 会自动先跑）。`npm install` 已按 `file:../shared` 建立链接；**部署时 `shared/` 必须一起上服务器**（见 `docs/部署与服务器现状.md`）。
+> **`@persist/shared`（仓库根 `shared/`）**：同步契约（`contract/sync.ts`、`contract/entities.ts`、`contract/parse.ts`）与**综合分析契约**（`contract/analysis.ts`：事实包 v2 / 报告内容 / 错误码 / 保留期 / 每日简报时间）只有这一份，服务端与前端同源引用；`contract/backup.ts` 现同时承载快照列表 / 手动创建 / 恢复契约，14c 新增 `contract/export.ts` 导出信封与下载文件名契约，14d 新增 `contract/account.ts` 删除请求 / 响应计数契约。`shared/` 是独立 TS 项目，需先编译出 `shared/dist`：`npm run shared:build`（`prebuild` / `pretest` / `typecheck` 会自动先跑）。`npm install` 已按 `file:../shared` 建立链接；**部署时 `shared/` 必须一起上服务器**（见 `docs/部署与服务器现状.md`）。
 
 ## API
 
@@ -303,7 +303,9 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 
 ## 备份、恢复、导出与删除 API（`/api/v1`，步骤 14a/14b/14c/14d）
 
-- **14a 快照**：每日 systemd timer 调 `dist/db/backup-cli.js` 执行 `VACUUM INTO`，快照与 `.sha256` 旁车同目录保存；保留瀑布 7 日 / 4 周 / 3 月。手工备份仍走 CLI，`POST/GET /api/v1/backups` 尚未实现。
+- **14a 快照**：每日 systemd timer 调 `dist/db/backup-cli.js` 执行 `VACUUM INTO`，快照与 `.sha256` 旁车同目录保存；保留瀑布 7 日 / 4 周 / 3 月。CLI 仍可用于 SSH 运维。
+- **`POST /api/v1/backups`（本机实现并验证，尚未部署）**：设备令牌鉴权，共用 `/api/v1` 限流，固定生成 `manual` 快照（忽略客户端传入的 reason），使用 `BACKUP_KEEP_*` 配置执行保留清理；成功 `201`，返回 `{ backup: { id, bytes, createdAt, reason, sha256 } }`。同一秒已有同名快照返回 `409 backup_already_exists`，内存库返回 `409 backup_unavailable`；全部响应 `no-store`。
+- **`GET /api/v1/backups`（本机实现并验证，尚未部署）**：只列规范命名的 `.sqlite` 快照，按 `createdAt` 新到旧返回 `{ backups: [...] }`；每项只暴露 `id / bytes / createdAt / reason / sha256`，**不返回服务端绝对路径**。旁车缺失或校验失败时 `sha256: null`，文件仍列出，但恢复会再次严格拒绝。
 - **14b 恢复**：`POST /api/v1/backups/:id/restore`，设备令牌鉴权，共用 `/api/v1` 限流，全部响应 `no-store`。
   - `{}` 或 `{ "confirm": false }`：只返回当前库与快照的账号级计数预览，不修改数据。
   - `{ "confirm": true }`：校验规范快照 id / sha256 旁车 / `integrity_check` / schema / 必要表 / 当前账号存在，自动生成 `pre-restore` 快照，然后原子替换并重开数据库；失败会回滚旧库。
@@ -412,7 +414,7 @@ cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"   # 本机沙箱下必须带 workspace 内缓存
 npm run shared:build  # 先编译 ../shared → shared/dist（prebuild/pretest/typecheck 会自动跑）
 npm run typecheck    # tsc -p tsconfig.test.json（含 test）
-npm test             # vitest run，219 条（25 个文件）
+npm test             # vitest run，226 条（25 个文件）
 npm run build        # tsc -p tsconfig.json → dist/
 npm run format:check # prettier
 ```
@@ -447,7 +449,7 @@ curl http://127.0.0.1:3101/api/health
 
 ## 当前状态与 TODO
 
-- ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（2026-11-03 时 58 条；步骤 14b 后为 208 条 / 23 个文件，步骤 14c 后为 212 条 / 24 个文件，步骤 14d 后现共 **219 条 / 25 个文件**）。
+- ✅ 8a（`9138175`）服务端骨架 + DeepSeek 客户端 + 净化 + 限流 + SSE 编排，单测覆盖（2026-11-03 时 58 条；步骤 14b 后为 208 条 / 23 个文件，步骤 14c 后为 212 条 / 24 个文件，步骤 14d 时为 219 条 / 25 个文件，备份列表/手动创建端点后现共 **226 条 / 25 个文件**）。
 - ✅ 8b（`b99d3ad`）前端接入：`app/src/lib/ai-chat-client.ts` 用 `createAppChatClient({ consent })` 在真实/Mock 间切换，`probe()` 走 `/api/health`，只在首个内容事件前回退；`PlanChatSheet` / `PlansPage` 如实标注来源。**已用真实 Key 端到端联调**（`/api/chat` 200、3.5 s、127 事件）；真实调用暴露模型给出过去日期，已用「提示词注入 Asia/Shanghai 今天 + 前端日期兜底」修复并复验。
 - ✅ 8c（`bdd4265`，2026-11-04）报告接服务端：新增 `POST /api/report`（非流式 JSON）+ `ai/report.ts` 净化 + 报告提示词；前端 `app/src/lib/ai-report-client.ts` 先 `probeAiReport()` 探活，可用才走真实生成，不可用/失败自动回退本地 Mock 并如实标注。**已用真实 Key 验证**：完整摘要 2.7 s 返回、只授权学习时报告不出现训练/饮食字样；提示词原版允许「推算」，真实调用确实算出了「再补水约 0.5 L」这类未授权数字，已改为**禁止任何推算**并复验通过。
 - ✅ 步骤 9 部署（2026-11-04）：systemd `persist-server.service`（`User=persist`、`Restart=always`）+ `/etc/persist/server.env`（`600 root:root`，新轮换的 Key 只在这里）+ Nginx `/etc/nginx/conf.d/persist.conf`（`/api` 反代 + SSE `proxy_buffering off` + `proxy_read_timeout 300s`）。IP 直连实测：`/api/health` `ai:"deepseek"`；SSE 188 事件、首包 0.118 s、末包 4.215 s 增量到达；`/api/report` 200 / 2.78 s；限流第 2 次 `429` + `Retry-After: 298`。**仅内部调试，未对外宣称上线。**
@@ -456,7 +458,7 @@ curl http://127.0.0.1:3101/api/health
 - ✅ 步骤 10 A 段（2026-11-06/07）：服务器已升 Node v22.19.0、建 `/var/lib/persist` + systemd `ReadWritePaths`、每日 `VACUUM INTO` 备份、部署步骤 12/13、前端产物 2026-11-07 上传；剩 SSH 仅密钥 + `fail2ban`、删 3389（控制台）。域名 / 443 / 证书 / 页脚备案号才等备案号。
 - ✅ 步骤 12a（2026-11-05）：`src/db/*` 数据层——`driver.ts`（`Db` 抽象：`prepare/run/all/get/exec/transaction`，`BEGIN IMMEDIATE` + 嵌套 `SAVEPOINT`）、`migrations.ts`（schema v1，14 张表）、`entities.ts`（9 类实体的列映射与校验）、`repositories/*`（实体 upsert/拉取、rev 分配、sync_ops、设备/账号）、`index.ts`（`openPersistDatabase()`）。单测覆盖驱动、迁移、仓储三层。
 - ✅ 步骤 12b（2026-11-05）：账号 + 同步接口——`auth.ts`（令牌 / 恢复码生成与哈希，只存哈希）、`POST /api/v1/devices{,/restore,/revoke}`、`POST /api/v1/sync/{push,bootstrap}` + `GET /api/v1/sync/pull`（opId 幂等、LWW、墓碑、分页）、独立同步限流器、`/api/health` 增加 `db` / `version`。`engines` 提到 `>=22.5`。**本机验收**：tsc 0 错、单测 112/112、真实进程冒烟（重启后数据仍在、恢复码换设备拿到同一 userId）。**已于 2026-11-06 部署到服务器**（步骤 10 A 段已升 Node v22.19.0）；前端同步层与设置页开关见下面 12d/12e 条目。
-- 🟡 P4 步骤 14：14a 备份已在生产启用；**14b 恢复（`821eabb`）、14c 导出（2026-11-10）与 14d 删除账号（`ca10b42`，2026-11-10）均已在本机实现并验证，尚未部署**。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
+- 🟡 P4 步骤 14：14a 备份已在生产启用；**14b 恢复（`821eabb`）、14c 导出（2026-11-10）、14d 删除账号（`ca10b42`，2026-11-10）与备份列表/手动创建 HTTP 端点（`c309001`，2026-11-10）均已在本机实现并验证，尚未部署**。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §5–§12。
 - ✅ 步骤 12c（2026-11-05）：同步契约搬进 `shared/src/contract/`（`sync.ts` / `entities.ts` / `parse.ts`），以 `@persist/shared` 包（`file:../shared`）供 `app` 与 `server` 同源引用；服务端删掉 `src/sync/contract.ts`、`db/entities.ts` 只做转出，前端新增 `app/src/lib/sync-contract.ts` 作为唯一入口。`shared/dist` 由 `shared:build` 产出（已 gitignore）。验收：shared 编译 0 错、服务端 tsc 0 错 + 单测 112/112、前端 tsc 0 错 + 单测 230/230 + oxlint 0/0、`vite build` 产物 hash 与 12b 一致（说明共享层未意外改动前端行为）、真实进程冒烟通过（push 幂等回放 rev 不变、重启后 pull 得到数据、恢复码换设备同 userId）。
 - 结构说明：chat/report 的请求响应类型仍在 `src/contract.ts`（镜像 `app/src/lib/chat-types.ts`、`app/src/lib/report-types.ts`），迁移 `shared/` 另排期；**同步契约已迁完**（`shared/src/contract/sync.ts`），前端 12d 直接经由 `app/src/lib/sync-contract.ts` 引用，不再另抄。
 - ✅ 步骤 12d（2026-11-05，`9abd8bb`）前端同步层：`app/src/lib/` 新增 `sync-client.ts`（`/api/v1/*` 客户端、错误分类、指数退避）、`sync-store.ts`（`persist-sync` IndexedDB：元数据 + outbox）、`sync-queue.ts`（opId 批次与合并）、`sync-entities.ts`（8 切片摊平 / 差分 / pull 合并 LWW + 墓碑）、`sync-engine.ts`（bootstrap、5 s 防抖增量、60 s 兜底、`online`/`visibility` 触发）。设置页开关默认关闭，关闭时不发任何同步请求。
@@ -470,4 +472,5 @@ curl http://127.0.0.1:3101/api/health
 - ✅ 步骤 14a（2026-11-06，`c6ed57e` / `7d6ef32`）：每日 `VACUUM INTO` 快照、sha256 旁车、保留瀑布、`/api/health` 磁盘水位；systemd timer 03:00 已在生产启用并实跑成功。
 - ✅ 步骤 14b（2026-11-09，`821eabb`）：安全快照恢复端点（预览 / 显式 `confirm:true` / `pre-restore` / sha256 / integrity / schema / 账号校验 / 原子替换与回滚）。完成时为 **23 文件 / 208 条**，其中新增 `db-restore` 与 `backup-routes` 共 2 文件 / 11 条。**本机验证，尚未部署。**
 - ✅ 步骤 14c（2026-11-10）：`GET /api/v1/export` 账号级 0.3.0 JSON 导出；新增 `shared/src/contract/export.ts`、`server/src/export/account-export.ts`、`server/src/routes/export.ts` 与 `server/test/export-routes.test.ts`；客户端允许空 `reports` 数组以兼容空账号导出。**本机验证，尚未部署。**
-- ✅ 步骤 14d（2026-11-10，`ca10b42`）：`DELETE /api/v1/account` 显式 `confirm:true` + 单事务硬删除 + 规范快照清理 + 多 active 账号整库快照保护；新增 `shared/src/contract/account.ts`、`server/src/account/delete-account.ts`、`server/src/routes/account.ts` 与 `server/test/account-delete-routes.test.ts`（7 条）。当前 server **25 文件 / 219 条**、app **24 文件 / 335 条**。**本机验证，尚未部署。**
+- ✅ 步骤 14d（2026-11-10，`ca10b42`）：`DELETE /api/v1/account` 显式 `confirm:true` + 单事务硬删除 + 规范快照清理 + 多 active 账号整库快照保护；新增 `shared/src/contract/account.ts`、`server/src/account/delete-account.ts`、`server/src/routes/account.ts` 与 `server/test/account-delete-routes.test.ts`（7 条）。**本机验证，尚未部署。**
+- ✅ 备份列表 / 手动创建 HTTP 端点（2026-11-10，`c309001`）：`GET /api/v1/backups` 只列规范快照并按新到旧排序，`POST /api/v1/backups` 固定 `manual`、使用配置保留策略；补齐共享契约与 7 条路由测试，覆盖鉴权、排序、路径脱敏、旁车缺失、同秒冲突与内存库 409。当前 server **25 文件 / 226 条**、app **24 文件 / 335 条**。**本机验证，尚未部署。**
