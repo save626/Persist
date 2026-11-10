@@ -150,3 +150,11 @@ export function countDevices(db: Db, userId?: string): number {
     : db.prepare<{ total: number }>('SELECT COUNT(*) AS total FROM devices').get()
   return row ? Number(row.total) : 0
 }
+
+/** 14d 删除前的安全预检：只统计未删除账号，避免把已删除账号算成“其他人”。 */
+export function countActiveUsers(db: Db): number {
+  const row = db
+    .prepare<{ total: number }>('SELECT COUNT(*) AS total FROM users WHERE deleted_at IS NULL')
+    .get()
+  return row ? Number(row.total) : 0
+}

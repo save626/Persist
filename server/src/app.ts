@@ -3,6 +3,7 @@ import type { ServerConfig } from './config.js'
 import { errorBody } from './contract.js'
 import { openPersistDatabase, type PersistDatabase } from './db/index.js'
 import { createRateLimiter } from './rate-limit.js'
+import { registerAccountDeletionRoute } from './routes/account.js'
 import { registerAnalysisRoutes } from './routes/analysis.js'
 import { registerBackupRoutes } from './routes/backups.js'
 import { registerChatRoute } from './routes/chat.js'
@@ -90,6 +91,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   })
   registerReportArchiveRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerBackupRoutes(app, { database: db, config: options.config, limiter: syncLimiter, now })
+  registerAccountDeletionRoute(app, {
+    db: db.db,
+    backupDir: options.config.backupDir,
+    limiter: syncLimiter,
+    now,
+  })
   registerDeviceRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerExportRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerSyncRoutes(app, { db: db.db, limiter: syncLimiter, now })

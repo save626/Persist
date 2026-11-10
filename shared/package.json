@@ -34,6 +34,10 @@
     "./contract/export": {
       "types": "./dist/contract/export.d.ts",
       "default": "./dist/contract/export.js"
+    },
+    "./contract/account": {
+      "types": "./dist/contract/account.d.ts",
+      "default": "./dist/contract/account.js"
     }
   },
   "files": [
