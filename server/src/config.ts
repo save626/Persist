@@ -12,6 +12,8 @@ import { DEFAULT_DAILY_BRIEF_AT, parseDailyBriefAt } from '@persist/shared/contr
 export interface ServerConfig {
   host: string
   port: number
+  /** Capacitor Android WebView 的 CORS 白名单；只接受完整 http(s) origin。 */
+  allowedOrigins: string[]
   trustProxy: boolean
   logLevel: string
   deepseekApiKey: string | null
@@ -50,6 +52,29 @@ export interface ServerConfig {
 
 export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
 export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-chat'
+export const DEFAULT_ALLOWED_ORIGINS = ['https://localhost'] as const
+
+/** 解析逗号分隔的 origin；非法项丢弃，留空时回到 Capacitor 安全的默认值。 */
+export function parseAllowedOrigins(raw: string | undefined): string[] {
+  const values =
+    raw
+      ?.split(',')
+      .map((value) => value.trim())
+      .filter(Boolean) ?? []
+  const origins = new Set<string>()
+  for (const value of values) {
+    try {
+      const url = new URL(value)
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+      if (url.username || url.password || url.search || url.hash) continue
+      if (url.pathname !== '/' && url.pathname !== '') continue
+      origins.add(url.origin)
+    } catch {
+      // 忽略无法解析的项，避免一个坏配置让服务端无法启动。
+    }
+  }
+  return origins.size > 0 ? [...origins] : [...DEFAULT_ALLOWED_ORIGINS]
+}
 
 function readInt(env: NodeJS.ProcessEnv, key: string, fallback: number, min: number, max: number) {
   const raw = env[key]?.trim()
@@ -73,6 +98,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   return {
     host: env.HOST?.trim() || '127.0.0.1',
     port: readInt(env, 'PORT', 3000, 1, 65_535),
+    allowedOrigins: parseAllowedOrigins(env.PERSIST_ALLOWED_ORIGINS),
     trustProxy: readBool(env, 'TRUST_PROXY', true),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
     deepseekApiKey: apiKey.length > 0 ? apiKey : null,
@@ -118,6 +144,7 @@ export function describeConfig(config: ServerConfig) {
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     analysisRateLimit: `${config.analysisRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
+    corsOrigins: config.allowedOrigins,
     dailyBrief: `${config.dailyBriefEnabled ? 'on' : 'off'}@${config.dailyBriefAt}`,
   }
 }

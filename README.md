@@ -4,13 +4,13 @@
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
 - 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成；服务端 2026-11-06、前端产物 2026-11-07 均已部署，同步默认关闭）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
-- 规模：八页面可完整点击验收；当前本机为 app 单测 356（28 文件）、server 单测 229（26 文件）、E2E 128 次执行（11 文件，1.4 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest 与日期 / 时间选择器已双端验收；owner 三张观察卡与 14d 删除流程真机验收未在本轮记录中确认）。
+- 规模：八页面可完整点击验收；当前本机为 app 单测 359（29 文件）、server 单测 234（27 文件）、E2E 128 次执行（11 文件，1.4 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest 与日期 / 时间选择器已双端验收；owner 三张观察卡与 14d 删除流程真机验收未在本轮记录中确认）。Android 工程骨架已补齐（Capacitor 8.6.0），尚未在本机编译 APK 或真机验收。
 
 ## 当前阶段（2026-11-11：步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
 
 前端产品原型**已完成并通过双端视觉验收，视觉范围冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI，`9f9cc71`）：AI 引导建档 → 长期计划草案确认 → 启用/归档闭环已通；AI 建档对话（`POST /api/chat`）、AI 报告文字与今日页晨间简报文字（`POST /api/report`）在「档案页开启 AI 数据授权 + 服务端健康」时走真实 DeepSeek，失败或未授权时回退本地规则/Mock 并如实标注；**报告的指标数字、依据条目与简报 KPI 始终由前端按本地记录确定性生成，模型只写文字**。业务数据全部写入本机 IndexedDB（刷新/重开不丢，有「清空本机数据」入口，导出导入为 0.3.0 备份格式并兼容旧版）：步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（`schemaVersion` 2），报告页可按近 7 / 30 / 90 天窗口汇总真实历史。
 
-服务端 P3 已完成（8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`），并**于 2026-11-04 以 IP 直连方式部署到阿里云 ECS（Nginx + systemd + 真实 DeepSeek Key）并通过联调验收——仅内部调试，不得对外宣称「已上线」**。P4 已开工：步骤 11（数据历史化）2026-11-04 完成，步骤 12（P4a 账号 + 增量同步，12a–12f）2026-11-05 **本机完成并验收、已推送到 `origin/main`，服务端 2026-11-06 已部署**（服务器已升到 Node v22.19.0，`node:sqlite` 可用）。**步骤 13（P4b 服务端 SQL 聚合 + AI 综合分析）2026-11-05 在本机完成并验证，源码与文档已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**：事实包 v2 → 单次模型调用 → 模型只写文字（数字全来自 SQL 且有白名单校验）；四个 `/api/v1` 接口（分析生成 / 事实包 / 归档列表 / 归档详情）、每日简报 job（默认关闭、进程内调度）、报告归档 365 天保留；前端 `/reports` 新增「服务端综合分析」块、设置页新增「每日简报」卡片。**本机已用真实 DeepSeek Key 验证 chat / report / 综合分析三条链路（2026-11-05）**：分析首次 5.7 s、同参 `cached`、`force` 重生成、正文无英文字段名；联调暴露的「模型偶尔写 6 段导致 502、正文夹带英文字段名」已修（`18d5f77`：内容不合规带原因重试一次）。**该结论只适用于本机；线上已换新版服务端与静态包（仍 IP 直连，未上线）。** 步骤 14 的本机面已补齐：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号，以及 `GET/POST /api/v1/backups` 备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产（`c309001`）。14c 的 `GET /api/v1/export` 返回可被客户端 0.3.0 导入的账号级 JSON，并排除凭据、设备信息与分析归档；14d 的 `DELETE /api/v1/account` 只接受显式 `confirm:true`，在单事务中硬删除当前账号的业务行、分析归档、任务、同步台账与设备，并清理规范快照及旁车；多 active 账号且存在整库快照时返回 409，避免误删他人恢复副本。备份 HTTP 端点只暴露稳定 id 与元数据，不返回绝对路径。14d 前端「先删服务端、成功后清本机」入口已随 2026-11-11 web 包部署；真机验收未在本轮记录中确认。域名已购、阿里云备案初审已通过、**备案号未下发**（因此不得宣称已上线，也不能用域名对外提供服务）。
+服务端 P3 已完成（8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`），并**于 2026-11-04 以 IP 直连方式部署到阿里云 ECS（Nginx + systemd + 真实 DeepSeek Key）并通过联调验收——仅内部调试，不得对外宣称「已上线」**。P4 已开工：步骤 11（数据历史化）2026-11-04 完成，步骤 12（P4a 账号 + 增量同步，12a–12f）2026-11-05 **本机完成并验收、已推送到 `origin/main`，服务端 2026-11-06 已部署**（服务器已升到 Node v22.19.0，`node:sqlite` 可用）。**步骤 13（P4b 服务端 SQL 聚合 + AI 综合分析）2026-11-05 在本机完成并验证，源码与文档已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**：事实包 v2 → 单次模型调用 → 模型只写文字（数字全来自 SQL 且有白名单校验）；四个 `/api/v1` 接口（分析生成 / 事实包 / 归档列表 / 归档详情）、每日简报 job（默认关闭、进程内调度）、报告归档 365 天保留；前端 `/reports` 新增「服务端综合分析」块、设置页新增「每日简报」卡片。**本机已用真实 DeepSeek Key 验证 chat / report / 综合分析三条链路（2026-11-05）**：分析首次 5.7 s、同参 `cached`、`force` 重生成、正文无英文字段名；联调暴露的「模型偶尔写 6 段导致 502、正文夹带英文字段名」已修（`18d5f77`：内容不合规带原因重试一次）。**该结论只适用于本机；线上已换新版服务端与静态包（仍 IP 直连，未上线）。** 步骤 14 的本机面已补齐：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号，以及 `GET/POST /api/v1/backups` 备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产（`c309001`）。14c 的 `GET /api/v1/export` 返回可被客户端 0.3.0 导入的账号级 JSON，并排除凭据、设备信息与分析归档；14d 的 `DELETE /api/v1/account` 只接受显式 `confirm:true`，在单事务中硬删除当前账号的业务行、分析归档、任务、同步台账与设备，并清理规范快照及旁车；多 active 账号且存在整库快照时返回 409，避免误删他人恢复副本。备份 HTTP 端点只暴露稳定 id 与元数据，不返回绝对路径。14d 前端「先删服务端、成功后清本机」入口已随 2026-11-11 web 包部署；真机验收未在本轮记录中确认。域名已购、阿里云备案初审已通过、**备案号未下发**（因此不得宣称已上线，也不能用域名对外提供服务）。Android/P5 已补齐 `app/android/` Capacitor 8.6.0 工程、移动端 API 桥接、USB 安装脚本和服务端 `https://localhost` CORS 白名单；本地已通过 `build:mobile` + `cap sync android`，但当前开发机仍是 JDK 8、无 adb、无 Android SDK，因此**尚未编译 APK、尚未真机验收**。
 
 下一步（2026-11-06 更正口径）：**步骤 10 不再整步等备案号**。①**已完成（2026-11-06 / 11-07）**：服务器升 Node 22 LTS（`/opt/node22` v22.19.0）、建 `/var/lib/persist` + systemd `ReadWritePaths`、每日 `VACUUM INTO` 备份（`persist-backup.timer` 每日 03:00）、上传 `shared/dist` + `server/dist` 并部署步骤 12/13、前端产物上传（2026-11-07 14:14）；**未走 3100 端口预演，改为备份先行 + 版本化目录（`/opt/persist-next`）**。②**已完成（2026-11-10）**：SSH 仅密钥 + 禁用密码 + `fail2ban` 已启用并验证；安全组 3389 入方向规则已由用户删除，外部复验为超时不可达，22/80 正常。③**必须等备案号**：域名解析、443、证书、HTTP→HTTPS、页脚备案号、「已上线」表述。④14b / 14c / 14d 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产（停机 501 ms；部署后备份实跑 `integrity:"ok"`）；Nginx 根路径与 `/settings` 均 200，5 条新端点未鉴权请求均 401。逐项拆解见 [`HANDOFF.md`](HANDOFF.md) §13.3 与 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) §6。
 
@@ -34,7 +34,7 @@
 ## 目录
 
 ```text
-app/      React + Vite Web 客户端（web 产物 app/dist，生产挂在 /app/；mobile 产物 app/dist-mobile，USB 安装）
+app/      React + Vite Web 客户端（web 产物 app/dist，生产挂在 /app/；mobile 产物 app/dist-mobile；app/android 为 Capacitor 8.6.0 Android 工程，USB 安装）
 landing/  对外落地页与产品介绍首页（/ 与 /home.html，由另一 Agent 维护视觉）
 server/   Fastify 服务端：P3 的 /api/health、SSE /api/chat、POST /api/report；步骤 12 的 /api/v1/devices*、/api/v1/sync/* + SQLite；步骤 13 的 /api/v1/analysis/*、/api/v1/reports* + 每日简报 job + 报告归档（12/13 均已部署）；14b 恢复 / 14c 导出 / 14d 删除账号 / 备份列表与手动创建端点已于 2026-11-10 部署到生产
 shared/   跨端共享纯 TS 契约（`@persist/shared`）：同步实体与接口契约（步骤 12c）、综合分析契约（步骤 13），前后端同源，`shared/dist` 已 gitignore
@@ -53,6 +53,10 @@ npm run dev:mobile -- --port 4173  # owner 完整模式；/api 代理到 127.0.0
 npm run dev -- --port 4174         # web 入口；只允许 demo / guest
 npm run build                      # web 产物使用 /app/ base；部署到 /var/www/persist/app
 npm run preview                    # 本地预览 /app/
+npm run build:mobile               # mobile 构建；输出 dist-mobile，默认 owner
+npm run android:check              # 检查 API origin、JDK 21+、adb 与单台授权设备
+npm run android:sync               # build:mobile + cap sync android
+npm run android:usb                # 构建、同步并通过 USB 安装 debug APK
 ```
 
 常用检查（提交前必跑，门禁见 `docs/工程约定.md` §7）：
@@ -60,7 +64,7 @@ npm run preview                    # 本地预览 /app/
 ```powershell
 npm run lint
 npm run typecheck
-npm test               # 356 条 / 28 个文件
+npm test               # 359 条 / 29 个文件
 npx playwright test    # 64 用例 × 2 项目 = 128 次执行，11 个文件
 npm run build
 npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；需先起无 Key 后端，改布局/弹层时跑
@@ -73,7 +77,7 @@ npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；�
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
-npm run typecheck && npm test && npm run build   # 229 条 / 26 个文件
+npm run typecheck && npm test && npm run build   # 234 条 / 27 个文件
 Copy-Item .env.example .env    # 本机联调才填 DEEPSEEK_API_KEY；.env 不入库、用完即删
 node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动读 .env，带 Key 必须加 --env-file，否则 /api/chat、/api/report 返回 503
 ```

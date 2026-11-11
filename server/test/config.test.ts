@@ -1,6 +1,11 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_DEEPSEEK_BASE_URL, loadConfig } from '../src/config.js'
+import {
+  DEFAULT_ALLOWED_ORIGINS,
+  DEFAULT_DEEPSEEK_BASE_URL,
+  loadConfig,
+  parseAllowedOrigins,
+} from '../src/config.js'
 
 function env(values: Record<string, string>): NodeJS.ProcessEnv {
   return values as unknown as NodeJS.ProcessEnv
@@ -16,6 +21,7 @@ describe('loadConfig', () => {
     expect(config.aiTimeoutMs).toBe(25_000)
     expect(config.aiMaxRetries).toBe(1)
     expect(config.rateLimitMax).toBe(20)
+    expect(config.allowedOrigins).toEqual([...DEFAULT_ALLOWED_ORIGINS])
   })
 
   it('解析环境变量并去掉密钥首尾空白', () => {
@@ -43,6 +49,18 @@ describe('loadConfig', () => {
     expect(config.rateLimitMax).toBe(5)
     expect(config.rateLimitWindowMs).toBe(60_000)
     expect(config.trustProxy).toBe(false)
+  })
+
+  it('CORS 白名单只保留合法 origin，并支持环境变量覆盖', () => {
+    expect(
+      parseAllowedOrigins('https://owner.example/, http://192.0.2.10:8080, https://owner.example'),
+    ).toEqual(['https://owner.example', 'http://192.0.2.10:8080'])
+    expect(parseAllowedOrigins('https://bad.example/api, ftp://bad.example')).toEqual([
+      ...DEFAULT_ALLOWED_ORIGINS,
+    ])
+    expect(
+      loadConfig(env({ PERSIST_ALLOWED_ORIGINS: 'https://owner.example/' })).allowedOrigins,
+    ).toEqual(['https://owner.example'])
   })
 
   it('非法数字回落默认值，端口被限制在合法范围', () => {

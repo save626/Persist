@@ -18,6 +18,7 @@ server/data/
 .env
 .env.*
 !.env.example
+!app/.env.mobile.example
 *.local
 *.local.md
 

@@ -69,6 +69,25 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     })
   }
 
+  const allowedOrigins = new Set(options.config.allowedOrigins)
+  app.addHook('onRequest', async (request, reply) => {
+    const origin = request.headers.origin
+    if (typeof origin !== 'string' || !allowedOrigins.has(origin)) {
+      if (request.method === 'OPTIONS' && request.url.startsWith('/api/')) {
+        return reply.code(403).send(errorBody('cors_forbidden', '当前来源不允许访问 API。'))
+      }
+      return
+    }
+
+    reply.header('access-control-allow-origin', origin)
+    reply.header('vary', 'Origin')
+    reply.header('access-control-allow-methods', 'GET,POST,DELETE,OPTIONS')
+    reply.header('access-control-allow-headers', 'accept,authorization,content-type')
+    reply.header('access-control-max-age', '600')
+    if (request.method === 'OPTIONS') {
+      return reply.code(204).send()
+    }
+  })
   app.setErrorHandler((error: FastifyError, request, reply) => {
     request.log.error({ err: error }, 'unhandled error')
     const status = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500
