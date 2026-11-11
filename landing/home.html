@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#F4F7F9">
+<title>Persist · 同一天，看清自己</title>
+<meta name="description" content="健身、饮食、学习记在一个地方，晚上让 AI 把这一天的数字写成一段人话。记录优先留在你自己的设备上。">
+<meta name="robots" content="index,follow">
+<style>
+  /* ---------- 1. 基础变量与重置 ---------- */
+  :root{
+    --bg:#F4F7F9; --surface:#FBFCFD; --strong:#FFFFFF;
+    --ink:#202830; --soft:#4D5965; --muted:#55616D; --faint:#616D79;
+    --line:#DFE5EB; --line2:#CBD5DE;
+    --accent:#6D9FBD; --accent-deep:#467692; --accent-ink:#3C6883; --accent-soft:#E9F2F7;
+    --fit:#6D9FBD; --food:#9A897F; --study:#7F8FAC;
+    --wrap:1120px;
+    --r-lg:22px; --r-md:16px; --r-sm:11px;
+    --sh-1:0 1px 2px rgba(32,40,48,.04);
+    --sh-2:0 1px 2px rgba(32,40,48,.05),0 10px 28px rgba(32,40,48,.06);
+    --sh-3:0 1px 2px rgba(32,40,48,.05),0 22px 56px rgba(32,40,48,.10);
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:16px;line-height:1.75;
+    -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    font-variant-numeric:tabular-nums;
+    overflow-x:hidden;
+  }
+  h1,h2,h3,p,figure,ul,ol{margin:0}
+  ul,ol{padding:0;list-style:none}
+  a{color:inherit;text-decoration:none}
+  svg{display:block}
+  :focus-visible{outline:2px solid var(--accent-deep);outline-offset:3px;border-radius:4px}
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+      clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+  .skip{position:absolute;left:16px;top:-64px;z-index:100;padding:10px 16px;border-radius:10px;
+        background:var(--ink);color:#fff;font-size:14px;transition:top .18s ease}
+  .skip:focus{top:16px}
+
+  /* ---------- 2. 版面骨架 ---------- */
+  .wrap{width:100%;max-width:var(--wrap);margin:0 auto;padding:0 clamp(20px,4.6vw,40px)}
+  .band{padding:clamp(64px,9vh,116px) 0;position:relative}
+  .band--plain{background:var(--surface);border-block:1px solid var(--line)}
+  .band--tint{background:#EDF2F6}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:9px;
+    font-size:12px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:18px;
+  }
+  .eyebrow::before{content:"";width:20px;height:1px;background:var(--line2)}
+  h2{
+    font-size:clamp(25px,3.5vw,40px);font-weight:600;line-height:1.28;
+    letter-spacing:-.022em;max-width:20em;
+  }
+  .lead{
+    margin-top:22px;font-size:clamp(15px,1.28vw,17px);line-height:1.95;
+    color:var(--soft);max-width:34em;
+  }
+  .lead + .lead{margin-top:10px}
+  .notes{margin-top:14px;font-size:13.5px;color:var(--faint)}
+
+  /* ---------- 3. 顶栏 ---------- */
+  .nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(244,247,249,0);backdrop-filter:blur(0px);
+    border-bottom:1px solid transparent;
+    transition:background .3s ease,border-color .3s ease,backdrop-filter .3s ease;
+  }
+  .nav.is-stuck{
+    background:rgba(244,247,249,.88);backdrop-filter:saturate(150%) blur(14px);
+    -webkit-backdrop-filter:saturate(150%) blur(14px);
+    border-bottom-color:var(--line);
+  }
+  .nav-in{
+    display:flex;align-items:center;gap:24px;
+    height:clamp(58px,7vh,72px);
+  }
+  .brand{
+    font-size:15px;font-weight:600;letter-spacing:.24em;margin-right:auto;
+    display:inline-flex;align-items:center;gap:10px;color:var(--ink);
+  }
+  .brand i{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
+  .nav-links{display:flex;align-items:center;gap:clamp(16px,2.2vw,30px)}
+  .nav-links a{
+    font-size:14px;color:var(--soft);padding:6px 0;position:relative;
+    transition:color .2s ease;
+  }
+  .nav-links a::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
+    background:var(--accent-deep);transform:scaleX(0);transform-origin:left;
+    transition:transform .25s ease;
+  }
+  .nav-links a:hover{color:var(--ink)}
+  .nav-links a:hover::after{transform:scaleX(1)}
+
+  /* ---------- 4. 按钮 ---------- */
+  .btn{
+    --btn-bg:var(--strong);--btn-fg:var(--ink);--btn-bd:var(--line2);
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    font:inherit;font-size:15px;font-weight:500;line-height:1;
+    padding:15px 26px;border-radius:13px;cursor:pointer;
+    color:var(--btn-fg);background:var(--btn-bg);
+    border:1px solid var(--btn-bd);
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset,var(--sh-1);
+    transition:transform .2s cubic-bezier(.2,.7,.3,1),box-shadow .25s ease,
+               background .2s ease,border-color .2s ease;
+    white-space:nowrap;
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 1px 0 rgba(255,255,255,.9) inset,var(--sh-2)}
+  .btn:active{transform:translateY(0);box-shadow:0 1px 0 rgba(255,255,255,.55) inset,var(--sh-1)}
+  .btn--primary{
+    --btn-bg:linear-gradient(180deg,#4A7A96 0%,#44738F 58%,#406E89 100%);
+    --btn-fg:#FFFFFF;--btn-bd:rgba(70,118,146,.45);
+    box-shadow:0 1px 0 rgba(255,255,255,.34) inset,0 -1px 0 rgba(42,80,102,.18) inset,0 8px 22px rgba(109,159,189,.30);
+  }
+  .btn--primary:hover{box-shadow:0 1px 0 rgba(255,255,255,.34) inset,0 -1px 0 rgba(42,80,102,.18) inset,0 12px 28px rgba(109,159,189,.38)}
+  .btn--sm{padding:10px 17px;font-size:13.5px;border-radius:11px}
+  .btn--ghost{--btn-bg:transparent;--btn-bd:transparent;box-shadow:none;color:var(--soft)}
+  .btn--ghost:hover{color:var(--ink);background:rgba(255,255,255,.6);box-shadow:var(--sh-1)}
+  .btn__arrow{width:15px;height:15px;flex:none;opacity:.85}
+
+  /* ---------- 5. 首屏 ---------- */
+  .hero{
+    position:relative;overflow:hidden;
+    background:
+      radial-gradient(120% 78% at 50% -14%,#FFFFFF 0%,rgba(255,255,255,0) 62%),
+      linear-gradient(180deg,#FCFDFE 0%,#F4F7F9 100%);
+    padding-top:clamp(40px,7vh,84px);
+    padding-bottom:clamp(56px,8vh,104px);
+  }
+  .hero::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(closest-side,rgba(109,159,189,.16),rgba(109,159,189,0)),
+      radial-gradient(closest-side,rgba(127,143,172,.12),rgba(127,143,172,0));
+    background-size:520px 520px,420px 420px;
+    background-position:88% 12%,12% 84%;
+    background-repeat:no-repeat;
+    opacity:.9;
+  }
+  .hero-grid{
+    position:relative;display:grid;
+    grid-template-columns:1.02fr .98fr;
+    gap:clamp(28px,5vw,64px);align-items:center;
+  }
+  .hero h1{
+    font-size:clamp(36px,5.6vw,62px);font-weight:600;line-height:1.16;
+    letter-spacing:-.035em;margin-top:6px;
+  }
+  .hero-sub{
+    margin-top:24px;font-size:clamp(15px,1.3vw,17.5px);line-height:1.95;
+    color:var(--soft);max-width:30em;
+  }
+  .hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
+  .hero-note{
+    margin-top:20px;font-size:13px;color:var(--faint);
+    display:flex;align-items:center;gap:8px;
+  }
+  .hero-note::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent);flex:none}
+
+  /* 今日卡片（纯 CSS 示意，无图片） */
+  .day{
+    position:relative;background:var(--surface);
+    border:1px solid rgba(255,255,255,.95);border-radius:var(--r-lg);
+    box-shadow:var(--sh-3),0 0 0 1px rgba(223,229,235,.7);
+    padding:clamp(18px,2.3vw,26px);
+  }
+  .day::after{
+    content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(160deg,rgba(255,255,255,.85),rgba(255,255,255,0) 40%);
+  }
+  .day-h{
+    display:flex;align-items:center;gap:10px;font-size:12.5px;
+    color:var(--muted);letter-spacing:.02em;position:relative;
+  }
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    background:var(--accent-soft);color:var(--accent-ink);font-size:11.5px;
+    letter-spacing:.08em;font-weight:500;
+  }
+  .day-list{margin-top:16px;display:grid;gap:9px;position:relative}
+  .day-row{
+    display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:11px;
+    padding:12px 13px;border-radius:var(--r-md);
+    background:var(--strong);border:1px solid var(--line);
+    transition:border-color .2s ease,transform .2s ease;
+  }
+  .day-row:hover{border-color:var(--line2);transform:translateX(2px)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .dot--fit{background:var(--fit)}
+  .dot--food{background:var(--food)}
+  .dot--study{background:var(--study)}
+  .day-k{font-size:12px;color:var(--muted);letter-spacing:.06em;width:2.4em;flex:none}
+  .day-v{font-size:13.5px;color:var(--ink);line-height:1.5;min-width:0}
+  .day-v em{font-style:normal;color:var(--muted);font-size:12px}
+  .day-s{font-size:11.5px;color:var(--faint);letter-spacing:.04em;flex:none}
+  .day-bar{margin-top:16px;position:relative}
+  .track{height:5px;border-radius:999px;background:#EDF2F6;overflow:hidden}
+  .track i{display:block;height:100%;border-radius:999px;
+           background:linear-gradient(90deg,#7FAFCA,#467692)}
+  .day-bar-t{
+    margin-top:9px;display:flex;justify-content:space-between;
+    font-size:11.5px;color:var(--faint);letter-spacing:.02em;
+  }
+  .day-foot{
+    margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);
+    display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);
+    position:relative;
+  }
+  .day-foot svg{width:15px;height:15px;color:var(--accent-ink);flex:none}
+  .day-foot b{color:var(--ink);font-weight:500}
+  .day-flag{
+    position:absolute;right:0;top:-9px;font-size:10.5px;letter-spacing:.1em;
+    color:var(--faint);
+  }
+
+  /* ---------- 6. 问题区 ---------- */
+  .scatter{
+    display:grid;grid-template-columns:repeat(3,1fr);
+    gap:clamp(12px,1.6vw,20px);margin-top:clamp(30px,4vw,46px);
+  }
+  .scatter-card{
+    background:var(--strong);border:1px solid var(--line);border-radius:var(--r-md);
+    padding:20px 20px 18px;box-shadow:var(--sh-1);
+  }
+  .scatter-card:nth-child(2){transform:translateY(10px) rotate(-.5deg)}
+  .scatter-card:nth-child(3){transform:translateY(4px) rotate(.6deg)}
+  .scatter-app{font-size:11.5px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+  .scatter-val{margin-top:10px;font-size:16px;color:var(--ink);letter-spacing:-.01em}
+  .scatter-val span{color:var(--muted);font-size:13px}
+  .scatter-foot{
+    margin-top:clamp(34px,5vw,54px);display:grid;gap:12px;
+    padding-left:clamp(0px,2vw,8px);
+  }
+  .scatter-foot p{font-size:clamp(15px,1.5vw,19px);line-height:1.8;color:var(--soft);max-width:32em}
+  .scatter-foot p b{color:var(--ink);font-weight:600}
+  .scatter-foot p.hl{color:var(--ink);font-weight:500}
+
+  /* ---------- 7. 五步 ---------- */
+  .steps{
+    display:grid;grid-template-columns:repeat(5,1fr);
+    gap:clamp(10px,1.4vw,18px);margin-top:clamp(32px,4.4vw,52px);
+  }
+  .step{
+    position:relative;padding:22px 18px 20px;border-radius:var(--r-md);
+    background:var(--strong);border:1px solid var(--line);
+    box-shadow:var(--sh-1);
+    transition:border-color .25s ease,box-shadow .25s ease,transform .25s ease;
+  }
+  .step:hover{border-color:var(--line2);box-shadow:var(--sh-2);transform:translateY(-3px)}
+  .step-n{
+    font-size:11.5px;letter-spacing:.14em;color:var(--accent-ink);
+    font-weight:600;
+  }
+  .step-n::after{
+    content:"";display:block;width:18px;height:1px;background:var(--accent);
+    opacity:.5;margin-top:9px;
+  }
+  .step h3{margin-top:14px;font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+  .step p{margin-top:9px;font-size:13px;line-height:1.8;color:var(--soft)}
+
+  /* ---------- 8. 三个模块 ---------- */
+  .mods{
+    display:grid;grid-template-columns:repeat(3,1fr);
+    gap:clamp(14px,2vw,22px);margin-top:clamp(32px,4.4vw,52px);
+  }
+  .mod{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:clamp(22px,2.6vw,30px);box-shadow:var(--sh-2);
+    display:flex;flex-direction:column;
+    transition:transform .28s cubic-bezier(.2,.7,.3,1),box-shadow .28s ease;
+  }
+  .mod:hover{transform:translateY(-4px);box-shadow:var(--sh-3)}
+  .mod-ico{
+    width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+    background:var(--accent-soft);color:var(--accent-ink);
+    border:1px solid rgba(109,159,189,.22);margin-bottom:18px;
+  }
+  .mod-ico svg{width:21px;height:21px}
+  .mod--food .mod-ico{background:#F5F1ED;color:#7E6B5F;border-color:rgba(154,137,127,.24)}
+  .mod--study .mod-ico{background:#EEF0F6;color:#62718F;border-color:rgba(127,143,172,.24)}
+  .mod h3{font-size:clamp(17px,1.6vw,20px);font-weight:600;letter-spacing:-.015em;line-height:1.5}
+  .mod p{margin-top:11px;font-size:13.5px;line-height:1.85;color:var(--soft)}
+  .mod ul{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:grid;gap:8px}
+  .mod li{
+    font-size:12.5px;color:var(--muted);display:flex;align-items:baseline;gap:8px;
+  }
+  .mod li::before{
+    content:"";width:4px;height:4px;border-radius:50%;background:var(--line2);
+    flex:none;translate:0 -2px;
+  }
+
+  /* ---------- 9. AI 报告 ---------- */
+  .report-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,4.4vw,60px);
+    align-items:center;margin-top:8px;
+  }
+  .points{margin-top:clamp(24px,3vw,34px);display:grid;gap:2px}
+  .point{padding:17px 0;border-top:1px solid var(--line);display:grid;gap:6px}
+  .point:last-child{border-bottom:1px solid var(--line)}
+  .point-t{font-size:14.5px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .point-t span{
+    font-size:11px;font-weight:500;letter-spacing:.08em;color:var(--accent-ink);
+    background:var(--accent-soft);padding:2.5px 8px;border-radius:6px;
+  }
+  .point p{font-size:13.5px;line-height:1.8;color:var(--soft)}
+  .rpt{
+    background:var(--strong);border:1px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:var(--sh-3);overflow:hidden;
+  }
+  .rpt-h{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:16px 20px;border-bottom:1px solid var(--line);background:var(--surface);
+  }
+  .rpt-h b{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+  .rpt-h span{font-size:11px;color:var(--faint);letter-spacing:.1em}
+  .rpt-body{padding:8px 20px 4px}
+  .rpt-line{
+    display:flex;align-items:center;gap:12px;padding:14px 0;
+    border-bottom:1px solid #EEF2F6;
+  }
+  .rpt-line:last-child{border-bottom:0}
+  .rpt-l{font-size:12.5px;color:var(--muted);width:6.2em;flex:none}
+  .rpt-v{font-size:14px;color:var(--ink);margin-right:auto}
+  .rpt-v b{font-weight:600}
+  .rpt-v em{font-style:normal;font-size:11.5px;color:var(--muted);margin-left:6px}
+  .rpt-src{
+    font-size:10.5px;letter-spacing:.08em;color:var(--accent-ink);
+    border:1px solid rgba(109,159,189,.3);border-radius:6px;padding:3px 7px;
+    background:var(--accent-soft);flex:none;
+  }
+  .rpt-foot{
+    padding:13px 20px;background:var(--surface);border-top:1px solid var(--line);
+    font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:8px;
+  }
+  .rpt-foot svg{width:13px;height:13px;flex:none;color:var(--accent-ink)}
+
+  /* ---------- 10. 长期 ---------- */
+  .scale{
+    margin-top:clamp(34px,4.4vw,54px);
+    display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(12px,1.8vw,22px);
+  }
+  .scale-item{
+    position:relative;padding-top:26px;
+  }
+  .scale-item::before{
+    content:"";position:absolute;left:0;top:6px;right:0;height:1px;background:var(--line2);
+  }
+  .scale-item::after{
+    content:"";position:absolute;left:0;top:2px;width:9px;height:9px;border-radius:50%;
+    background:var(--strong);border:1.5px solid var(--accent-deep);box-shadow:0 0 0 4px rgba(109,159,189,.12);
+  }
+  .scale-n{font-size:clamp(22px,2.6vw,30px);font-weight:600;letter-spacing:-.03em;line-height:1}
+  .scale-n small{font-size:.5em;font-weight:500;color:var(--muted);margin-left:3px}
+  .scale-t{margin-top:9px;font-size:14px;color:var(--ink)}
+  .scale-p{margin-top:5px;font-size:12.5px;color:var(--muted);line-height:1.7}
+  .long-q{
+    margin-top:clamp(30px,4vw,44px);font-size:clamp(17px,1.9vw,23px);
+    color:var(--ink);letter-spacing:-.015em;line-height:1.6;
+  }
+
+  /* ---------- 11. 隐私 ---------- */
+  .priv{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,2vw,24px);
+    margin-top:clamp(30px,4vw,46px);
+  }
+  .priv-item{
+    background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.9);
+    border-radius:var(--r-md);padding:24px 22px;box-shadow:var(--sh-1);
+  }
+  .priv-ico{
+    width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:var(--strong);border:1px solid var(--line);color:var(--accent-ink);
+    margin-bottom:15px;
+  }
+  .priv-ico svg{width:17px;height:17px}
+  .priv-item h3{font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .priv-item p{margin-top:9px;font-size:13px;line-height:1.85;color:var(--soft)}
+
+  /* ---------- 12. 适合谁 ---------- */
+  .fit{
+    display:grid;grid-template-columns:1fr 1fr;gap:clamp(18px,3vw,44px);
+    margin-top:clamp(30px,4vw,46px);
+  }
+  .fit-col h3{
+    font-size:13px;letter-spacing:.12em;color:var(--muted);font-weight:500;
+    padding-bottom:12px;border-bottom:1px solid var(--line);
+  }
+  .fit-col ul{margin-top:6px}
+  .fit-col li{
+    padding:14px 0;border-bottom:1px solid var(--line);
+    font-size:14.5px;line-height:1.7;color:var(--ink);
+    display:flex;gap:11px;align-items:flex-start;
+  }
+  .fit-col li::before{
+    flex:none;width:16px;height:16px;margin-top:3px;border-radius:50%;
+    display:grid;place-items:center;font-size:10px;line-height:1;
+  }
+  .fit-yes li::before{content:"";background:var(--accent-soft);
+    box-shadow:inset 0 0 0 1px rgba(109,159,189,.35)}
+  .fit-no li{color:var(--soft)}
+  .fit-no li::before{content:"";background:#F0F2F4;box-shadow:inset 0 0 0 1px var(--line2)}
+
+  /* ---------- 13. 收尾 + 页脚 ---------- */
+  .beta{text-align:center;padding-block:clamp(64px,9vh,110px)}
+  .beta h2{margin-inline:auto;max-width:16em}
+  .beta .lead{margin-inline:auto}
+  .beta-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:max(30px,4vw)}
+  .beta-note{margin-top:18px;font-size:12.5px;color:var(--faint)}
+  footer{background:#EAEFF3;border-top:1px solid var(--line);padding:clamp(38px,5vw,58px) 0 clamp(30px,4vw,44px)}
+  .foot-in{
+    display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;justify-content:space-between;
+  }
+  .foot-brand{font-size:14px;font-weight:600;letter-spacing:.24em}
+  .foot-desc{margin-top:10px;font-size:12.5px;color:var(--muted);line-height:1.9}
+  .foot-desc span{display:block}
+  .foot-right{text-align:right;font-size:12.5px;color:var(--muted);line-height:1.9}
+  .foot-right a{color:var(--soft);border-bottom:1px solid var(--line2);padding-bottom:1px;transition:color .2s,border-color .2s}
+  .foot-right a:hover{color:var(--accent-ink);border-bottom-color:var(--accent-ink)}
+  .foot-line{
+    margin-top:32px;padding-top:22px;border-top:1px solid rgba(203,213,222,.7);
+    font-size:12px;color:var(--faint);letter-spacing:.02em;
+    display:flex;flex-wrap:wrap;gap:10px 20px;justify-content:space-between;
+  }
+
+  /* ---------- 14. 提示条 ---------- */
+  .toast{
+    position:fixed;left:50%;bottom:clamp(20px,4vh,36px);z-index:90;
+    transform:translate(-50%,16px);opacity:0;pointer-events:none;
+    max-width:min(460px,calc(100vw - 32px));
+    background:rgba(32,40,48,.96);color:#F2F6F9;
+    border-radius:14px;padding:14px 18px;
+    font-size:13.5px;line-height:1.7;
+    box-shadow:0 12px 34px rgba(32,40,48,.28);
+    transition:opacity .28s ease,transform .28s cubic-bezier(.2,.7,.3,1);
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  /* ---------- 15. 滚动淡入 ---------- */
+  html.js .reveal{opacity:0;transform:translateY(18px);
+    transition:opacity .75s cubic-bezier(.2,.7,.3,1),transform .75s cubic-bezier(.2,.7,.3,1)}
+  html.js .reveal.in{opacity:1;transform:none}
+  html.js .reveal.d1{transition-delay:.06s}
+  html.js .reveal.d2{transition-delay:.12s}
+  html.js .reveal.d3{transition-delay:.18s}
+
+  /* ---------- 16. 响应式 ---------- */
+  @media (max-width:1024px){
+    .hero-grid{grid-template-columns:1fr;gap:clamp(32px,5vh,48px)}
+    .day{max-width:560px}
+    .steps{grid-template-columns:repeat(3,1fr)}
+    .report-grid{grid-template-columns:1fr;gap:clamp(30px,4vh,44px)}
+    .rpt{max-width:620px}
+  }
+  @media (max-width:860px){
+    .nav-links{display:none}
+    .mods{grid-template-columns:1fr}
+    .scatter{grid-template-columns:1fr}
+    .scatter-card:nth-child(2),.scatter-card:nth-child(3){transform:none}
+    .priv{grid-template-columns:1fr}
+    .fit{grid-template-columns:1fr;gap:clamp(26px,4vh,38px)}
+    .scale{grid-template-columns:1fr;gap:0}
+    .scale-item{padding:0 0 22px 30px}
+    .scale-item::before{left:4px;top:6px;bottom:0;right:auto;width:1px;height:auto}
+    .scale-item::after{top:4px;left:0}
+    .scale-item:last-child{padding-bottom:0}
+    .scale-item:last-child::before{display:none}
+    .foot-in{flex-direction:column;gap:22px}
+    .foot-right{text-align:left}
+  }
+  @media (max-width:600px){
+    .steps{grid-template-columns:1fr}
+    .step{display:grid;grid-template-columns:auto 1fr;gap:0 16px;padding:18px}
+    .step-n{grid-row:1 / span 2;padding-top:2px}
+    .step-n::after{display:none}
+    .step h3{margin-top:0}
+    .step p{grid-column:2}
+    .hero-actions .btn{flex:1 1 auto}
+    .day-flag{display:none}
+  }
+
+  /* ---------- 17. 降级 ---------- */
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    html.js .reveal{opacity:1;transform:none;transition:none}
+    *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;
+      transition-duration:.001ms !important}
+    .btn:hover,.step:hover,.mod:hover,.day-row:hover{transform:none}
+  }
+  @media print{
+    .nav,.toast{display:none}
+    body{background:#fff}
+    .band,.band--plain,.band--tint{background:#fff;border:0}
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><i aria-hidden="true"></i>PERSIST</a>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#product">产品</a>
+      <a href="#how">怎么工作</a>
+      <a href="#report">AI 报告</a>
+      <a href="#privacy">隐私</a>
+    </nav>
+    <button class="btn btn--sm" type="button" data-enter="beta">申请内测</button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ================= S1 首屏 ================= -->
+  <section class="hero" id="top">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow reveal">个人记录与 AI 复盘</span>
+        <h1 class="reveal d1">同一天，看清自己。</h1>
+        <p class="hero-sub reveal d2">
+          健身、饮食、学习，不再散在三个 App 里。先定今天的计划，晚上让 AI 把这一天的数字写成一段人话。
+        </p>
+        <div class="hero-actions reveal d3">
+          <button class="btn btn--primary" type="button" data-enter="demo">
+            查看演示
+            <svg class="btn__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6"/>
+            </svg>
+          </button>
+          <button class="btn" type="button" data-enter="blank">自己体验</button>
+        </div>
+        <p class="hero-note reveal d3">内测中 · 不开放注册</p>
+      </div>
+
+      <figure class="day reveal d1" aria-label="示例：一天里的三条记录">
+        <figcaption class="day-h">
+          <span class="pill">今日</span>
+          <span>11 月 10 日 星期二</span>
+          <span class="day-flag">示例记录</span>
+        </figcaption>
+        <ul class="day-list">
+          <li class="day-row">
+            <span class="dot dot--fit" aria-hidden="true"></span>
+            <span class="day-k">健身</span>
+            <span class="day-v">深蹲 80 kg × 3 组 <em>RPE 7</em></span>
+            <span class="day-s">完成</span>
+          </li>
+          <li class="day-row">
+            <span class="dot dot--food" aria-hidden="true"></span>
+            <span class="day-k">饮食</span>
+            <span class="day-v">午餐 620 kcal <em>蛋白 38 g</em></span>
+            <span class="day-s">已记</span>
+          </li>
+          <li class="day-row">
+            <span class="dot dot--study" aria-hidden="true"></span>
+            <span class="day-k">学习</span>
+            <span class="day-v">背 30 词 <em>复习 42 词</em></span>
+            <span class="day-s">已记</span>
+          </li>
+        </ul>
+        <div class="day-bar">
+          <div class="track"><i style="width:67%"></i></div>
+          <div class="day-bar-t"><span>今日计划 3 项</span><span>完成 2 项</span></div>
+        </div>
+        <p class="day-foot">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+            <circle cx="12" cy="12" r="3.6"/>
+          </svg>
+          晚间复盘 · <b>AI 已生成</b>
+        </p>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= S2 问题 ================= -->
+  <section class="band" id="problem">
+    <div class="wrap">
+      <span class="eyebrow reveal">问题</span>
+      <h2 class="reveal">你记了很多，但拼不起来。</h2>
+      <p class="lead reveal d1">健身在训练 App，饮食在热量 App，学习在备忘录。三个都记得挺好，只是它们互相不认识。</p>
+
+      <div class="scatter">
+        <div class="scatter-card reveal">
+          <div class="scatter-app">训练 App</div>
+          <div class="scatter-val">卧推 60 kg <span>· 4 组</span></div>
+        </div>
+        <div class="scatter-card reveal d1">
+          <div class="scatter-app">热量 App</div>
+          <div class="scatter-val">午餐 620 kcal <span>· 蛋白 38 g</span></div>
+        </div>
+        <div class="scatter-card reveal d2">
+          <div class="scatter-app">备忘录</div>
+          <div class="scatter-val">背 30 个词 <span>· 复习 42</span></div>
+        </div>
+      </div>
+
+      <div class="scatter-foot">
+        <p class="reveal">这三条记录，本来属于同一天。</p>
+        <p class="reveal d1">分开看，它们只是三条流水账；合起来，才能回答那个真正的问题。</p>
+        <p class="hl reveal d2">三个月后，你只记得「我好像练过」，说不出「我变了没有」。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= S3 怎么工作 ================= -->
+  <section class="band band--plain" id="how">
+    <div class="wrap">
+      <span class="eyebrow reveal">它是怎么工作的</span>
+      <h2 class="reveal">一个地方，装下一天。</h2>
+      <p class="lead reveal d1">
+        Persist 是个人自用的记录工具。先定今天的计划，再记健身、饮食、学习，晚上复盘。AI 把这一天的数字，写成一段人话。
+      </p>
+
+      <ol class="steps">
+        <li class="step reveal">
+          <span class="step-n">01 建档</span>
+          <h3>写下你的基线</h3>
+          <p>目标、作息、训练和饮食习惯。一次就够，之后随时可改。</p>
+        </li>
+        <li class="step reveal d1">
+          <span class="step-n">02 计划</span>
+          <h3>今天只做三件事</h3>
+          <p>练什么、吃什么、学什么。定完就收，不再往下堆。</p>
+        </li>
+        <li class="step reveal d2">
+          <span class="step-n">03 记录</span>
+          <h3>一组、一餐、一段</h3>
+          <p>几秒记完。不追求完整，真实就行，记漏了也能补。</p>
+        </li>
+        <li class="step reveal d3">
+          <span class="step-n">04 复盘</span>
+          <h3>今天哪里断了</h3>
+          <p>今天做到什么，哪里断了，明天先改哪一件。</p>
+        </li>
+        <li class="step reveal d3">
+          <span class="step-n">05 报告</span>
+          <h3>数字变成一句话</h3>
+          <p>7 天看节奏，30 天看趋势，90 天看变化。</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ================= S4 三个模块 ================= -->
+  <section class="band" id="product">
+    <div class="wrap">
+      <span class="eyebrow reveal">三个模块</span>
+      <h2 class="reveal">只记该记的。</h2>
+      <p class="lead reveal d1">不是体检表，不用填满。每个模块只留几个真正会影响判断的字段。</p>
+
+      <div class="mods">
+        <article class="mod mod--fit reveal">
+          <div class="mod-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9v6M7 6.5v11M17 6.5v11M20 9v6M7 12h10"/>
+            </svg>
+          </div>
+          <h3>健身，记训练，不记汗水。</h3>
+          <p>组数、重量、RPE，一次点选。下次训练，知道该加多少。</p>
+          <ul>
+            <li>动作 + 组数 + 重量 + RPE</li>
+            <li>上次同动作自动带出</li>
+            <li>训练量按周汇总</li>
+          </ul>
+        </article>
+
+        <article class="mod mod--food reveal d1">
+          <div class="mod-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.5 11h17a8.5 8.5 0 0 1-17 0Z"/>
+              <path d="M8 7.5c0-1.2.9-1.7.9-2.8M12 7.5c0-1.2.9-1.7.9-2.8M16 7.5c0-1.2.9-1.7.9-2.8"/>
+            </svg>
+          </div>
+          <h3>饮食，记吃进去的，不评判你。</h3>
+          <p>热量、蛋白、饮水，一餐一笔。外食也能估，估错能改。</p>
+          <ul>
+            <li>热量 + 蛋白 + 饮水</li>
+            <li>外食可估算，随时修正</li>
+            <li>只做记录，不给分数</li>
+          </ul>
+        </article>
+
+        <article class="mod mod--study reveal d2">
+          <div class="mod-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/>
+              <path d="M8 7h8M8 10.5h5"/>
+            </svg>
+          </div>
+          <h3>学习，记投入，不记表演。</h3>
+          <p>新词、复习、正确率、时长。看的是累积，不是连续天数。</p>
+          <ul>
+            <li>时长 + 内容 + 正确率</li>
+            <li>复习量单独统计</li>
+            <li>不显示「连续 X 天」</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= S5 AI 报告 ================= -->
+  <section class="band band--plain" id="report">
+    <div class="wrap">
+      <div class="report-grid">
+        <div>
+          <span class="eyebrow reveal">AI 报告</span>
+          <h2 class="reveal">AI 写解读，数字有出处。</h2>
+          <p class="lead reveal d1">
+            不是 AI 猜的，是记录算的。报告里的每个数字，都由你的记录算出；每句话，都能点回原始记录。
+          </p>
+          <div class="points">
+            <div class="point reveal">
+              <div class="point-t">今日简报 <span>每天</span></div>
+              <p>今天发生了什么，明天先改哪一件。</p>
+            </div>
+            <div class="point reveal d1">
+              <div class="point-t">7 · 30 · 90 天 <span>三种尺度</span></div>
+              <p>节奏、趋势、变化，分开看，不混在一张图上。</p>
+            </div>
+            <div class="point reveal d2">
+              <div class="point-t">查看分析依据 <span>可回溯</span></div>
+              <p>点开任何一个数字，回到那天的记录。AI 不猜，也不替你下医学结论。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rpt reveal d1" aria-label="示例：一份 AI 报告">
+          <div class="rpt-h">
+            <b>7 天节奏</b>
+            <span>示例报告</span>
+          </div>
+          <div class="rpt-body">
+            <div class="rpt-line">
+              <span class="rpt-l">训练</span>
+              <span class="rpt-v"><b>4</b> 次 <em>比上周少 1 次</em></span>
+              <span class="rpt-src">依据</span>
+            </div>
+            <div class="rpt-line">
+              <span class="rpt-l">蛋白质</span>
+              <span class="rpt-v"><b>96</b> g <em>日均</em></span>
+              <span class="rpt-src">依据</span>
+            </div>
+            <div class="rpt-line">
+              <span class="rpt-l">学习</span>
+              <span class="rpt-v"><b>3.2</b> h <em>累计 5 天</em></span>
+              <span class="rpt-src">依据</span>
+            </div>
+            <div class="rpt-line">
+              <span class="rpt-l">饮水</span>
+              <span class="rpt-v"><b>1.9</b> L <em>日均</em></span>
+              <span class="rpt-src">依据</span>
+            </div>
+          </div>
+          <div class="rpt-foot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+              <circle cx="12" cy="12" r="3.6"/>
+            </svg>
+            数字来自当时的记录，点开可回到那一天
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= S6 长期 ================= -->
+  <section class="band" id="long">
+    <div class="wrap">
+      <span class="eyebrow reveal">长期</span>
+      <h2 class="reveal">一天一页，长期可见。</h2>
+      <p class="lead reveal d1">你今天记的，不是给今天看的。</p>
+
+      <div class="scale">
+        <div class="scale-item reveal">
+          <div class="scale-n">7<small>天</small></div>
+          <div class="scale-t">看出节奏</div>
+          <p class="scale-p">哪几天练了，哪几天断了，一周的起伏。</p>
+        </div>
+        <div class="scale-item reveal d1">
+          <div class="scale-n">30<small>天</small></div>
+          <div class="scale-t">看出趋势</div>
+          <p class="scale-p">重量、热量、时长，方向是往上还是往下。</p>
+        </div>
+        <div class="scale-item reveal d2">
+          <div class="scale-n">90<small>天</small></div>
+          <div class="scale-t">看出变化</div>
+          <p class="scale-p">三个月前和现在，究竟差在哪里。</p>
+        </div>
+      </div>
+
+      <p class="long-q reveal d2">Persist 不催你坚持，只帮你看清。</p>
+    </div>
+  </section>
+
+  <!-- ================= S7 隐私 ================= -->
+  <section class="band band--tint" id="privacy">
+    <div class="wrap">
+      <span class="eyebrow reveal">隐私</span>
+      <h2 class="reveal">记录是你的，不是平台的。</h2>
+      <p class="lead reveal d1">这件事从设计的第一天就定下来，不是后面补的条款。</p>
+
+      <div class="priv">
+        <div class="priv-item reveal">
+          <div class="priv-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="10" width="16" height="10" rx="2.4"/>
+              <path d="M8 10V7.2A4 4 0 0 1 16 7.2V10"/>
+            </svg>
+          </div>
+          <h3>本地优先</h3>
+          <p>记录优先留在你的设备上。同步是选项，不是前提。</p>
+        </div>
+        <div class="priv-item reveal d1">
+          <div class="priv-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.5 12s3.2-6 8.5-6 8.5 6 8.5 6-3.2 6-8.5 6-8.5-6-8.5-6Z"/>
+              <circle cx="12" cy="12" r="2.4"/>
+            </svg>
+          </div>
+          <h3>只读需要的</h3>
+          <p>AI 分析只读取这次需要的事实，不读取无关内容。</p>
+        </div>
+        <div class="priv-item reveal d2">
+          <div class="priv-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="9" cy="9" r="3.2"/>
+              <path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>
+              <path d="M16 7.5h5M16 12h3.5"/>
+            </svg>
+          </div>
+          <h3>没有观众</h3>
+          <p>没有社交，没有排行榜，没有陌生人看你的记录。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= S8 适合谁 ================= -->
+  <section class="band" id="who">
+    <div class="wrap">
+      <span class="eyebrow reveal">适合谁</span>
+      <h2 class="reveal">它适合这样的你。</h2>
+
+      <div class="fit">
+        <div class="fit-col fit-yes reveal">
+          <h3>它适合</h3>
+          <ul>
+            <li>你已经在记，但记在三个地方。</li>
+            <li>你想知道「这三个月到底有没有变化」。</li>
+            <li>你不想被连续天数绑架。</li>
+          </ul>
+        </div>
+        <div class="fit-col fit-no reveal d1">
+          <h3>它不适合</h3>
+          <ul>
+            <li>想要社交排名的人。</li>
+            <li>想要拍照自动算热量的人。</li>
+            <li>想要 AI 给治疗方案的人。</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="notes reveal d2">
+        另外几件我们主动不做的事：不做连续打卡和排行榜，不做社交，不靠拍照识别食物，
+        不给医学建议，不做开放聊天。AI 只在复盘时说话。
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= S9 内测 ================= -->
+  <section class="band band--plain beta" id="beta">
+    <div class="wrap">
+      <h2 class="reveal">现在在内测。</h2>
+      <p class="lead reveal d1">不开放注册。开放后，从这里直接进入产品。</p>
+      <div class="beta-actions reveal d2">
+        <button class="btn btn--primary" type="button" data-enter="product">
+          体验产品
+          <svg class="btn__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6"/>
+          </svg>
+        </button>
+        <button class="btn" type="button" data-enter="demo">查看演示</button>
+        <button class="btn" type="button" data-enter="blank">自己体验</button>
+      </div>
+      <p class="beta-note reveal d3">只用于内测邀请，不发营销邮件。</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-in">
+      <div>
+        <div class="foot-brand">PERSIST</div>
+        <div class="foot-desc">
+          <span>个人记录与 AI 复盘</span>
+          <span>内测中 · 不开放注册</span>
+        </div>
+      </div>
+      <div class="foot-right">
+        <div>记录，不需要完整。</div>
+        <div><a href="index.html">回到星空入口页</a></div>
+      </div>
+    </div>
+    <div class="foot-line">
+      <span>© 2026 Persist</span>
+      <span>记录优先留在你的设备上</span>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  document.documentElement.className = 'js';
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---------- 产品入口地址 ----------
+     待定：填上后三个按钮会直接跳转。
+     为空时只弹提示，绝不硬编码任何 IP 或临时地址。 */
+  var PRODUCT_URL = '';
+  /* 各入口在地址就位前，说明它到底会看到什么 */
+  var ENTRY_DESC = {
+    demo:    '演示入口还在准备中。开放后这里会直接进入一份预设数据的演示：记录已经填好，AI 报告也已经生成。',
+    blank:   '体验入口还在准备中。开放后这里会直接进入空白数据，由你自己填，AI 用本地规则回应。',
+    product: '产品入口还在准备中。开放后这里会直接进入 Persist。',
+    beta:    '内测按批次邀请，暂未开放线上提交。开放后这里可以留邮箱。'
+  };
+
+  var toast = document.getElementById('toast');
+  var toastTimer = 0;
+
+  function showToast(key) {
+    toast.textContent = ENTRY_DESC[key] || ENTRY_DESC.product;
+    toast.classList.add('on');
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () {
+      toast.classList.remove('on');
+    }, 5200);
+  }
+
+  document.addEventListener('click', function (ev) {
+    var el = ev.target.closest ? ev.target.closest('[data-enter]') : null;
+    if (!el) return;
+    var key = el.getAttribute('data-enter');
+    if (PRODUCT_URL) {
+      window.location.href = PRODUCT_URL;
+      return;
+    }
+    ev.preventDefault();
+    showToast(key);
+  });
+
+  /* ---------- 顶栏吸顶样式 ---------- */
+  var nav = document.getElementById('nav');
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(function () {
+      nav.classList.toggle('is-stuck', window.scrollY > 12);
+      ticking = false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- 滚动淡入 ---------- */
+  var items = document.querySelectorAll('.reveal');
+  if (!reduce.matches && 'IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    items.forEach(function (el) { io.observe(el); });
+  } else {
+    items.forEach(function (el) { el.classList.add('in'); });
+  }
+
+  /* 首屏元素立刻显示，不等观察器 */
+  window.requestAnimationFrame(function () {
+    document.querySelectorAll('.hero .reveal').forEach(function (el) {
+      el.classList.add('in');
+    });
+  });
+
+  /* ---------- 降动画偏好变化时同步 ---------- */
+  if (reduce.addEventListener) {
+    reduce.addEventListener('change', function () {
+      if (reduce.matches) {
+        items.forEach(function (el) { el.classList.add('in'); });
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
