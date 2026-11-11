@@ -8,6 +8,7 @@
        └─ home.html                 产品介绍首页（9 段，浅色低饱和）
             ├─ 查看演示 → /app/?mode=demo   完整预置数据 + 部署前固化 AI 内容
             └─ 自己体验 → /app/?mode=guest  空白数据 + 全部 AI Mock
+产品内返回 → /app/ 的“返回首页 / 首页”回到 home.html
 完整产品 → 作者自有移动端 App（USB 安装 build:mobile 包，默认 owner）
 ```
 
@@ -16,7 +17,7 @@
 | 文件                        | 行数  | 原始        | gzip          | 说明                                          |
 | --------------------------- | ----- | ----------- | ------------- | --------------------------------------------- |
 | `index.html`                | 688   | 27241 B     | **10411 B**   | 入口页，内联 CSS / JS / SVG，LF 换行、无 BOM  |
-| `home.html`                 | 1027  | 43330 B     | **12097 B**   | 介绍首页，纯 CSS/SVG，**零 `<img>`**          |
+| `home.html`                 | 1027  | 43003 B     | **12097 B**   | 介绍首页，纯 CSS/SVG，**零 `<img>`**          |
 | `assets/`                   | —     | 5565293 B   | —             | 星空底图 7 档 + LQIP 2 个，共 9 个文件        |
 | `preview/05`–`preview/11`   | —     | 6594954 B   | —             | 自测渲染截图，**证据不是营销素材**            |
 
@@ -91,10 +92,10 @@
 ├─ assets/starfield-*        星空底图
 └─ app/
    ├─ index.html             React web 入口（623 B）
-   └─ assets/index-BnhgTVnR.js 662959 B + index-BqIsigJr.css 152883 B
+   └─ assets/index-CFCYNhZY.js 663401 B + index-J1EyySLN.css 153579 B
 ```
 
-生产核验：`/`、`/home.html`、`/app/?mode=demo`、`/app/?mode=guest`、`/app/fitness`、`/app/reports` 均 `200`；JS / CSS / 星空图分别以正确 MIME 返回。Nginx 已 reload，后端未重启。
+生产核验：`/`、`/home.html`、`/app/?mode=demo`、`/app/?mode=guest`、`/app/fitness`、`/app/reports` 均 `200`；JS / CSS / 星空图分别以正确 MIME 返回。入口路由切换时 Nginx 已 reload；2026-11-11 返回首页静态包替换未重启后端、未 reload Nginx。web demo / guest 的“返回首页 / 首页”均回到 `/home.html`，用户已完成双端验收。
 
 仍未完成：
 

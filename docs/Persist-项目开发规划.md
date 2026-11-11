@@ -34,7 +34,7 @@ Persist 是一个**个人自用、本地优先**的「计划 → 记录 → 复�
 
 **现状（2026-11-09）**：前端八个页面全部可用并通过桌面端 + 移动端视觉验收，**前端已冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI）；业务数据写入本机 IndexedDB（刷新 / 关标签页 / 重开浏览器不丢），步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（`schemaVersion` 2），备份升级为 0.3.0 并兼容 0.2.0 / 0.1.0；AI 建档、报告文字与晨间简报文字在「档案页开启授权 + 服务端可用」时经自建代理调用真实 DeepSeek，失败自动回退本地 Mock 并如实标注来源。**服务端已于 2026-11-04 以 IP 直连方式部署（Nginx + systemd），仅内部调试，未宣称上线**。
 
-**下一步（2026-11-11 更新）**：P4 服务端面 14a–14d 已部署 / 启用。步骤 12/13 于 2026-11-05 本机完成并推送，服务端 2026-11-06、前端 2026-11-07 已部署。`owner / demo / guest` 运行模式、web / mobile 构建隔离、owner 三张真实 AI 观察卡、14d 前端删除入口与统一日期 / 时间选择器已提交 `ec8f16f`；2026-11-11 又部署 `/` 落地页 → `/home.html` 产品介绍首页 → `/app/` demo / guest，web 产物 `index-BnhgTVnR.js` 662959 B + `index-BqIsigJr.css` 152883 B，mobile 仅本机构建。当前基线为 server 26 文件 / 229 测试、app 28 文件 / 356 测试、E2E 128/128、视觉 102 + 1 张。**对外开放前必须先补 `/api/chat`、`/api/report` 服务端 token 门、来源限制、配额与审计，并完成生成式 AI 专门备案 / 安全评估；`?mode=` 不是安全边界。** 域名解析 / 443 / 证书 / 页脚备案号仍等备案号下发，整体未上线。
+**下一步（2026-11-11 更新）**：P4 服务端面 14a–14d 已部署 / 启用。步骤 12/13 于 2026-11-05 本机完成并推送，服务端 2026-11-06、前端 2026-11-07 已部署。`owner / demo / guest` 运行模式、web / mobile 构建隔离、owner 三张真实 AI 观察卡、14d 前端删除入口与统一日期 / 时间选择器已提交 `ec8f16f`；2026-11-11 又部署 `/` 落地页 → `/home.html` 产品介绍首页 → `/app/` demo / guest，web 产物 `index-CFCYNhZY.js` 663401 B + `index-J1EyySLN.css` 153579 B，mobile 仅本机构建。当前基线为 server 26 文件 / 229 测试、app 28 文件 / 356 测试、E2E 128/128、视觉 102 + 1 张。**对外开放前必须先补 `/api/chat`、`/api/report` 服务端 token 门、来源限制、配额与审计，并完成生成式 AI 专门备案 / 安全评估；`?mode=` 不是安全边界。** 域名解析 / 443 / 证书 / 页脚备案号仍等备案号下发，整体未上线。
 
 **三条硬约束**（任何阶段都不能破）：
 
@@ -520,7 +520,7 @@ Persist 是一个安静、可信、可持续的个人数据面板：
 | 服务端单测 | Vitest（node 环境）                            | **229 条 / 26 个文件**（2026-11-11 在步骤 13/14 既有覆盖上新增报告类型提示词测试；含事实包聚合 / 报告缓存与归档 / 每日简报 job / 备份 / 恢复 / 导出 / 删除与备份 HTTP 端点）                                                        |
 | 端到端     | Playwright（Chrome 通道，桌面 + 移动两个项目） | **128 次执行 = 64 用例 × 2**（11 个文件、1.2 m；demo / guest 均断言零 `/api/*`；owner 三张观察卡验证来源裁剪请求）                                                                                                                  |
 | 视觉基线   | 自定义 `scripts/visual-check.mjs`              | 102 张页面截图 + 1 张快速记录（17 状态 × 6 视口 + 1 张快速记录）；2026-11-11 复跑 `overflow / missingElements / missingDialogs / failures` 全 0；demo / guest 与日期 / 时间选择器已双端验收，owner 观察卡与 14d 删除流程真机验收未在本轮记录中确认 |
-| 构建       | `vite build` / `vite build --mode mobile`      | web `index-BnhgTVnR.js` 662959 B、mobile `index-CvarG7D-.js` 662929 B，CSS 均为 `index-BqIsigJr.css` 152883 B；>500 kB 提示仍在，`/plans` 尚未拆分懒加载。web 已部署到 `/app/`，mobile 未发布 |
+| 构建       | `vite build` / `vite build --mode mobile`      | web `index-CFCYNhZY.js` 663401 B、mobile `index-BnOuOezj.js` 663059 B，CSS 均为 `index-J1EyySLN.css` 153579 B；>500 kB 提示仍在，`/plans` 尚未拆分懒加载。web 已部署到 `/app/`，mobile 未发布 |
 
 ### 11.2 测试纪律（容易踩的坑）
 
