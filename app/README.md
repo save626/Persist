@@ -5,15 +5,16 @@ Persist 的 React Web 客户端。
 ## 开发命令
 
 ```powershell
-npm run dev          # web 构建；只允许 demo / guest，默认 guest
-npm run dev:mobile   # mobile 构建；默认 owner（移动端验收用）
+npm run dev          # web 开发；根路径，只允许 demo / guest，默认 guest
+npm run dev:mobile   # mobile 开发；默认 owner（移动端验收用）
 npm run lint         # Oxlint
 npm run typecheck    # TypeScript 类型检查
 npm test             # Vitest 单元测试
 npm run test:e2e     # Playwright 端到端测试
 npm run format       # Prettier 格式化
-npm run build        # web 生产构建；禁止 owner
-npm run build:mobile # USB 移动端包；输出 dist-mobile，默认 owner
+npm run build        # web 生产构建（--base=/app/）；禁止 owner
+npm run preview      # 预览 web 构建，地址为 /app/
+npm run build:mobile # USB 移动端包；输出 dist-mobile，根路径，默认 owner
 ```
 
 ## 工程约定
@@ -21,7 +22,7 @@ npm run build:mobile # USB 移动端包；输出 dist-mobile，默认 owner
 - 页面路由与全局壳层放在 `src/`。
 - 已验收的 v3 视觉样式位于 `src/styles/home-v3.css`，新增共享样式放在 `src/styles/persist.css`。
 - 业务数据写入本机浏览器 IndexedDB（原生实现，无 Dexie）：`src/lib/persist-state.ts` 管记录结构与 `schemaVersion` 迁移，`src/lib/persist-storage.ts` 管 open / load / save 与降级；`MockDataProvider` 首挂载水合、200 ms 防抖落盘、`pagehide` / `visibilitychange` 补写，对外 Context 契约不变。
-- AI 引导建档已接服务端（步骤 8b）：`src/lib/ai-chat-client.ts` 的 `createAppChatClient({ consent })` 在「档案页开启 AI 数据授权 + `/api/health` 可用」时走同源 `/api/chat`，否则用本地 Mock；SSE 增量解析，**只在首个内容事件前回退**，回退后本次会话不再重试，界面如实标注来源。AI 报告文字也已接服务端（步骤 8c，见下条）。运行模式按 Vite mode 隔离：默认 `npm run dev` / `npm run build` 是 web，只允许 demo / guest；`npm run dev:mobile` / `npm run build:mobile` 是移动端，默认 owner，构建输出 `dist-mobile`。开发时 `/api` 代理指向 `PERSIST_API_TARGET`（默认 `http://127.0.0.1:3000`），Playwright 使用 mobile mode 固定测试 owner 基线，并把 API 指向不可达端口以免 E2E 打到真实后端。
+- AI 引导建档已接服务端（步骤 8b）：`src/lib/ai-chat-client.ts` 的 `createAppChatClient({ consent })` 在「档案页开启 AI 数据授权 + `/api/health` 可用」时走同源 `/api/chat`，否则用本地 Mock；SSE 增量解析，**只在首个内容事件前回退**，回退后本次会话不再重试，界面如实标注来源。AI 报告文字也已接服务端（步骤 8c，见下条）。运行模式按 Vite mode 隔离：默认 `npm run dev` / `npm run build` 是 web，只允许 demo / guest；`npm run dev:mobile` / `npm run build:mobile` 是移动端，默认 owner，构建输出 `dist-mobile`。开发时 `/api` 代理指向 `PERSIST_API_TARGET`（默认 `http://127.0.0.1:3000`）。生产 web 挂在 `/app/`，`BrowserRouter` 会按 `import.meta.env.BASE_URL` 使用 `/app` basename；mobile 构建仍使用根路径。Playwright 使用 mobile mode 固定测试 owner 基线，并把 API 指向不可达端口以免 E2E 打到真实后端。
 - AI 报告已接服务端（步骤 8c）：`src/lib/ai-report-client.ts` 的 `probeAiReport()` 要求 `/api/health` 返回 `ai:'deepseek'`，`requestAiReport()` POST 同源 `/api/report`；`src/lib/report-types.ts` 镜像服务端契约。**报告只有文字字段来自模型**（`title/status/summary/conclusions/actions/warnings`），指标数字、依据条目、统计区间仍由 `ReportsPage.tsx` 的 `buildDailyReport()` 按本地记录确定性生成；请求只含「已授权 + 设置来源开关打开」的摘要，未授权模块发 `null` 而不是 0/[]。不可用时回退本地 Mock 并显示回退提示、徽标降级；响应不合契约抛 `ReportContractError`、明确报错不伪造报告。**`/api/report` 在 owner 移动端由「今日简报」「训练建议」「饮食观察」「学习观察」共用；三张今日观察卡只在 owner + 授权 + 当日有数据时请求，按日缓存、摘要变化提示重新生成、失败回退本地规则；demo / guest 不请求。**`ReportRecord.origin` 区分 AI / Mock。
 - 今日页晨间简报也接服务端（2026-11-04）：摘要构造统一到 `src/lib/report-digest.ts`（报告页与简报共用同一份授权/来源规则），`src/lib/morning-brief.ts` 负责「未授权/无来源不发请求 → `sessionStorage` 按天 + 摘要指纹缓存 → `POST /api/report`（`今日简报` / 7 天）→ `parseReportContent` 校验」；模型只覆盖面板标题与摘要，三个 KPI 与建议节奏仍是本地确定性生成。失败按状态回退并如实标注（「已回退到本机规则，未使用模型输出」），只有拿到合规内容才显示 DeepSeek 来源。
 - 跨设备同步（步骤 12d/12e）：`src/lib/sync-*.ts` 六个文件——`sync-contract.ts`（转出 `@persist/shared` 契约）、`sync-client.ts`（`/api/v1/*` 请求与退避）、`sync-queue.ts`（outbox 合并/批次）、`sync-store.ts`（`persist-sync` IndexedDB）、`sync-entities.ts`（切片摊平 / diff / pull LWW + 墓碑 + 形状守卫）、`sync-engine.ts`（bootstrap、5 s 防抖、60 s 兜底、`online`/`visibility` 触发）。**默认关闭，关闭时不发任何同步请求**；开关与恢复码在设置页「数据同步」卡片。服务端 `/api/v1/*` 只在同源可用时生效，**服务端 2026-11-06、前端静态包 2026-11-07 均已部署**，但同步默认关闭，默认路径仍是纯本地。
@@ -39,17 +40,19 @@ npm run build:mobile # USB 移动端包；输出 dist-mobile，默认 owner
 /diet      饮食          /study    学习
 /plans     长期计划      /profile  个人档案
 /reports   AI 报告       /settings 设置
+
+> 上述为应用内路由：生产 web 实际访问为 `/app/plans`、`/app/reports` 等；USB 移动端包仍为 `/plans`、`/reports` 等根路径。
 ```
 
 主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话在授权且服务端可用时调用真实 DeepSeek（标注「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock（标注「本地生成 · Mock 对话」）。`/reports` 的「今日简报」同理：授权 + 服务端可用时经 `/api/report` 生成文字（标注「DeepSeek 生成 · 经本站服务端代理」），否则本地 Mock（标注「本地生成 · Mock 报告」）。今日页「晨间简报」也已接通同一接口：打开面板时按「今日简报 / 7 天」请求，模型写标题与摘要，KPI 与建议节奏仍本地生成，失败/未授权时回退并明确标注。**步骤 13 起 `/reports` 末尾新增「服务端综合分析」块**：选中 7 / 30 / 90 天窗口后点「生成综合分析」→ `POST /api/v1/analysis/reports`，展示模型文字 + 指标卡 + 来源与缓存标记，下方列出服务端归档（`GET /api/v1/reports`）；此项依赖跨设备同步（需要 `syncToken`）且服务端已部署，未就绪时只显示说明、不发请求。设置页新增「每日简报」卡片（默认关闭、默认 21:00）。
 
-测试现状（2026-11-11 收口复跑）：`npm test` **356 条**单元测试（28 个文件；含观察卡请求 / 缓存 / 回退、共享报告契约、日期 / 时间组件与运行模式覆盖），`npx playwright test` 64 用例 × 2 项目 = **128 次执行**（11 个文件、1.4 m；demo / guest 均断言零 `/api/*`），`npm run lint` **0 错 0 警告**、`npm run typecheck` 通过，`npm run build` web JS `index-CaeiVeCi.js` 662933 B（gzip 196.72 kB）、`npm run build:mobile` JS `index-CvarG7D-.js` 662929 B，CSS 均为 `index-BqIsigJr.css` 152883 B（gzip 26.19 kB）。`npm run visual:check` 生成 17 状态 × 6 视口 = 102 张页面截图 + 快速记录 1 张；`overflow / missingElements / missingDialogs / failures` 全 0。demo / guest 与统一日期 / 时间选择器已于 2026-11-11 双端验收；owner 观察卡与 14d 删除流程真机验收未在本轮记录中确认，截图未提交。构建产物过 500 kB 的 Vite 警告仍在，`/plans` 尚未拆分懒加载。验证细节见仓库根目录 `HANDOFF.md`。
+测试现状（2026-11-11 入口路由部署后复跑）：`npm test` **356 条**单元测试（28 个文件；含观察卡请求 / 缓存 / 回退、共享报告契约、日期 / 时间组件与运行模式覆盖），`npm run test:e2e` **128 次执行全部通过**（11 个文件、1.4 m；demo / guest 均断言零 `/api/*`），`npm run typecheck` 通过。`npm run build` web JS `index-BnhgTVnR.js` 662959 B、CSS `index-BqIsigJr.css` 152883 B；mobile 最近构建 JS `index-CvarG7D-.js` 662929 B，仅本机构建。`npm run visual:check` 生成 17 状态 × 6 视口 = 102 张页面截图 + 快速记录 1 张；`overflow / missingElements / missingDialogs / failures` 全 0。demo / guest 与统一日期 / 时间选择器已于 2026-11-11 双端验收；owner 观察卡与 14d 删除流程真机验收未在本轮记录中确认，截图未提交。构建产物过 500 kB 的 Vite 警告仍在，`/plans` 尚未拆分懒加载。验证细节见仓库根目录 `HANDOFF.md`。
 
 > **`visual:check` 的前置条件**：owner 视觉基线必须先用 `npm run dev:mobile -- --port 4173` 启动 mobile 开发服务；web 默认 guest，不能用于 owner 截图。脚本只连接已在运行的 4173，**自己不启动后端**。步骤 8b 之后 `/plans` 会先探测 `/api/health`，步骤 8c 之后 `/reports` 同样探测，所以跑之前要另开终端起本机后端 `cd ../server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，页面显示 Mock，与基线一致）。后端不在时 Vite 代理返回 502，浏览器把每个 `/plans`、`/reports` 状态记控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判失败（exit 1，截图像素本身没问题）。
 
 ## 待办（按顺序）
 
-1. 步骤 9 ✅ 已完成（2026-11-04）：IP 直连部署（本地 build 上传 `app/dist` + Nginx 深链/反代/gzip + systemd + 真实 Key 只存服务器），8 页深链、SSE、`/api/report` 与限流均实测通过。**步骤 10 A 段已完成（2026-11-11 复核）**：Node 22、步骤 12/13 部署、前端产物上传、SSH 仅密钥 + `fail2ban`、删除安全组 3389 均已验证；B 段只剩域名解析 / 443 / 证书 / 页脚备案号，等备案号。备案进度：阿里云初审 ✅ 2026-11-04，管局审核中（实际状态以阿里云控制台为准）。完整计划见 `HANDOFF.md` §0.4 / §13.3，服务器与部署约束见 `docs/部署与服务器现状.md` §6。
+1. 步骤 9 ✅ 已完成（2026-11-04）：IP 直连部署（本地 build 上传 `app/dist` + Nginx 深链/反代/gzip + systemd + 真实 Key 只存服务器），8 页深链、SSE、`/api/report` 与限流均实测通过。**2026-11-11 入口路由已部署**：`/` 落地页、`/home.html` 介绍首页、`/app/` demo / guest，深链 `/app/fitness`、`/app/reports` 回退正常。**步骤 10 A 段已完成（2026-11-11 复核）**：Node 22、步骤 12/13 部署、前端产物上传、SSH 仅密钥 + `fail2ban`、删除安全组 3389 均已验证；B 段只剩域名解析 / 443 / 证书 / 页脚备案号，等备案号。备案进度：阿里云初审 ✅ 2026-11-04，管局审核中（实际状态以阿里云控制台为准）。完整计划见 `HANDOFF.md` §0.4 / §13.3，服务器与部署约束见 `docs/部署与服务器现状.md` §6。
 2. **步骤 11（8d）数据历史化** —— ✅ 已完成（2026-11-04）：`schemaVersion` 2、训练真实历史、饮食/饮水/计划按日台账、备份 0.3.0。
 3. **步骤 12（P4a）账号 + 增量同步** —— ✅ 本机完成并验收（2026-11-05，12a–12f）：客户端同步层 + 设置页「数据同步」卡片；**已推送；服务端 2026-11-06 已部署、前端「数据同步」卡片 2026-11-07 已上传**（服务器已升 Node v22.19.0）。
 4. **步骤 13（P4b）服务端聚合 + AI 综合分析** —— ✅ 本机完成并验证（2026-11-05，**已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**）：服务端 SQL 聚合事实包 + 四个 `/api/v1` 接口 + 每日简报 job；前端 `/reports`「服务端综合分析」块（7/30/90 天、四态、归档列表）与设置页「每日简报」卡片（默认关闭、21:00）。**已随 2026-11-06 切换部署**（步骤 10 A 段升 Node v22.19.0）。

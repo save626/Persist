@@ -61,7 +61,7 @@ server/
 │     ├─ analysis.ts    综合分析提示词与响应解析、数字白名单校验
 │     ├─ extract.ts     结构化结果净化（问题/档案增量/计划草案/warnings）
 │     └─ report.ts      报告内容净化（字数/条数/重复项/代码块，拒绝就报契约错误）
-└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / analysis-* / jobs / db-* / devices / sync / backups / export / account-delete（25 个文件 / 226 条）
+└─ test/                Vitest：config / contract / rate-limit / extract / deepseek / chat / prompts / report / analysis-* / jobs / db-* / devices / sync / backups / export / account-delete（26 个文件 / 229 条）
 ```
 
 > **`@persist/shared`（仓库根 `shared/`）**：同步契约（`contract/sync.ts`、`contract/entities.ts`、`contract/parse.ts`）与**综合分析契约**（`contract/analysis.ts`：事实包 v2 / 报告内容 / 错误码 / 保留期 / 每日简报时间）只有这一份，服务端与前端同源引用；`contract/backup.ts` 现同时承载快照列表 / 手动创建 / 恢复契约，14c 新增 `contract/export.ts` 导出信封与下载文件名契约，14d 新增 `contract/account.ts` 删除请求 / 响应计数契约。`shared/` 是独立 TS 项目，需先编译出 `shared/dist`：`npm run shared:build`（`prebuild` / `pretest` / `typecheck` 会自动先跑）。`npm install` 已按 `file:../shared` 建立链接；**部署时 `shared/` 必须一起上服务器**（见 `docs/部署与服务器现状.md`）。

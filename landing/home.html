@@ -512,7 +512,7 @@
       <a href="#report">AI 报告</a>
       <a href="#privacy">隐私</a>
     </nav>
-    <button class="btn btn--sm" type="button" data-enter="beta">申请内测</button>
+    <button class="btn btn--sm" type="button" data-enter="demo">查看演示</button>
   </div>
 </header>
 
@@ -535,7 +535,7 @@
               <path d="M5 12h14M13 6l6 6-6 6"/>
             </svg>
           </button>
-          <button class="btn" type="button" data-enter="blank">自己体验</button>
+          <button class="btn" type="button" data-enter="guest">自己体验</button>
         </div>
         <p class="hero-note reveal d3">内测中 · 不开放注册</p>
       </div>
@@ -889,19 +889,18 @@
   <section class="band band--plain beta" id="beta">
     <div class="wrap">
       <h2 class="reveal">现在在内测。</h2>
-      <p class="lead reveal d1">不开放注册。开放后，从这里直接进入产品。</p>
+      <p class="lead reveal d1">不开放注册。现在可以查看预置数据的演示，或从空白数据自己体验。</p>
       <div class="beta-actions reveal d2">
-        <button class="btn btn--primary" type="button" data-enter="product">
-          体验产品
+        <button class="btn btn--primary" type="button" data-enter="demo">
+          查看演示
           <svg class="btn__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M5 12h14M13 6l6 6-6 6"/>
           </svg>
         </button>
-        <button class="btn" type="button" data-enter="demo">查看演示</button>
-        <button class="btn" type="button" data-enter="blank">自己体验</button>
+        <button class="btn" type="button" data-enter="guest">自己体验</button>
       </div>
-      <p class="beta-note reveal d3">只用于内测邀请，不发营销邮件。</p>
+      <p class="beta-note reveal d3">桌面端仅提供演示与体验模式；完整产品仅通过手机 App 使用。</p>
     </div>
   </section>
 
@@ -939,23 +938,22 @@
 
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  /* ---------- 产品入口地址 ----------
-     待定：填上后三个按钮会直接跳转。
-     为空时只弹提示，绝不硬编码任何 IP 或临时地址。 */
-  var PRODUCT_URL = '';
-  /* 各入口在地址就位前，说明它到底会看到什么 */
+  /* ---------- 产品入口 ----------
+     桌面公开站点只允许 demo / guest，绝不暴露 owner 或真实 AI 入口。 */
+  var ENTRY_URL = {
+    demo:  'app/?mode=demo',
+    guest: 'app/?mode=guest'
+  };
   var ENTRY_DESC = {
-    demo:    '演示入口还在准备中。开放后这里会直接进入一份预设数据的演示：记录已经填好，AI 报告也已经生成。',
-    blank:   '体验入口还在准备中。开放后这里会直接进入空白数据，由你自己填，AI 用本地规则回应。',
-    product: '产品入口还在准备中。开放后这里会直接进入 Persist。',
-    beta:    '内测按批次邀请，暂未开放线上提交。开放后这里可以留邮箱。'
+    demo:  '演示入口暂不可用：应进入一份带预设数据和预生成 AI 内容的只读演示。',
+    guest: '体验入口暂不可用：应进入空白数据，AI 使用本地 Mock。'
   };
 
   var toast = document.getElementById('toast');
   var toastTimer = 0;
 
   function showToast(key) {
-    toast.textContent = ENTRY_DESC[key] || ENTRY_DESC.product;
+    toast.textContent = ENTRY_DESC[key] || ENTRY_DESC.demo;
     toast.classList.add('on');
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(function () {
@@ -967,8 +965,9 @@
     var el = ev.target.closest ? ev.target.closest('[data-enter]') : null;
     if (!el) return;
     var key = el.getAttribute('data-enter');
-    if (PRODUCT_URL) {
-      window.location.href = PRODUCT_URL;
+    var target = ENTRY_URL[key];
+    if (target) {
+      window.location.href = target;
       return;
     }
     ev.preventDefault();

@@ -14,6 +14,8 @@ import { SettingsPage } from './pages/SettingsPage'
 import { StudyPage } from './pages/StudyPage'
 import { TodayPage } from './pages/TodayPage'
 
+const routerBasename = import.meta.env.BASE_URL === '/app/' ? '/app' : '/'
+
 export default function App() {
   const [runtimeMode] = useState(() =>
     resolveRuntimeMode(typeof window === 'undefined' ? '' : window.location.search, {
@@ -23,7 +25,7 @@ export default function App() {
 
   return (
     <RuntimeModeProvider mode={runtimeMode}>
-      <BrowserRouter>
+      <BrowserRouter basename={routerBasename}>
         <UIProvider>
           <MockDataProvider>
             <Routes>

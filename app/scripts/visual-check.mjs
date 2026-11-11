@@ -134,6 +134,16 @@ function outputPath(filename) {
   return new URL(filename, outputDir).pathname.replace(/^\/([A-Za-z]:)/, '$1')
 }
 
+const NO_KEY_REPORT_503 =
+  'Failed to load resource: the server responded with a status of 503 (Service Unavailable)'
+let aiDisabled = false
+try {
+  const healthResponse = await fetch(new URL('/api/health', baseUrl))
+  const health = await healthResponse.json()
+  aiDisabled = healthResponse.ok && health?.status === 'ok' && health?.ai !== 'deepseek'
+} catch {
+  // 健康检查失败时不做白名单，避免把真正的后端故障藏掉。
+}
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const results = []
 
@@ -144,6 +154,13 @@ for (const pageDef of pages) {
       deviceScaleFactor: 1,
     })
     const errors = []
+    const expectedNoKeyReport503 = []
+    page.on('response', (response) => {
+      const url = new URL(response.url())
+      if (aiDisabled && response.status() === 503 && url.pathname === '/api/report') {
+        expectedNoKeyReport503.push(response.url())
+      }
+    })
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text())
     })
@@ -188,7 +205,22 @@ for (const pageDef of pages) {
       path: outputPath(filename),
       fullPage: viewport.fullPage && !pageDef.waitFor,
     })
-    results.push({ page: pageDef.slug, viewport: viewport.name, layout, missingElements, errors })
+    let expected503Budget = expectedNoKeyReport503.length
+    const unexpectedErrors = errors.filter((message) => {
+      if (aiDisabled && message === NO_KEY_REPORT_503 && expected503Budget > 0) {
+        expected503Budget -= 1
+        return false
+      }
+      return true
+    })
+    results.push({
+      page: pageDef.slug,
+      viewport: viewport.name,
+      layout,
+      missingElements,
+      errors: unexpectedErrors,
+      expectedNoKeyReport503: expectedNoKeyReport503.length - expected503Budget,
+    })
     await page.close()
   }
 }
@@ -257,6 +289,10 @@ const summary = {
       result.layout.innerWidth + 1,
   ).length,
   consoleErrors: pageResults.filter((result) => result.errors.length > 0).length,
+  expectedNoKeyReport503: pageResults.reduce(
+    (total, result) => total + (result.expectedNoKeyReport503 ?? 0),
+    0,
+  ),
   missingDialogs: pageResults.filter((result) => {
     const definition = pages.find((item) => item.slug === result.page)
     return Boolean(definition?.waitFor) && !result.layout.dialogOpen

@@ -1,12 +1,14 @@
 # landing/ — 对外入口（星空入场页 + 产品介绍首页）
 
-两个**单文件**页面，零外部请求、零第三方库，`file://` 双击即可打开。**未部署、未上线**：没有域名、没有备案号，也没有指向应用地址的链接。
+两个**单文件**页面，零外部请求、零第三方库，`file://` 双击也可打开。2026-11-11 已部署到生产 IP：`/` 为星空落地页，`/home.html` 为产品介绍首页，`/app/` 为桌面 demo / guest 产品。仍没有可用域名、备案号和 443，不得写「已上线」。
 
 ```
 域名 / IP
-  └─ /                 index.html   星空入口页（星轨 + 流星雨 + 「Hello world」手写揭示）
+  └─ /                 index.html   星空落地页（星轨 + 流星雨 + 「Hello world」手写揭示）
        └─ home.html                 产品介绍首页（9 段，浅色低饱和）
-            └─ 产品                 查看演示 / 自己体验 / 体验产品（PRODUCT_URL 待填）
+            ├─ 查看演示 → /app/?mode=demo   完整预置数据 + 部署前固化 AI 内容
+            └─ 自己体验 → /app/?mode=guest  空白数据 + 全部 AI Mock
+完整产品 → 作者自有移动端 App（USB 安装 build:mobile 包，默认 owner）
 ```
 
 ## 1. 文件与体积（2026-11-11 实测）
@@ -39,7 +41,7 @@
 
 - **零图片**：所有图形都是 CSS 渐变、`box-shadow`、内联描边 SVG（`stroke` 系图标）。首屏「今日卡片」是纯 CSS 摆出来的示意，不是截图。
 - **动效只用 `opacity` / `transform`**：导航 `is-stuck` 在 `scrollY > 12` 切换（rAF 节流）；`.reveal → .in` 由 `IntersectionObserver` 驱动，并有 `delivered` 兜底与首帧强制放行；`prefers-reduced-motion` 下全部直出。
-- **4 个入口按钮**：`data-enter="demo|blank|product|beta"` 交给同一个事件委托。`PRODUCT_URL = ''` 时弹诚实提示（「演示入口还在准备中。」等，5.2 s 自动消失），**绝不假装已上线、也绝不硬编码 IP**。
+- **仅两个产品入口**：`data-enter="demo"` 与 `data-enter="guest"` 交给同一个事件委托，分别进入 `/app/?mode=demo` 与 `/app/?mode=guest`。页面不存在 `product` / `beta` / `blank` / `owner` 入口；桌面构建不提供真实 AI 入口，完整产品只在作者自有移动端 App。
 
 ## 4. 配色与对比度（含对 `docs/工程约定.md` §3 的偏离）
 
@@ -75,14 +77,31 @@
 
 - 入口页：用户已确认两轮缺陷（流星偏少、文案不是从 `H` 开始）修复后**「满意，可以进入产品介绍首页了」**。
 - 首页：文案按「可参考、不必照抄」授权自行设计；结构与对比度为自测结论。
-- **本 Agent 无图像输入能力**：以上全部是测量结论，观感必须由人眼最终确认（截图见 `preview/`）。
+- **本 Agent 无图像输入能力**：以上全部是基于渲染的测量结论，观感必须由人眼最终确认（截图见 `preview/`）。
+- 2026-11-11 生产功能验收：真实 Chrome 经 SSH 隧道打开 `/` → `/home.html` → `/app/?mode=demo` / `/app/?mode=guest` 全链路通过；demo 计划徽标 `3 / 7`、guest `0 / 0`，两种模式捕获到的 `/api/*` 请求均为 `[]`；390 px 视口首页 `scrollWidth = 390`，无横向溢出。新增入口文案后的最终双端人工观感验收仍待用户确认。
 
-## 7. 上线前待替换
+## 7. 部署结果与上线前边界
 
-1. `PRODUCT_URL` 为空 → 填入应用地址后，四个按钮按 `ENTRY_DESC` 的语义分别指向 **`?mode=demo`（查看演示）** 与 **`?mode=guest`（自己体验）**；跨页参数口径以 [`docs/落地页与入场动画方案.md`](../docs/落地页与入场动画方案.md) §2/§4 为准。
-2. 备案号下发前，页脚只写「内测中 · 不开放注册」，不放假备案号、不写「已上线」。
-3. 真实产品截图（当前首页刻意零图片）。
-4. 部署方式未定（纯静态托管；`file://` 也能跑，但那时按钮跳转无效）。
+2026-11-11 已按以下结构部署到生产 IP：
+
+```text
+/var/www/persist/
+├─ index.html                落地页（27241 B）
+├─ home.html                 产品介绍首页（43003 B）
+├─ assets/starfield-*        星空底图
+└─ app/
+   ├─ index.html             React web 入口（623 B）
+   └─ assets/index-BnhgTVnR.js 662959 B + index-BqIsigJr.css 152883 B
+```
+
+生产核验：`/`、`/home.html`、`/app/?mode=demo`、`/app/?mode=guest`、`/app/fitness`、`/app/reports` 均 `200`；JS / CSS / 星空图分别以正确 MIME 返回。Nginx 已 reload，后端未重启。
+
+仍未完成：
+
+1. 备案号下发后替换页脚占位，并接域名、443、证书与 HTTPS 跳转。备案号下发前不得写「已上线」或「域名可用」。
+2. 首页仍是 CSS/SVG 示意，真实截图与 OG 分享图由落地页负责方决定是否补。
+3. 服务端 `/api/chat`、`/api/report` 仍需 token 门、来源限制、配额与审计；网页页面没有真实 AI 入口不等于服务端接口已经安全。
+4. 桌面第一期只提供 demo / guest。不得新增 owner 入口；完整产品只通过作者自有移动端 USB 包使用。
 
 ## 8. 维护约定
 
