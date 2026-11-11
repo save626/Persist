@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { chooseTime } from './date-time'
 
 /** 防抖写入是 200ms，留一倍余量等 IndexedDB 事务真正落盘。 */
 const PERSIST_FLUSH_MS = 450
@@ -62,7 +63,7 @@ test('刷新后保留设置里的提醒开关与时间', async ({ page }) => {
   await expect(waterSwitch).toBeChecked()
 
   // 时间输入在提醒关闭后会被禁用，所以先改时间再关开关。
-  await page.getByLabel('饮水提醒时间').fill('07:30')
+  await chooseTime(page, '饮水提醒时间', '07:30')
   await waterSwitch.uncheck()
   await expect(waterSwitch).not.toBeChecked()
 
@@ -70,7 +71,7 @@ test('刷新后保留设置里的提醒开关与时间', async ({ page }) => {
   await page.reload()
 
   await expect(page.getByLabel('启用饮水提醒')).not.toBeChecked()
-  await expect(page.getByLabel('饮水提醒时间')).toHaveValue('07:30')
+  await expect(page.getByLabel('饮水提醒时间')).toContainText('07:30')
 })
 
 test('清空本机数据后刷新回到初始示例数据', async ({ page }) => {

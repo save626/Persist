@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DatePickerField } from './DateTimePicker'
 import { Icon } from './Icon'
 import { PageSheet } from './PageSheet'
 import {
@@ -148,24 +149,21 @@ export function PlanDraftSheet({
         </div>
 
         <div className="plans-field-row">
-          <label className="plans-field">
-            <span>开始日期</span>
-            <input
-              className="plans-input"
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-            />
-          </label>
-          <label className="plans-field">
-            <span>结束日期（可选）</span>
-            <input
-              className="plans-input"
-              type="date"
-              value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
-            />
-          </label>
+          <DatePickerField
+            className="plans-field"
+            triggerClassName="plans-input"
+            label="开始日期"
+            value={startDate}
+            onChange={setStartDate}
+          />
+          <DatePickerField
+            className="plans-field"
+            triggerClassName="plans-input"
+            label="结束日期（可选）"
+            value={endDate}
+            onChange={setEndDate}
+            clearable
+          />
         </div>
 
         <div className="plans-field">

@@ -113,6 +113,22 @@ describe('generateMorningBrief', () => {
     expect(morningBriefNote('no-consent', digest)).toContain('未开启 AI 数据授权')
   })
 
+  it('allowRealAi=false keeps morning brief local even with consent and sources', async () => {
+    const { calls, fetchImpl } = stubFetch(() => jsonResponse({}))
+    const result = await generateMorningBrief({
+      aiConsent: true,
+      allowRealAi: false,
+      digest,
+      date: '2026-11-04',
+      storage: null,
+      fetchImpl,
+    })
+
+    expect(result).toEqual<MorningBriefResult>({ status: 'experience-mock', content: null })
+    expect(calls).toHaveLength(0)
+    expect(morningBriefNote('experience-mock', digest)).toContain('Mock')
+  })
+
   it('没有任何打开的数据来源时不请求模型', async () => {
     const emptyDigest = buildReportDigest({
       aiConsent: true,

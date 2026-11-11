@@ -3,6 +3,9 @@ import { EvidenceSheet } from '../components/EvidenceSheet'
 import { Icon } from '../components/Icon'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
+import { useRuntimeMode } from '../context/runtime-mode-context'
+import { buildReportDigest } from '../lib/report-digest'
+import { useAiObservation } from '../lib/use-ai-observation'
 import { useNewRecordParam } from '../lib/use-new-record-param'
 import type { FoodEntry, Meal, MealId } from '../types'
 
@@ -485,7 +488,20 @@ function AiNutritionSheet({
   )
 }
 export function DietPage() {
-  const { meals, setMeals, waterLiters, addWater, lastWaterMilliliters, undoWater } = useMockData()
+  const {
+    meals,
+    setMeals,
+    waterLiters,
+    addWater,
+    lastWaterMilliliters,
+    undoWater,
+    waterLog,
+    aiConsent,
+    settings,
+    profile,
+    today,
+  } = useMockData()
+  const runtime = useRuntimeMode()
   const { showToast } = useUI()
   const newRecord = useNewRecordParam()
   const [editingMealId, setEditingMealId] = useState<MealId | null>(null)
@@ -533,6 +549,60 @@ export function DietPage() {
   const chartValues = [...WATER_TREND.slice(0, -1), waterLiters]
   const chartMax = Math.max(...chartValues, TARGETS.waterLiters)
   const foodEntryCount = meals.reduce((total, meal) => total + meal.entries.length, 0)
+  const observationRequest = useMemo(() => {
+    if (
+      runtime.mode !== 'owner' ||
+      !runtime.ai.report ||
+      !aiConsent ||
+      !settings.sources.diet ||
+      foodEntryCount === 0
+    ) {
+      return null
+    }
+    const digest = buildReportDigest({
+      aiConsent,
+      settings,
+      profile,
+      fitnessSession: null,
+      studyRecords: [],
+      meals,
+      waterLiters,
+      waterLog,
+    })
+    return {
+      type: '饮食观察' as const,
+      rangeDays: 7 as const,
+      digest: { ...digest, fitness: null, study: null },
+    }
+  }, [
+    aiConsent,
+    foodEntryCount,
+    meals,
+    profile,
+    runtime.ai.report,
+    runtime.mode,
+    settings,
+    waterLiters,
+    waterLog,
+  ])
+  const aiObservation = useAiObservation({
+    enabled: Boolean(observationRequest),
+    request: observationRequest,
+    dateKey: today,
+  })
+  const localObservationSummary = `目前蛋白质摄入约占目标的 ${Math.round((totals.protein / TARGETS.protein) * 100)}%。晚餐可以安排一份鱼、虾或豆制品，同时保留蔬菜和适量主食。`
+  const observationTitle = aiObservation.content?.title ?? '晚餐优先补齐蛋白质'
+  const observationSummary = aiObservation.content?.summary ?? localObservationSummary
+  const observationNote =
+    runtime.mode !== 'owner'
+      ? '这是基于今日记录的 Mock 建议，接入个人档案后会考虑训练与恢复情况。'
+      : aiObservation.mode === 'loading'
+        ? '正在请求 DeepSeek 生成今日饮食观察…'
+        : aiObservation.mode === 'ai'
+          ? `${aiObservation.fromCache ? 'DeepSeek 今日缓存' : 'DeepSeek 生成'}，依据今日已授权的饮食与饮水摘要${aiObservation.stale ? '；数据已更新，可重新生成' : ''}。`
+          : aiObservation.mode === 'fallback'
+            ? '真实 AI 暂时不可用，本次显示本地规则建议。'
+            : '记录食物并开启饮食数据授权后，可使用真实 AI 观察。'
 
   const recordWater = (milliliters: number) => {
     addWater(milliliters)
@@ -963,17 +1033,24 @@ export function DietPage() {
               </span>
               <div>
                 <span className="diet-observation-kicker">Persist AI · 今日观察</span>
-                <h2 id="dietObservationTitle">晚餐优先补齐蛋白质</h2>
+                <h2 id="dietObservationTitle">{observationTitle}</h2>
               </div>
             </div>
-            <p>
-              目前蛋白质摄入约占目标的 {Math.round((totals.protein / TARGETS.protein) * 100)}%。
-              晚餐可以安排一份鱼、虾或豆制品，同时保留蔬菜和适量主食。
-            </p>
+            <p>{observationSummary}</p>
             <div className="diet-observation-note">
               <span className="dot" />
-              这是基于今日记录的 Mock 建议，接入个人档案后会考虑训练与恢复情况。
+              {observationNote}
             </div>
+            {aiObservation.mode === 'ai' && (
+              <button
+                className="diet-observation-link"
+                type="button"
+                onClick={aiObservation.regenerate}
+              >
+                重新生成
+                <Icon name="chev" className="icon-sm" />
+              </button>
+            )}
             <button
               className="diet-observation-link"
               type="button"
@@ -1073,7 +1150,11 @@ export function DietPage() {
               value: `${waterMilliliters} ml`,
             },
           ]}
-          note="当前为前端 Mock 依据。接入 DeepSeek 后，仍只会发送已授权的营养摘要。"
+          note={
+            runtime.mode === 'owner' && aiObservation.mode === 'ai'
+              ? '本次今日观察由 DeepSeek 根据已授权的饮食与饮水摘要生成；“AI 热量登记”仍由你主动粘贴并核对，不调用模型。'
+              : '当前为本地规则依据。真实 AI 不可用或尚未授权时不会发起模型请求；“AI 热量登记”行为不变。'
+          }
           onClose={() => setEvidenceOpen(false)}
         />
       )}

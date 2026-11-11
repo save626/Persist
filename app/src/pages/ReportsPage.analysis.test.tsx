@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UIContext, type UIContextValue } from '../context/ui-context'
 import { MockDataContext, type MockDataContextValue } from '../context/mock-data-context'
+import { RuntimeModeProvider } from '../context/RuntimeModeProvider'
 import { INITIAL_SETTINGS } from '../data/settings'
 import {
   ANALYSIS_CACHE_LABEL,
@@ -22,6 +23,7 @@ import type {
   AnalysisReportDetail,
   ReportContentV2,
 } from '../lib/analysis-contract'
+import type { RuntimeMode } from '../lib/runtime-mode'
 import type { ProfileData, ReportRecord } from '../types'
 import { ReportsPage } from './ReportsPage'
 
@@ -171,6 +173,9 @@ function buildContextValue(overrides: Partial<MockDataContextValue> = {}): MockD
     disableSync: vi.fn(async () => {}),
     restoreSync: vi.fn(async () => {}),
     revokeSync: vi.fn(async () => {}),
+    deleteServerAccount: vi.fn(async () => {
+      throw new Error('not used in analysis tests')
+    }),
     syncNow: vi.fn(),
     longTermPlans: [],
     addLongTermPlan: vi.fn(),
@@ -189,15 +194,17 @@ const UI_VALUE: UIContextValue = {
   showToast: vi.fn(),
 }
 
-function renderPage(overrides: Partial<MockDataContextValue> = {}) {
+function renderPage(overrides: Partial<MockDataContextValue> = {}, mode: RuntimeMode = 'owner') {
   return render(
-    <MemoryRouter initialEntries={['/reports']}>
-      <UIContext.Provider value={UI_VALUE}>
-        <MockDataContext.Provider value={buildContextValue(overrides)}>
-          <ReportsPage />
-        </MockDataContext.Provider>
-      </UIContext.Provider>
-    </MemoryRouter>,
+    <RuntimeModeProvider mode={mode}>
+      <MemoryRouter initialEntries={['/reports']}>
+        <UIContext.Provider value={UI_VALUE}>
+          <MockDataContext.Provider value={buildContextValue(overrides)}>
+            <ReportsPage />
+          </MockDataContext.Provider>
+        </UIContext.Provider>
+      </MemoryRouter>
+    </RuntimeModeProvider>,
   )
 }
 
@@ -273,6 +280,15 @@ describe('ReportsPage 服务端综合分析', () => {
 
     expect((await screen.findAllByText(ANALYSIS_INVALID_LABEL)).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
+  })
+
+  it('桌面体验模式固定使用本地 Mock，不请求服务端综合分析', async () => {
+    mocks.requestAnalysisReport.mockClear()
+    renderPage({}, 'guest')
+
+    expect(await screen.findByText('桌面体验模式固定使用本地 Mock')).toBeInTheDocument()
+    expect(mocks.requestAnalysisReport).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: '去设置开启数据同步' })).not.toBeInTheDocument()
   })
 
   it('AI 授权关闭时展示授权文案与去个人档案入口，不发起请求', async () => {

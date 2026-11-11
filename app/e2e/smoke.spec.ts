@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
+import { chooseDate, chooseTime } from './date-time'
 
 test('today page renders and primary navigation works', async ({ page }) => {
   await page.goto('/')
@@ -52,7 +53,13 @@ test('important goal can be edited and persisted in the mock session', async ({ 
     .first()
     .click()
   await expect(page.getByRole('dialog', { name: /编辑重要目标 01/ })).toBeVisible()
+  await expect(page.locator('input[type="date"], input[type="time"]')).toHaveCount(0)
   await page.getByLabel('目标名称').fill('新的阶段目标')
+  const targetDate = new Date()
+  targetDate.setDate(targetDate.getDate() + 3)
+  const targetDateValue = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
+  await chooseDate(page, '目标日期', targetDateValue)
+  await chooseTime(page, '目标时间', '18:45')
   await page.getByRole('button', { name: '保存目标' }).click()
 
   await expect(page.getByRole('button', { name: '编辑重要目标：新的阶段目标' })).toBeVisible()
@@ -193,7 +200,7 @@ test('today plan can be added and removed through the editor', async ({ page }) 
 
   const newRow = page.locator('.mock-planner-row').last()
   await newRow.getByLabel('安排名称').fill('晚间拉伸')
-  await newRow.getByLabel('时间').fill('21:20')
+  await chooseTime(page, '时间', '21:20', newRow)
   await newRow.getByLabel('详情').fill('10 分钟 · 髋部与肩部放松')
   await page.getByRole('button', { name: '保存计划' }).click()
 
@@ -395,6 +402,60 @@ test('settings can enable sync against a mocked device API and show the recovery
   await page.getByRole('button', { name: '确认吊销' }).click()
   await expect(toggle).not.toBeChecked()
   await expect(syncCard.getByText('数据副本会存到自建服务器', { exact: false })).toBeVisible()
+})
+
+test('settings deletes server account and clears local data', async ({ page }, testInfo) => {
+  const recoveryCode = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
+  let deleteAuthorization: string | undefined
+  let deleteBody: unknown = null
+
+  await page.route('**/api/v1/**', (route) => {
+    const request = route.request()
+    const url = request.url()
+    if (url.endsWith('/devices')) {
+      return route.fulfill({
+        json: { userId: 'u-e2e', deviceId: 'd-e2e', token: 'token-e2e', recoveryCode },
+      })
+    }
+    if (request.method() === 'DELETE' && url.endsWith('/account')) {
+      deleteAuthorization = request.headers().authorization
+      deleteBody = request.postDataJSON()
+      return route.fulfill({
+        json: { deleted: true, deletedAt: Date.now(), counts: { profile: 1 } },
+      })
+    }
+    if (url.includes('/sync/bootstrap') || url.includes('/sync/push')) {
+      return route.fulfill({ json: { applied: 1, skipped: [], serverRev: 1 } })
+    }
+    if (url.includes('/sync/pull')) {
+      return route.fulfill({ json: { entities: [], nextSince: 1, hasMore: false } })
+    }
+    return route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'x' } } })
+  })
+
+  await page.goto('/settings')
+  const syncCard = page.locator('.settings-sync-card')
+  const toggle = syncCard.getByRole('checkbox', { name: '跨设备同步' })
+  await toggle.click()
+
+  const deleteHeading = page.getByRole('heading', { name: '删除同步账号与全部数据' })
+  await expect(deleteHeading).toBeVisible()
+  await page.screenshot({
+    path: testInfo.outputPath('settings-delete-account.png'),
+    fullPage: true,
+  })
+
+  await page.getByRole('button', { name: '删除账号与数据' }).click()
+  await expect(
+    page.getByRole('alertdialog', { name: '永久删除同步账号与全部数据？' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: '永久删除' }).click()
+
+  await expect(page.locator('.toast.show')).toContainText('同步账号和本机数据已永久删除')
+  await expect(deleteHeading).toHaveCount(0)
+  await expect(toggle).not.toBeChecked()
+  expect(deleteAuthorization).toBe('Bearer token-e2e')
+  expect(deleteBody).toEqual({ confirm: true })
 })
 
 test('report type cards open the matching reports', async ({ page }) => {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { TimePickerField } from '../components/DateTimePicker'
 import { Icon } from '../components/Icon'
 import { PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
@@ -236,15 +237,13 @@ function ProfileEditor({
             />
           </label>
           <div className="surface-form-grid">
-            <label className="form-field">
-              <span>通常入睡时间</span>
-              <input
-                className="form-input"
-                type="time"
-                value={draft.bedtime}
-                onChange={(event) => patch({ bedtime: event.target.value })}
-              />
-            </label>
+            <TimePickerField
+              className="form-field"
+              triggerClassName="form-input"
+              label="通常入睡时间"
+              value={draft.bedtime}
+              onChange={(bedtime) => patch({ bedtime })}
+            />
             <label className="form-field">
               <span>平均睡眠 / 小时</span>
               <input

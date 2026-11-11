@@ -12,6 +12,7 @@ import {
   type PushBody,
   type PushResult,
 } from './sync-contract'
+import type { AccountDeleteResponse } from '@persist/shared/contract/account'
 
 /**
  * 同步 HTTP 客户端（设计文档 §7.3 / §10）。
@@ -23,7 +24,13 @@ import {
  */
 
 export type SyncApiPath =
-  'devices' | 'devices/restore' | 'devices/revoke' | 'sync/push' | 'sync/pull' | 'sync/bootstrap'
+  | 'devices'
+  | 'devices/restore'
+  | 'devices/revoke'
+  | 'sync/push'
+  | 'sync/pull'
+  | 'sync/bootstrap'
+  | 'account'
 
 /** 失败分类：引擎据此决定重试、暂停还是提示用户重新绑定。 */
 export type SyncErrorKind =
@@ -84,6 +91,7 @@ export interface SyncClient {
   push(token: string, body: PushBody): Promise<PushResult>
   pull(token: string, query: PullQuery): Promise<PullResponseBody>
   bootstrap(token: string, body: BootstrapBody): Promise<PushResult>
+  deleteAccount(token: string): Promise<AccountDeleteResponse>
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -164,6 +172,19 @@ function parsePullResponse(body: unknown): PullResponseBody {
   }
 }
 
+function parseAccountDeleteResponse(body: unknown): AccountDeleteResponse {
+  if (
+    !isRecord(body) ||
+    body.deleted !== true ||
+    typeof body.deletedAt !== 'number' ||
+    !Number.isFinite(body.deletedAt) ||
+    !isRecord(body.counts)
+  ) {
+    throw new SyncRequestError('invalid', '删除账号接口返回的内容不完整。', { status: 200 })
+  }
+  return body as unknown as AccountDeleteResponse
+}
+
 export function createSyncClient(options: SyncClientOptions = {}): SyncClient {
   const baseUrl = (options.baseUrl ?? '').replace(/\/$/, '')
   const fetchImpl = options.fetchImpl ?? globalThis.fetch
@@ -174,7 +195,7 @@ export function createSyncClient(options: SyncClientOptions = {}): SyncClient {
   }
 
   async function request(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     path: SyncApiPath,
     init: { token?: string; body?: unknown; query?: Record<string, string | number> } = {},
   ): Promise<unknown> {
@@ -254,6 +275,11 @@ export function createSyncClient(options: SyncClientOptions = {}): SyncClient {
     },
     async bootstrap(token, body) {
       return parsePushResult(await request('POST', 'sync/bootstrap', { token, body }))
+    },
+    async deleteAccount(token) {
+      return parseAccountDeleteResponse(
+        await request('DELETE', 'account', { token, body: { confirm: true } }),
+      )
     },
   }
 }

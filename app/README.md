@@ -5,13 +5,15 @@ Persist 的 React Web 客户端。
 ## 开发命令
 
 ```powershell
-npm run dev          # 本地开发服务器
+npm run dev          # web 构建；只允许 demo / guest，默认 guest
+npm run dev:mobile   # mobile 构建；默认 owner（移动端验收用）
 npm run lint         # Oxlint
 npm run typecheck    # TypeScript 类型检查
 npm test             # Vitest 单元测试
 npm run test:e2e     # Playwright 端到端测试
 npm run format       # Prettier 格式化
-npm run build        # 生产构建
+npm run build        # web 生产构建；禁止 owner
+npm run build:mobile # USB 移动端包；输出 dist-mobile，默认 owner
 ```
 
 ## 工程约定
@@ -19,8 +21,8 @@ npm run build        # 生产构建
 - 页面路由与全局壳层放在 `src/`。
 - 已验收的 v3 视觉样式位于 `src/styles/home-v3.css`，新增共享样式放在 `src/styles/persist.css`。
 - 业务数据写入本机浏览器 IndexedDB（原生实现，无 Dexie）：`src/lib/persist-state.ts` 管记录结构与 `schemaVersion` 迁移，`src/lib/persist-storage.ts` 管 open / load / save 与降级；`MockDataProvider` 首挂载水合、200 ms 防抖落盘、`pagehide` / `visibilitychange` 补写，对外 Context 契约不变。
-- AI 引导建档已接服务端（步骤 8b）：`src/lib/ai-chat-client.ts` 的 `createAppChatClient({ consent })` 在「档案页开启 AI 数据授权 + `/api/health` 可用」时走同源 `/api/chat`，否则用本地 Mock；SSE 增量解析，**只在首个内容事件前回退**，回退后本次会话不再重试，界面如实标注来源。AI 报告文字也已接服务端（步骤 8c，见下条）。开发时 `npm run dev` 的 `/api` 代理指向 `PERSIST_API_TARGET`（默认 `http://127.0.0.1:3000`），Playwright 固定指向不可达端口以免 E2E 打到真实后端。
-- AI 报告已接服务端（步骤 8c）：`src/lib/ai-report-client.ts` 的 `probeAiReport()` 要求 `/api/health` 返回 `ai:'deepseek'`，`requestAiReport()` POST 同源 `/api/report`；`src/lib/report-types.ts` 镜像服务端契约。**报告只有文字字段来自模型**（`title/status/summary/conclusions/actions/warnings`），指标数字、依据条目、统计区间仍由 `ReportsPage.tsx` 的 `buildDailyReport()` 按本地记录确定性生成；请求只含「已授权 + 设置来源开关打开」的摘要，未授权模块发 `null` 而不是 0/[]。不可用时回退本地 Mock 并显示回退提示、徽标降级；响应不合契约抛 `ReportContractError`、明确报错不伪造报告。**只有「今日简报」走服务端**，`训练建议` / `学习观察` 仍打开本地已有报告；`ReportRecord.origin` 区分 AI / Mock。
+- AI 引导建档已接服务端（步骤 8b）：`src/lib/ai-chat-client.ts` 的 `createAppChatClient({ consent })` 在「档案页开启 AI 数据授权 + `/api/health` 可用」时走同源 `/api/chat`，否则用本地 Mock；SSE 增量解析，**只在首个内容事件前回退**，回退后本次会话不再重试，界面如实标注来源。AI 报告文字也已接服务端（步骤 8c，见下条）。运行模式按 Vite mode 隔离：默认 `npm run dev` / `npm run build` 是 web，只允许 demo / guest；`npm run dev:mobile` / `npm run build:mobile` 是移动端，默认 owner，构建输出 `dist-mobile`。开发时 `/api` 代理指向 `PERSIST_API_TARGET`（默认 `http://127.0.0.1:3000`），Playwright 使用 mobile mode 固定测试 owner 基线，并把 API 指向不可达端口以免 E2E 打到真实后端。
+- AI 报告已接服务端（步骤 8c）：`src/lib/ai-report-client.ts` 的 `probeAiReport()` 要求 `/api/health` 返回 `ai:'deepseek'`，`requestAiReport()` POST 同源 `/api/report`；`src/lib/report-types.ts` 镜像服务端契约。**报告只有文字字段来自模型**（`title/status/summary/conclusions/actions/warnings`），指标数字、依据条目、统计区间仍由 `ReportsPage.tsx` 的 `buildDailyReport()` 按本地记录确定性生成；请求只含「已授权 + 设置来源开关打开」的摘要，未授权模块发 `null` 而不是 0/[]。不可用时回退本地 Mock 并显示回退提示、徽标降级；响应不合契约抛 `ReportContractError`、明确报错不伪造报告。**`/api/report` 在 owner 移动端由「今日简报」「训练建议」「饮食观察」「学习观察」共用；三张今日观察卡只在 owner + 授权 + 当日有数据时请求，按日缓存、摘要变化提示重新生成、失败回退本地规则；demo / guest 不请求。**`ReportRecord.origin` 区分 AI / Mock。
 - 今日页晨间简报也接服务端（2026-11-04）：摘要构造统一到 `src/lib/report-digest.ts`（报告页与简报共用同一份授权/来源规则），`src/lib/morning-brief.ts` 负责「未授权/无来源不发请求 → `sessionStorage` 按天 + 摘要指纹缓存 → `POST /api/report`（`今日简报` / 7 天）→ `parseReportContent` 校验」；模型只覆盖面板标题与摘要，三个 KPI 与建议节奏仍是本地确定性生成。失败按状态回退并如实标注（「已回退到本机规则，未使用模型输出」），只有拿到合规内容才显示 DeepSeek 来源。
 - 跨设备同步（步骤 12d/12e）：`src/lib/sync-*.ts` 六个文件——`sync-contract.ts`（转出 `@persist/shared` 契约）、`sync-client.ts`（`/api/v1/*` 请求与退避）、`sync-queue.ts`（outbox 合并/批次）、`sync-store.ts`（`persist-sync` IndexedDB）、`sync-entities.ts`（切片摊平 / diff / pull LWW + 墓碑 + 形状守卫）、`sync-engine.ts`（bootstrap、5 s 防抖、60 s 兜底、`online`/`visibility` 触发）。**默认关闭，关闭时不发任何同步请求**；开关与恢复码在设置页「数据同步」卡片。服务端 `/api/v1/*` 只在同源可用时生效，**服务端 2026-11-06、前端静态包 2026-11-07 均已部署**，但同步默认关闭，默认路径仍是纯本地。
 - 服务端账号导出兼容（步骤 14c，2026-11-10）：`GET /api/v1/export` 返回 `mode: "server-export"` 的 0.3.0 同构信封；`src/lib/mock-data-transfer.ts` 的导入校验已允许空 `reports` 数组，因此空账号导出也能被当前客户端重新导入。该改动不改页面或视觉；端点已于 2026-11-10 部署到生产。14d 的服务端删除端点同样未接前端 UI，设置页不改视觉。
@@ -41,9 +43,9 @@ npm run build        # 生产构建
 
 主导航固定五项：今日 / 健身 / 饮食 / 学习 / AI 报告。`/plans` 是二级页面，从档案页「AI 建档」、今日页计划区或 `/plans?onboard=1` 深链进入；该页的 AI 对话在授权且服务端可用时调用真实 DeepSeek（标注「DeepSeek 生成 · 经本站服务端代理」），否则使用本地规则式 Mock（标注「本地生成 · Mock 对话」）。`/reports` 的「今日简报」同理：授权 + 服务端可用时经 `/api/report` 生成文字（标注「DeepSeek 生成 · 经本站服务端代理」），否则本地 Mock（标注「本地生成 · Mock 报告」）。今日页「晨间简报」也已接通同一接口：打开面板时按「今日简报 / 7 天」请求，模型写标题与摘要，KPI 与建议节奏仍本地生成，失败/未授权时回退并明确标注。**步骤 13 起 `/reports` 末尾新增「服务端综合分析」块**：选中 7 / 30 / 90 天窗口后点「生成综合分析」→ `POST /api/v1/analysis/reports`，展示模型文字 + 指标卡 + 来源与缓存标记，下方列出服务端归档（`GET /api/v1/reports`）；此项依赖跨设备同步（需要 `syncToken`）且服务端已部署，未就绪时只显示说明、不发请求。设置页新增「每日简报」卡片（默认关闭、默认 21:00）。
 
-测试现状（2026-11-10 复核）：`npm test` **335 条**单元测试（24 个文件，步骤 13 新增 `analysis-client` / 综合分析块 / 每日简报设置项的用例，步骤 14c 新增服务端导出信封可导入与空报告数组用例），`npx playwright test` 60 用例 × 2 项目 = **120 次执行**（9 个文件、1.2 m；新增 `e2e/reports-analysis.spec.ts` 4 条 → 8 次执行，顺带修掉一处既有用例的 `.reports-kicker` strict mode 冲突），`npm run lint` **0 错 0 警告**（98 个文件）、`npm run typecheck` 通过、`npm run format:check` 通过，`npm run build` JS 628.24 kB（gzip 186.67 kB）/ CSS 145.40 kB（gzip 24.89 kB），`npm run visual:check` 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张截图（步骤 13 重跑未起后端：`overflow/missing*` 全 0，`failures 12` 为 `/reports`、`plans-ai` 各 6 条 502 属前置条件未满足；**本轮 12 张 png 差异已随 `ec97938` 入库**）。注意构建产物已过 500 kB：Vite 仍报 chunk 体积警告，`/plans` 尚未拆分懒加载（已知问题，非本步骤引入）。验证细节与已知问题见仓库根目录 `HANDOFF.md`。
+测试现状（2026-11-11 owner 三张观察卡接入真实 AI 后复跑）：`npm test` **356 条**单元测试（28 个文件；新增观察卡请求 / 缓存 / 回退、共享报告契约与报告类型提示词相关覆盖），`npx playwright test` 64 用例 × 2 项目 = **128 次执行**（11 个文件、1.2 m；新增 `ai-observations.spec.ts` 1 条 × 2，验证三张卡只发送对应来源摘要），`npm run lint` **0 错 0 警告**、`npm run typecheck` 通过，`npm run build` web JS `index-4QYRMEYg.js` 656116 B（gzip 194.49 kB）、`npm run build:mobile` JS `index-D3qP8Eox.js` 656112 B（gzip 194.49 kB），CSS 均为 `index-BGlBBerF.css` 145428 B（gzip 24.90 kB）。`npm run visual:check` 生成 15 状态 × 6 视口 = 90 张 + 快速记录 1 张 = 91 张；`overflow / missingElements / missingDialogs / failures` 全 0。demo / guest 已于 2026-11-11 双端验收；owner 观察卡文案待真机验收，截图未提交。构建产物过 500 kB 的 Vite 警告仍在，`/plans` 尚未拆分懒加载。验证细节见仓库根目录 `HANDOFF.md`。
 
-> **`visual:check` 的前置条件**：脚本只连接已在运行的 4173，**自己不启动后端**。步骤 8b 之后 `/plans` 会先探测 `/api/health`，步骤 8c 之后 `/reports` 同样探测，所以跑之前要另开终端起本机后端 `cd ../server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，页面显示 Mock，与基线一致）。后端不在时 Vite 代理返回 502，浏览器把每个 `/plans`、`/reports` 状态记控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判失败（exit 1，截图像素本身没问题）。
+> **`visual:check` 的前置条件**：owner 视觉基线必须先用 `npm run dev:mobile -- --port 4173` 启动 mobile 开发服务；web 默认 guest，不能用于 owner 截图。脚本只连接已在运行的 4173，**自己不启动后端**。步骤 8b 之后 `/plans` 会先探测 `/api/health`，步骤 8c 之后 `/reports` 同样探测，所以跑之前要另开终端起本机后端 `cd ../server; node dist/index.js`（无 Key 也会返回 200 `ai:"disabled"`，页面显示 Mock，与基线一致）。后端不在时 Vite 代理返回 502，浏览器把每个 `/plans`、`/reports` 状态记控制台错误 ⇒ 脚本按 `consoleErrors > 0` 判失败（exit 1，截图像素本身没问题）。
 
 ## 待办（按顺序）
 
@@ -51,7 +53,7 @@ npm run build        # 生产构建
 2. **步骤 11（8d）数据历史化** —— ✅ 已完成（2026-11-04）：`schemaVersion` 2、训练真实历史、饮食/饮水/计划按日台账、备份 0.3.0。
 3. **步骤 12（P4a）账号 + 增量同步** —— ✅ 本机完成并验收（2026-11-05，12a–12f）：客户端同步层 + 设置页「数据同步」卡片；**已推送；服务端 2026-11-06 已部署、前端「数据同步」卡片 2026-11-07 已上传**（服务器已升 Node v22.19.0）。
 4. **步骤 13（P4b）服务端聚合 + AI 综合分析** —— ✅ 本机完成并验证（2026-11-05，**已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**）：服务端 SQL 聚合事实包 + 四个 `/api/v1` 接口 + 每日简报 job；前端 `/reports`「服务端综合分析」块（7/30/90 天、四态、归档列表）与设置页「每日简报」卡片（默认关闭、21:00）。**已随 2026-11-06 切换部署**（步骤 10 A 段升 Node v22.19.0）。
-5. 步骤 14（备份 / 恢复 / 导出 / 删除账号）：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号与备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产。14d 当前只做服务端履约，**前端「本机 + 服务端」两段式删除入口尚未接线**，设置页视觉未改；本机「清空本机数据」仍是现有独立入口。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §12。
+5. 步骤 14（备份 / 恢复 / 导出 / 删除账号）：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号与备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产。14d 的「先删服务端、成功后清本机」入口已在本机接线，待双端验收；本机「清空本机数据」仍是独立入口。设计见 `docs/P4-数据层与AI综合分析设计方案.md` §12。
 
 已完成（2026-11-05）：
 

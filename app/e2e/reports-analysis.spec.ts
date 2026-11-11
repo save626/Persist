@@ -122,7 +122,7 @@ test('server analysis shows AI report with paragraphs and metrics', async ({ pag
   await enableSync(page)
   await page.goto('/reports')
 
-  await expect(page.getByRole('heading', { name: '服务端综合分析' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '服务端综合分析', exact: true })).toBeVisible()
   await expect(page.getByText(SERVER_LABEL).first()).toBeVisible()
   await expect(page.getByText(CONTENT.title)).toBeVisible()
   await expect(page.getByText(CONTENT.analysis[0])).toBeVisible()

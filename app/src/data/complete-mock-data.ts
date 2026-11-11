@@ -12,7 +12,14 @@ import type {
   StudyRecord,
   WaterLogEntry,
 } from '../types'
-import { formatTrainingSummary, getExerciseKind, summarizeFitness } from '../lib/fitness'
+import { formatTrainingSummary, summarizeFitness } from '../lib/fitness'
+import { createLongTermPlan } from '../lib/long-term-plan'
+import { proposalToDraft } from '../lib/plan-draft'
+import {
+  PREBUILT_DEMO_AI_METADATA,
+  PREBUILT_DEMO_PLAN_CHAT,
+  PREBUILT_DEMO_REPORT_CONTENT,
+} from './prebuilt-demo-ai'
 
 const WATER_BASELINE_MILLILITERS = 1_200
 
@@ -544,9 +551,6 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
 
   const fitnessSummary = summarizeFitness(fitnessSession.exercises)
   const doneSets = fitnessSummary.doneSets
-  const strengthDoneSets = fitnessSession.exercises
-    .filter((exercise) => getExerciseKind(exercise) === 'strength')
-    .reduce((total, exercise) => total + exercise.sets.filter((set) => set.done).length, 0)
   const englishRecords = studyRecords.filter((record) => record.category === 'english')
   const mathRecords = studyRecords.filter((record) => record.category === 'math')
   const totalStudyMinutes = studyRecords.reduce((total, record) => total + record.duration, 0)
@@ -562,18 +566,21 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
     0,
   )
   const foodEntryCount = meals.reduce((total, meal) => total + meal.entries.length, 0)
+  const mealCountLabel = meals.filter((meal) => meal.entries.length > 0).length
   const reportNow = dateAtOffset(0, now)
 
+  const prebuiltMeta = {
+    model: PREBUILT_DEMO_AI_METADATA.model,
+    generatedAt: PREBUILT_DEMO_AI_METADATA.generatedAt,
+  }
   const reports: ReportRecord[] = [
     {
-      id: 'report-week-current',
-      type: '每周复盘',
-      title: '完整演示：训练稳定，学习与补水节奏清晰',
+      id: 'report-demo-daily',
+      type: '今日简报',
+      ...PREBUILT_DEMO_REPORT_CONTENT.daily,
       date: reportDate(reportNow),
-      updatedAt: reportDateTime(reportNow, '16:45'),
-      period: `${reportDate(dateAtOffset(-6, now))} — ${reportDate(reportNow)}`,
-      summary: `完整演示数据覆盖 ${studyRecords.length} 条学习记录、4 个餐次、${doneSets} 个已完成训练组和 7 天目标。力量、跳绳与骑行记录可以同步进入今日页和报告页。`,
-      status: '跨模块可验证',
+      updatedAt: reportDateTime(reportNow, '20:32'),
+      period: '近 7 天',
       metric: [
         { label: '训练', value: '进行中', detail: `${doneSets} 组已完成` },
         {
@@ -588,16 +595,6 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
         },
         { label: '饮水', value: `${totalWaterLiters.toFixed(2)} L`, detail: '已达到 2.0 L 目标' },
       ],
-      conclusions: [
-        '训练会话同时包含力量、跳绳和骑行，可以验证容量、时长与距离的跨页面汇总。',
-        '学习记录覆盖英语与高数、今天与过去 6 天，可以验证新增、编辑、筛选和报告引用。',
-        '四个餐次、完整的营养明细和多个饮水事件均已准备，可以直接验证营养与饮水联动。',
-      ],
-      actions: [
-        '把高数练习提前到晚饭前，避免与疲劳叠加。',
-        '训练后 2 小时内完成含蛋白质的晚餐。',
-        '晚间复盘只整理高数错题，不额外追加训练量。',
-      ],
       evidence: [
         `训练记录：${formatTrainingSummary(fitnessSession.exercises)}`,
         `学习记录：共 ${studyRecords.length} 条，英语 ${englishRecords.length} 条、高数 ${mathRecords.length} 条，累计 ${totalStudyMinutes} 分钟`,
@@ -605,126 +602,115 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
         `饮水记录：3 段新增事件，叠加晨间基线后 ${totalWaterLiters.toFixed(2)} L`,
         '个人档案：14 / 14 项已填写，含过敏、作息与压力信息',
       ],
+      origin: 'prebuilt',
+      prebuilt: prebuiltMeta,
     },
     {
-      id: 'report-fitness-1024',
+      id: 'report-demo-training',
       type: '训练建议',
-      title: '上肢训练进入中段，下一组优先保持动作质量',
+      ...PREBUILT_DEMO_REPORT_CONTENT.training,
       date: reportDate(dateAtOffset(-1, now)),
-      updatedAt: reportDateTime(dateAtOffset(-1, now), '19:20'),
-      period: '单次训练复盘',
-      summary:
-        '当前会话已完成卧推、上斜推举和三头动作的主要工作组，强度逐步上升。剩余动作应保持重量，不追加强度。',
-      status: '强度可控',
+      updatedAt: reportDateTime(dateAtOffset(-1, now), '20:32'),
+      period: '近 7 天训练记录',
       metric: [
-        { label: '训练时长', value: '32 min', detail: '计划 45 min' },
-        {
-          label: '有效组数',
-          value: `${strengthDoneSets} 组`,
-          detail: `${fitnessSession.exercises.reduce((total, exercise) => total + exercise.sets.length, 0)} 组计划`,
-        },
-        {
-          label: '训练容量',
-          value: `${fitnessSummary.strengthVolume.toLocaleString('zh-CN')} kg`,
-          detail: '来自已完成力量组',
-        },
-        { label: '最高 RPE', value: '8.0', detail: '剩余工作组尚未结束' },
-      ],
-      conclusions: [
-        '已完成组的主要重量稳定，没有记录疼痛或动作失效。',
-        '剩余组数量足够，不需要通过增加重量制造额外疲劳。',
-        '训练后补水与蛋白质补充仍是当前最优先的恢复动作。',
-      ],
-      actions: [
-        '下一组卧推保持 62.5 kg，不追加次数。',
-        '训练后 2 小时内完成一餐含蛋白质的主食。',
-        '剩余肩部动作控制在 RPE 8 左右。',
+        { label: '完成组数', value: `${doneSets} / 16`, detail: '进行中的上肢力量会话' },
+        { label: '力量容量', value: '2680 kg', detail: '仅统计已完成组' },
+        { label: '有氧', value: '8.5 km', detail: '跳绳 12 分钟 + 骑行 25 分钟' },
+        { label: '动作', value: '6 个', detail: '力量、时长与距离动作均有覆盖' },
       ],
       evidence: [
-        '杠铃平板卧推完成前 3 组，RPE 为 7.0、7.5、8.0',
-        '上斜哑铃卧推完成 2 组，重量 22.5 kg',
-        '当前训练会话仍在进行，未完成组已保留',
+        '杠铃平板卧推完成前 3 组，重量依次为 60 / 62.5 / 62.5 kg',
+        '上斜哑铃卧推完成 2 组，重量均为 22.5 kg',
+        '绳索下压完成 2 组，哑铃侧平举完成 1 组',
+        '跳绳完成 12 分钟，骑行完成 8.5 km / 25 分钟',
+        '个人档案：目标增肌并改善体态，每周可训练 4 次',
       ],
+      origin: 'prebuilt',
+      prebuilt: prebuiltMeta,
     },
     {
-      id: 'report-study-1025',
+      id: 'report-demo-study',
       type: '学习观察',
-      title: '英语与高数均有连续记录，晚间任务需要减量',
+      ...PREBUILT_DEMO_REPORT_CONTENT.study,
       date: reportDate(dateAtOffset(-2, now)),
-      updatedAt: reportDateTime(dateAtOffset(-2, now), '21:10'),
+      updatedAt: reportDateTime(dateAtOffset(-2, now), '20:32'),
       period: '近 7 天学习记录',
-      summary: `过去 7 天已有 ${studyRecords.length} 条学习记录，英语与高数各 ${englishRecords.length} 条和 ${mathRecords.length} 条。记录结构足够验证分类、错题、听力和投入趋势。`,
-      status: '节奏可优化',
       metric: [
         {
           label: '英语投入',
           value: `${englishRecords.reduce((total, record) => total + record.duration, 0)} min`,
-          detail: '覆盖单词、听力与真题',
+          detail: `${englishRecords.length} 条记录`,
         },
         {
           label: '高数投入',
           value: `${mathRecords.reduce((total, record) => total + record.duration, 0)} min`,
-          detail: '覆盖章节与错题',
+          detail: `${mathRecords.length} 条记录`,
         },
         {
           label: '有效记录',
           value: `${studyRecords.length} 条`,
           detail: `英语 ${englishRecords.length} / 高数 ${mathRecords.length}`,
         },
-        { label: '记录天数', value: '7 天', detail: '含今日记录' },
-      ],
-      conclusions: [
-        '英语记录包含新词、复习词、正确率与听力，字段覆盖完整。',
-        '高数记录包含章节、题量与错题数，可以验证过滤和编辑流程。',
-        '晚间学习应只保留一次轻量复盘，避免与训练恢复冲突。',
-      ],
-      actions: [
-        '高数主练习安排在晚饭前，晚间只复盘错题。',
-        '英语保持每日最小任务，不追加密集打卡。',
-        '每条学习记录只保留一次完整结果。',
+        { label: '累计投入', value: `${totalStudyMinutes} min`, detail: '近 7 天学习记录' },
       ],
       evidence: [
-        `近 7 天学习记录 ${studyRecords.length} 条，覆盖 7 个日期`,
-        `英语 ${englishRecords.length} 条，高数 ${mathRecords.length} 条`,
+        `近 7 天学习记录 ${studyRecords.length} 条，英语 ${englishRecords.length} 条、高数 ${mathRecords.length} 条`,
         `累计学习 ${totalStudyMinutes} 分钟`,
+        '英语记录包含新词、复习词、正确率与听力字段',
+        '高数记录包含章节、题量与错题字段',
       ],
+      origin: 'prebuilt',
+      prebuilt: prebuiltMeta,
     },
     {
-      id: 'report-diet-1022',
+      id: 'report-demo-diet',
       type: '饮食观察',
-      title: '餐次记录完整，晚餐蛋白质与饮水节奏可继续核对',
+      ...PREBUILT_DEMO_REPORT_CONTENT.diet,
       date: reportDate(dateAtOffset(-3, now)),
-      updatedAt: reportDateTime(dateAtOffset(-3, now), '20:40'),
-      period: '今日饮食记录',
-      summary:
-        '早餐、午餐、晚餐和加餐都已记录。当前数据可以验证热量、宏量营养、餐次编辑和饮水补录。',
-      status: '结构可验证',
+      updatedAt: reportDateTime(dateAtOffset(-3, now), '20:32'),
+      period: '近 7 天饮食与饮水',
       metric: [
         {
           label: '总热量',
           value: `${totalCalories.toLocaleString('zh-CN')} kcal`,
           detail: '来自 4 个餐次',
         },
-        { label: '蛋白质', value: `${totalProtein} g`, detail: '早餐、午餐与晚餐均有覆盖' },
+        { label: '蛋白质', value: `${totalProtein} g`, detail: '早餐、午餐、晚餐与加餐合计' },
         { label: '食物条目', value: `${foodEntryCount} 个`, detail: '每餐均至少 2 项' },
         { label: '饮水', value: `${totalWaterLiters.toFixed(2)} L`, detail: '已达到 2.0 L 目标' },
-      ],
-      conclusions: [
-        '四个餐次均有食物，可以直接验证编辑、删除和 AI 热量登记流程。',
-        '食物条目按餐次记录，编辑或删除后立即汇总。',
-        '饮水已达到目标，仍可通过快捷按钮验证新增、撤销和自定义补录。',
-      ],
-      actions: [
-        '晚餐优先补齐蛋白质和蔬菜。',
-        '训练前 30 分钟补充 250 ml 水。',
-        '保持当前餐次结构，不额外追加热量。',
       ],
       evidence: [
         '早餐、午餐、晚餐和加餐均已记录食物',
         `食物条目共 ${foodEntryCount} 个，分布在 4 个餐次`,
         `总热量 ${totalCalories.toLocaleString('zh-CN')} kcal，蛋白质 ${totalProtein} g`,
         `饮水 ${totalWaterLiters.toFixed(2)} L，含 3 段新增饮水事件`,
+        '个人档案：花生过敏，饮食记录与建议均已避开花生',
       ],
+      origin: 'prebuilt',
+      prebuilt: prebuiltMeta,
+    },
+    {
+      id: 'report-demo-analysis',
+      type: '综合分析',
+      ...PREBUILT_DEMO_REPORT_CONTENT.analysis,
+      date: reportDate(dateAtOffset(-4, now)),
+      updatedAt: reportDateTime(dateAtOffset(-4, now), '20:32'),
+      period: '近 7 天综合分析',
+      metric: [
+        { label: '训练', value: '10 / 16 组', detail: '进行中的上肢力量会话' },
+        { label: '学习', value: '446 min', detail: '英语与高数各 6 条' },
+        { label: '饮食', value: '4 餐', detail: '8 个食物条目' },
+        { label: '饮水', value: '0.80 L', detail: '近 7 天 3 个记录节点' },
+      ],
+      evidence: [
+        `训练记录：${formatTrainingSummary(fitnessSession.exercises)}，力量容量 2680 kg`,
+        `学习记录：近 7 天 ${studyRecords.length} 条，累计 ${totalStudyMinutes} 分钟`,
+        `饮食记录：${mealCountLabel} 个有食物的餐次、${foodEntryCount} 个食物条目`,
+        `饮水记录：近 7 天 ${waterLog.length} 次事件，累计 0.80 L`,
+        '个人档案：14 / 14 项已填写，目标为增肌同时改善体态',
+      ],
+      origin: 'prebuilt',
+      prebuilt: prebuiltMeta,
     },
   ]
 
@@ -745,5 +731,21 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
     aiConsent: true,
     eveningReview,
     reports,
+  }
+}
+
+/** demo 专用：在完整演示数据上追加部署前通过真实 AI 建档生成的长期计划。 */
+export function createCompleteDemoData(now = new Date()): ImportableMockData {
+  const data = createCompleteMockData(now)
+  const generatedAt = new Date(PREBUILT_DEMO_AI_METADATA.generatedAt)
+  const prebuiltPlan = createLongTermPlan(
+    proposalToDraft(PREBUILT_DEMO_PLAN_CHAT.proposal, generatedAt),
+    generatedAt,
+  )
+  return {
+    ...data,
+    longTermPlans: prebuiltPlan
+      ? [{ ...prebuiltPlan, id: 'plan-demo-ai-12w', status: 'active' }]
+      : [],
   }
 }

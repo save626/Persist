@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { TimePickerField } from '../components/DateTimePicker'
 import { Icon } from '../components/Icon'
 import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
+import { useRuntimeMode } from '../context/runtime-mode-context'
 import { useUI } from '../context/ui-context'
 import {
   countMockRecords,
@@ -91,12 +93,15 @@ export function SettingsPage() {
     syncStatus,
     syncRecoveryCode,
     syncDeviceLabel,
+    syncToken,
     enableSync,
     disableSync,
     restoreSync,
     revokeSync,
+    deleteServerAccount,
     syncNow,
   } = useMockData()
+  const runtime = useRuntimeMode()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { reminders, summaryOnly, sources } = settings
   const [aiState, setAiState] = useState<AiState>('idle')
@@ -106,8 +111,11 @@ export function SettingsPage() {
   const [importError, setImportError] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmClearAll, setConfirmClearAll] = useState(false)
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
   const [infoSheet, setInfoSheet] = useState<InfoSheet>(null)
-  const [syncBusy, setSyncBusy] = useState<null | 'toggle' | 'sync' | 'restore' | 'revoke'>(null)
+  const [syncBusy, setSyncBusy] = useState<
+    null | 'toggle' | 'sync' | 'restore' | 'revoke' | 'delete'
+  >(null)
   const [restoreOpen, setRestoreOpen] = useState(false)
   const [restoreCode, setRestoreCode] = useState('')
   const [restoreError, setRestoreError] = useState('')
@@ -368,6 +376,42 @@ export function SettingsPage() {
       .finally(() => setSyncBusy(null))
   }
 
+  /**
+   * 两段式删除：先删服务端账号，成功后再清空本机数据。
+   * 服务端失败时不动本机；服务端成功但本机清空失败时保留可单独重试的清空入口。
+   */
+  const deleteAccountEverywhere = () => {
+    setConfirmDeleteAccount(false)
+    if (syncBusy) return
+    setImportName('')
+    setImportError('')
+    setAiState('idle')
+    setSavedAt('正在删除服务端账号…')
+    setSyncBusy('delete')
+    void (async () => {
+      let serverDeleted = false
+      try {
+        await deleteServerAccount()
+        serverDeleted = true
+        setSavedAt('服务端账号已删除，正在清空本机数据…')
+        await clearAllLocalData()
+        setSavedAt('账号与本地数据已删除')
+        showToast('同步账号和本机数据已永久删除')
+      } catch (error) {
+        const message = syncErrorMessage(error)
+        if (serverDeleted) {
+          setSavedAt('本机数据清空失败')
+          showToast(`服务端账号已删除，但本机数据清空失败：${message}`)
+        } else {
+          setSavedAt('删除账号失败')
+          showToast(`删除账号失败，本机数据未清空：${message}`)
+        }
+      } finally {
+        setSyncBusy(null)
+      }
+    })()
+  }
+
   return (
     <form className="settings-page" onSubmit={saveSettings}>
       <header className="head settings-head">
@@ -449,19 +493,15 @@ export function SettingsPage() {
                     <strong>{reminder.title}</strong>
                     <small>{reminder.detail}</small>
                   </span>
-                  <label className="settings-time-field">
-                    <span>提醒时间</span>
-                    <input
-                      type="time"
-                      value={reminder.time}
-                      disabled={!reminder.enabled}
-                      aria-label={`${reminder.title}时间`}
-                      onChange={(event) =>
-                        updateReminder(reminder.id, { time: event.target.value })
-                      }
-                    />
-                    <small>{timeLabel(reminder.time)}</small>
-                  </label>
+                  <TimePickerField
+                    className="settings-time-field"
+                    label="提醒时间"
+                    ariaLabel={`${reminder.title}时间`}
+                    value={reminder.time}
+                    disabled={!reminder.enabled}
+                    helper={timeLabel(reminder.time)}
+                    onChange={(time) => updateReminder(reminder.id, { time })}
+                  />
                   <label className="settings-switch">
                     <input
                       className="toggle-input"
@@ -685,7 +725,7 @@ export function SettingsPage() {
                   className="toggle-input"
                   type="checkbox"
                   checked={syncStatus.enabled}
-                  disabled={syncBusy !== null}
+                  disabled={syncBusy !== null || !runtime.sync}
                   aria-label="跨设备同步"
                   onChange={(event) => toggleSync(event.target.checked)}
                 />
@@ -772,8 +812,9 @@ export function SettingsPage() {
                 </>
               ) : (
                 <p className="settings-sync-disclosure">
-                  数据副本会存到自建服务器（当前为内网调试环境，尚未备案完成）。开启后本机每次写入会在
-                  5 秒内增量上传；关闭后不再发起任何同步请求。
+                  {runtime.sync
+                    ? '数据副本会存到自建服务器（当前为内网调试环境，尚未备案完成）。开启后本机每次写入会在 5 秒内增量上传；关闭后不再发起任何同步请求。'
+                    : '桌面演示 / 体验模式不创建同步账号，也不向服务器上传任何业务数据。'}
                 </p>
               )}
 
@@ -781,6 +822,7 @@ export function SettingsPage() {
                 <button
                   className="settings-outline-button"
                   type="button"
+                  disabled={!runtime.sync}
                   aria-expanded={restoreOpen}
                   onClick={() => {
                     setRestoreOpen((open) => !open)
@@ -849,22 +891,22 @@ export function SettingsPage() {
                   className="toggle-input"
                   type="checkbox"
                   checked={dailyBrief.enabled}
+                  disabled={!runtime.sync}
                   aria-label="每日简报"
                   onChange={(event) => toggleDailyBrief(event.target.checked)}
                 />
                 <span className="toggle-ui" />
               </label>
 
-              <label className="settings-time-field settings-brief-time">
-                <span>生成时间</span>
-                <input
-                  type="time"
-                  value={dailyBrief.at}
-                  aria-label="每日简报时间"
-                  onChange={(event) => updateDailyBriefTime(event.target.value)}
-                />
-                <small>{timeLabel(dailyBrief.at)}</small>
-              </label>
+              <TimePickerField
+                className="settings-time-field settings-brief-time"
+                label="生成时间"
+                ariaLabel="每日简报时间"
+                value={dailyBrief.at}
+                disabled={!runtime.sync}
+                helper={timeLabel(dailyBrief.at)}
+                onChange={updateDailyBriefTime}
+              />
 
               {briefTimeError && (
                 <p className="surface-error" role="alert">
@@ -874,9 +916,9 @@ export function SettingsPage() {
 
               <p className="settings-inline-note">
                 <Icon name="clock" className="icon-sm" />
-                到点后服务器汇总最近 7
-                天的训练、饮食、学习与个人档案摘要，报告写入服务端归档；服务端报告保留 365
-                天后自动删除。
+                {runtime.sync
+                  ? '到点后服务器汇总最近 7 天的训练、饮食、学习与个人档案摘要，报告写入服务端归档；服务端报告保留 365 天后自动删除。'
+                  : '桌面体验模式固定使用本地 Mock，不启用服务端每日简报。'}
               </p>
             </div>
           </section>
@@ -963,6 +1005,24 @@ export function SettingsPage() {
             </button>
           </section>
 
+          {syncToken && (
+            <section className="settings-danger-card" aria-labelledby="deleteAccountTitle">
+              <span className="settings-kicker">DELETE · ACCOUNT</span>
+              <h2 id="deleteAccountTitle">删除同步账号与全部数据</h2>
+              <p>
+                需要联网。会先永久删除自建服务器上的当前账号、同步副本、分析归档与可清理快照，成功后清空本机浏览器数据。此操作不可撤销，建议先导出
+                JSON 备份。
+              </p>
+              <button
+                className="settings-danger-button"
+                type="button"
+                disabled={syncBusy !== null || !syncStatus.online}
+                onClick={() => setConfirmDeleteAccount(true)}
+              >
+                {syncBusy === 'delete' ? '删除中…' : '删除账号与数据'}
+              </button>
+            </section>
+          )}
           <section className="settings-danger-card" aria-labelledby="clearDataTitle">
             <span className="settings-kicker">RESET · LOCAL DATA</span>
             <h2 id="clearDataTitle">清空本机数据</h2>
@@ -1008,6 +1068,16 @@ export function SettingsPage() {
         />
       )}
 
+      {confirmDeleteAccount && (
+        <ConfirmDialog
+          title="永久删除同步账号与全部数据？"
+          description="系统会先删除自建服务器上的当前账号和可清理快照，再清空本机浏览器里的全部记录、设置、长期计划与快照。此操作无法撤销，建议先导出 JSON 备份。"
+          confirmLabel="永久删除"
+          danger
+          onClose={() => setConfirmDeleteAccount(false)}
+          onConfirm={deleteAccountEverywhere}
+        />
+      )}
       {confirmRevoke && (
         <ConfirmDialog
           title="吊销本机同步？"

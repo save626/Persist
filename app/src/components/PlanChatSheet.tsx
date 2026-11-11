@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Icon } from './Icon'
 import { PageSheet } from './PageSheet'
+import { useRuntimeMode } from '../context/runtime-mode-context'
+import { PREBUILT_DEMO_PLAN_CHAT } from '../data/prebuilt-demo-ai'
 import type {
   ChatMessage,
   ChatPlanProposal,
@@ -74,16 +76,74 @@ function turnsOf(messages: ChatMessage[]): ChatTurn[] {
     .map((message) => ({ role: message.role, content: message.content }))
 }
 
+function PrebuiltPlanChatSheet({ onClose }: { onClose: () => void }) {
+  const proposal = PREBUILT_DEMO_PLAN_CHAT.proposal
+  return (
+    <PageSheet
+      title="AI 建档对话"
+      subtitle="部署前真实生成 · 当前只读"
+      onClose={onClose}
+      className="plan-chat-sheet"
+    >
+      <div className="plan-chat">
+        <div className="plan-chat-scroll" aria-label="预生成对话记录">
+          <div className="plan-chat-message assistant">
+            <div className="plan-chat-bubble">
+              这段建档对话和长期计划在部署前通过 DeepSeek 生成并固化；演示模式只读，不会再次调用
+              AI。
+            </div>
+          </div>
+          <div className="plan-chat-message user">
+            <div className="plan-chat-bubble">{PREBUILT_DEMO_PLAN_CHAT.userText}</div>
+          </div>
+          <div className="plan-chat-message assistant">
+            <div className="plan-chat-bubble">{PREBUILT_DEMO_PLAN_CHAT.assistantText}</div>
+          </div>
+          <div className="plan-chat-proposal">
+            <span className="plan-chat-proposal-kicker">预生成计划草案</span>
+            <h3>{proposal.title}</h3>
+            <p className="plan-chat-proposal-goal">{proposal.goal}</p>
+            <ul className="plan-chat-targets">
+              {proposal.weeklyTargets.map((target) => (
+                <li key={`${target.label}-${target.perWeek}`}>
+                  <span>{target.label}</span>
+                  <strong>
+                    {target.perWeek} {target.unit} / 周
+                  </strong>
+                </li>
+              ))}
+            </ul>
+            {PREBUILT_DEMO_PLAN_CHAT.warnings.length > 0 && (
+              <p className="plan-chat-warn">
+                需要注意：{PREBUILT_DEMO_PLAN_CHAT.warnings.join('；')}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="surface-form-actions">
+          <button className="btn secondary" type="button" onClick={onClose}>
+            关闭
+          </button>
+        </div>
+      </div>
+    </PageSheet>
+  )
+}
+
 export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps) {
+  const runtime = useRuntimeMode()
+  const realChatAllowed = runtime.ai.chat
   const chatClient = useMemo(
-    () => createAppChatClient({ consent: profile.aiConsent }),
-    [profile.aiConsent],
+    () => createAppChatClient({ consent: profile.aiConsent, allowRealAi: realChatAllowed }),
+    [profile.aiConsent, realChatAllowed],
   )
   const [messages, setMessages] = useState<ChatMessage[]>([INTRO_MESSAGE])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [subtitle, setSubtitle] = useState(profile.aiConsent ? PROBING_LABEL : MOCK_CHAT_LABEL)
+  const [subtitle, setSubtitle] = useState(
+    profile.aiConsent && realChatAllowed ? PROBING_LABEL : MOCK_CHAT_LABEL,
+  )
   const [fallbackNote, setFallbackNote] = useState<string | null>(null)
   const [questions, setQuestions] = useState<ChatQuestion[]>([])
   const [patch, setPatch] = useState<Partial<ProfileData>>({})
@@ -94,7 +154,7 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    if (!profile.aiConsent) return
+    if (!profile.aiConsent || !realChatAllowed) return
     let active = true
     void chatClient.probe().then((source) => {
       if (!active) return
@@ -108,7 +168,7 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
     return () => {
       active = false
     }
-  }, [chatClient, profile.aiConsent])
+  }, [chatClient, profile.aiConsent, realChatAllowed])
 
   useEffect(() => {
     const node = scrollRef.current
@@ -221,6 +281,8 @@ export function PlanChatSheet({ profile, onClose, onReview }: PlanChatSheetProps
 
   const patchEntries = profilePatchEntries(patch, profile)
   const hasUserMessage = messages.some((message) => message.role === 'user')
+
+  if (runtime.mode === 'demo') return <PrebuiltPlanChatSheet onClose={onClose} />
 
   return (
     <PageSheet title="AI 建档对话" subtitle={subtitle} onClose={onClose}>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useRuntimeMode } from '../context/runtime-mode-context'
+import { PREBUILT_DEMO_REPORT_CONTENT } from '../data/prebuilt-demo-ai'
 import type {
   EveningReviewPayload,
   FitnessSessionState,
@@ -18,6 +20,7 @@ import {
   type MorningBriefResult,
 } from '../lib/morning-brief'
 import { buildReportDigest } from '../lib/report-digest'
+import { TimePickerField } from './DateTimePicker'
 import { Icon } from './Icon'
 import { PageSheet } from './PageSheet'
 
@@ -151,15 +154,13 @@ export function PlanEditorSheet({
                     onChange={(event) => patchItem(item.id, { name: event.target.value })}
                   />
                 </label>
-                <label className="form-field">
-                  <span>时间</span>
-                  <input
-                    className="form-input"
-                    type="time"
-                    value={item.time}
-                    onChange={(event) => patchItem(item.id, { time: event.target.value })}
-                  />
-                </label>
+                <TimePickerField
+                  className="form-field"
+                  triggerClassName="form-input"
+                  label="时间"
+                  value={item.time}
+                  onChange={(time) => patchItem(item.id, { time })}
+                />
                 <label className="form-field">
                   <span>类型</span>
                   <select
@@ -294,6 +295,7 @@ export function MorningBriefSheet({
   profile: ProfileData
   onClose: () => void
 }) {
+  const runtime = useRuntimeMode()
   const today = localDateValue()
   const digest = useMemo(
     () =>
@@ -309,13 +311,24 @@ export function MorningBriefSheet({
       }),
     [aiConsent, settings, profile, fitnessSession, studyRecords, meals, waterLiters, waterLog],
   )
-  const [brief, setBrief] = useState<MorningBriefResult | null>(null)
+  const [brief, setBrief] = useState<MorningBriefResult | null>(() =>
+    runtime.mode === 'demo'
+      ? { status: 'prebuilt', content: PREBUILT_DEMO_REPORT_CONTENT.morning }
+      : null,
+  )
 
-  // 打开面板才请求：同会话内摘要没变化时复用缓存，数据变了旧文案自动失效。
+  // demo 直接读取部署前快照；其他模式才按需请求或回退本地规则。
   useEffect(() => {
+    if (runtime.mode === 'demo') return
     let active = true
     const controller = new AbortController()
-    void generateMorningBrief({ digest, aiConsent, date: today, signal: controller.signal })
+    void generateMorningBrief({
+      digest,
+      aiConsent,
+      allowRealAi: runtime.ai.morningBrief,
+      date: today,
+      signal: controller.signal,
+    })
       .then((result) => {
         if (active) setBrief(result)
       })
@@ -326,7 +339,7 @@ export function MorningBriefSheet({
       active = false
       controller.abort()
     }
-  }, [aiConsent, digest, today])
+  }, [aiConsent, digest, runtime.ai.morningBrief, runtime.mode, today])
 
   const todayMeals = meals.filter((meal) => meal.entries.length > 0)
   const todayStudyRecords = studyRecords.filter((record) => record.date === today)

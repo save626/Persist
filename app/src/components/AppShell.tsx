@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { calculateProfileCompleteness } from '../data/profile'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
+import { useRuntimeMode } from '../context/runtime-mode-context'
 import { BrandMark } from './BrandMark'
 import { Icon, IconSprite, type IconName } from './Icon'
 import { QuickRecordSheet } from './QuickRecordSheet'
@@ -26,6 +27,7 @@ const EXTRA_TITLES: Record<string, string> = {
 export function AppShell() {
   const location = useLocation()
   const { openQuickRecord, toast } = useUI()
+  const runtime = useRuntimeMode()
   const { profile, aiConsent } = useMockData()
   const completeness = calculateProfileCompleteness({ ...profile, aiConsent })
 
@@ -115,7 +117,13 @@ export function AppShell() {
         ))}
       </nav>
 
-      <button className="fab" type="button" aria-label="快速记录" onClick={openQuickRecord}>
+      <button
+        className="fab"
+        type="button"
+        aria-label={runtime.readOnly ? '演示模式只读，不能快速记录' : '快速记录'}
+        disabled={runtime.readOnly}
+        onClick={openQuickRecord}
+      >
         <Icon name="plus" />
       </button>
 

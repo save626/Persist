@@ -7,6 +7,35 @@
  */
 
 import type { ParseResult as SharedParseResult } from '@persist/shared/contract/parse'
+import {
+  REPORT_RANGE_DAYS,
+  REPORT_TYPES,
+  type ReportContent,
+  type ReportDietDigest,
+  type ReportDigest,
+  type ReportFitnessDigest,
+  type ReportProfileData,
+  type ReportRangeDays,
+  type ReportRequest,
+  type ReportResponse,
+  type ReportStudyDigest,
+  type ReportType,
+} from '@persist/shared/contract/report'
+
+export {
+  REPORT_RANGE_DAYS,
+  REPORT_TYPES,
+  type ReportContent,
+  type ReportDietDigest,
+  type ReportDigest,
+  type ReportFitnessDigest,
+  type ReportProfileData,
+  type ReportRangeDays,
+  type ReportRequest,
+  type ReportResponse,
+  type ReportStudyDigest,
+  type ReportType,
+}
 
 export type ChatRole = 'user' | 'assistant'
 
@@ -242,72 +271,8 @@ export function errorBody(code: string, message: string) {
 }
 
 // ---------------------------------------------------------------------------
-// AI 报告（8c）
-//
-// 与 app/src/lib/report-types.ts 同源。报告只需要「文字结论」：
-// 数字、指标与引用依据都由前端按本地记录确定性生成，模型不得编造。
-// 请求里的每个模块都必须是用户已授权且来源开关打开的数据，未授权的模块一律为 null。
+// AI 报告（8c）：类型与请求/响应契约统一放在 shared/contract/report.ts
 // ---------------------------------------------------------------------------
-
-export const REPORT_TYPES = ['今日简报', '训练建议', '学习观察'] as const
-export type ReportType = (typeof REPORT_TYPES)[number]
-
-export const REPORT_RANGE_DAYS = [7, 30, 90] as const
-export type ReportRangeDays = (typeof REPORT_RANGE_DAYS)[number]
-
-/** 训练摘要：只有聚合数字与动作名，不包含任何备注原文。 */
-export interface ReportFitnessDigest {
-  hasSession: boolean
-  exerciseCount: number
-  doneSets: number
-  totalSets: number
-  strengthVolumeKg: number
-  durationMinutes: number
-  distanceKm: number
-  exerciseNames: string[]
-}
-
-export interface ReportStudyDigest {
-  recordCount: number
-  englishCount: number
-  mathCount: number
-  totalMinutes: number
-}
-
-export interface ReportDietDigest {
-  mealCount: number
-  foodEntryCount: number
-  waterLiters: number
-  waterEvents: number
-}
-
-export interface ReportDigest {
-  fitness: ReportFitnessDigest | null
-  study: ReportStudyDigest | null
-  diet: ReportDietDigest | null
-  /** 只有个人档案来源开启时才有值；其中的 aiConsent 恒为 true。 */
-  profile: ProfileData | null
-}
-
-export interface ReportRequest {
-  type: ReportType
-  rangeDays: ReportRangeDays
-  digest: ReportDigest
-}
-
-export interface ReportContent {
-  title: string
-  status: string
-  summary: string
-  conclusions: string[]
-  actions: string[]
-  warnings: string[]
-}
-
-export interface ReportResponse {
-  report: ReportContent
-  model: string
-}
 
 const REPORT_TYPE_SET = new Set<string>(REPORT_TYPES)
 const REPORT_RANGE_SET = new Set<number>(REPORT_RANGE_DAYS)

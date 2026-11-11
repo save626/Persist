@@ -3,6 +3,7 @@ import { EvidenceSheet } from '../components/EvidenceSheet'
 import { Icon } from '../components/Icon'
 import { PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
+import { useRuntimeMode } from '../context/runtime-mode-context'
 import { useUI } from '../context/ui-context'
 import {
   EXERCISE_KIND_LABELS,
@@ -19,6 +20,9 @@ import {
   type HistorySessionRow,
   type HistorySetRow,
 } from '../lib/fitness-history'
+import { addDaysToDateKey, todayDateKey } from '../lib/history'
+import { buildReportDigest } from '../lib/report-digest'
+import { useAiObservation } from '../lib/use-ai-observation'
 import { useNewRecordParam } from '../lib/use-new-record-param'
 import type {
   Exercise,
@@ -413,6 +417,26 @@ const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
 ]
 
 const DEFAULT_ELAPSED_SECONDS = 12 * 60 + 48
+
+const FREE_WORKOUT_TEMPLATE: WorkoutTemplate = {
+  id: 'free-session',
+  name: '自由训练',
+  planName: '自由训练',
+  focus: '自由记录',
+  equipment: '按实际填写',
+  duration: 0,
+  description: '当前为自由训练，动作与组数均由你自行填写。',
+  exercises: [],
+}
+
+function createEmptyFitnessSession(): FitnessSessionState {
+  return {
+    activeTemplateId: FREE_WORKOUT_TEMPLATE.id,
+    exercises: [],
+    sessionStatus: 'active',
+    elapsedSeconds: 0,
+  }
+}
 
 function createFitnessSession(
   template: WorkoutTemplate = WORKOUT_TEMPLATES[0],
@@ -1228,14 +1252,30 @@ function HistoryDetailSheet({
 }
 export function FitnessPage() {
   const { showToast } = useUI()
-  const { setPlanItems, fitnessSession, setFitnessSession, archiveFitnessSession, fitnessHistory } =
-    useMockData()
+  const runtime = useRuntimeMode()
+  const isGuest = runtime.mode === 'guest'
+  const {
+    setPlanItems,
+    fitnessSession,
+    setFitnessSession,
+    archiveFitnessSession,
+    fitnessHistory,
+    aiConsent,
+    settings,
+    profile,
+    today,
+  } = useMockData()
   const newRecord = useNewRecordParam()
-  const initialSession = useMemo(() => createFitnessSession(), [])
+  const initialSession = useMemo(
+    () => (isGuest ? createEmptyFitnessSession() : createFitnessSession()),
+    [isGuest],
+  )
   const session = fitnessSession ?? initialSession
   const activeTemplate =
-    WORKOUT_TEMPLATES.find((template) => template.id === session.activeTemplateId) ??
-    WORKOUT_TEMPLATES[0]
+    session.activeTemplateId === FREE_WORKOUT_TEMPLATE.id
+      ? FREE_WORKOUT_TEMPLATE
+      : (WORKOUT_TEMPLATES.find((template) => template.id === session.activeTemplateId) ??
+        WORKOUT_TEMPLATES[0])
   const exercises = session.exercises
   const sessionStatus: SessionStatus = session.sessionStatus
   const elapsedSeconds = session.elapsedSeconds
@@ -1254,6 +1294,63 @@ export function FitnessPage() {
     () => buildHistorySessions(fitnessHistory, WORKOUT_TEMPLATES),
     [fitnessHistory],
   )
+
+  const guestTrainingSummary = useMemo(() => {
+    const todayKey = todayDateKey()
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const dateKey = addDaysToDateKey(todayKey, index - 6)
+      const date = new Date(`${dateKey}T00:00:00`)
+      return {
+        dateKey,
+        day: new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(date).replace('周', ''),
+        volume: 0,
+        sessions: 0,
+        sets: 0,
+      }
+    })
+    const byDate = new Map(days.map((day) => [day.dateKey, day]))
+    const muscles = new Map<string, number>()
+
+    fitnessHistory.forEach((record) => {
+      const day = byDate.get(record.date)
+      if (!day) return
+      const doneExercises = record.exercises
+        .map((exercise) => ({
+          ...exercise,
+          sets: exercise.sets.filter((set) => set.done),
+        }))
+        .filter((exercise) => exercise.sets.length > 0)
+      const summary = summarizeFitness(doneExercises)
+      day.volume += summary.strengthVolume
+      day.sessions += summary.doneSets > 0 ? 1 : 0
+      day.sets += summary.doneSets
+      doneExercises.forEach((exercise) => {
+        const label = exercise.muscle.trim() || '其他'
+        muscles.set(label, (muscles.get(label) ?? 0) + exercise.sets.length)
+      })
+    })
+
+    const maxVolume = Math.max(...days.map((day) => day.volume), 0)
+    const totalSets = days.reduce((total, day) => total + day.sets, 0)
+    return {
+      points: days.map((day) => ({
+        day: day.day,
+        value: maxVolume ? (day.volume / maxVolume) * 100 : 0,
+        label: day.volume > 0 ? `${day.volume.toLocaleString('zh-CN')} kg` : '休息',
+      })),
+      sessions: days.reduce((total, day) => total + day.sessions, 0),
+      volume: days.reduce((total, day) => total + day.volume, 0),
+      sets: totalSets,
+      muscles: Array.from(muscles, ([label, value]) => ({
+        label,
+        value: totalSets ? (value / totalSets) * 100 : 0,
+        sets: value,
+      }))
+        .sort((a, b) => b.sets - a.sets)
+        .slice(0, 4),
+    }
+  }, [fitnessHistory])
+  const muscleGroups = isGuest ? guestTrainingSummary.muscles : MUSCLE_GROUPS
 
   // 地址栏的 ?new=1 直接派生出「记录运动」弹层，不再用 effect 复制状态。
   const recordSheetOpen = recordOpen || newRecord.active
@@ -1274,6 +1371,62 @@ export function FitnessPage() {
   }, [initialSession, sessionStatus, setFitnessSession])
 
   const stats = useMemo(() => summarizeFitness(exercises), [exercises])
+  const observationRequest = useMemo(() => {
+    if (
+      runtime.mode !== 'owner' ||
+      !runtime.ai.report ||
+      !aiConsent ||
+      !settings.sources.fitness ||
+      !fitnessSession
+    ) {
+      return null
+    }
+    const digest = buildReportDigest({
+      aiConsent,
+      settings,
+      profile,
+      fitnessSession,
+      studyRecords: [],
+      meals: [],
+      waterLiters: 0,
+      waterLog: [],
+    })
+    return {
+      type: '训练建议' as const,
+      rangeDays: 7 as const,
+      digest: { ...digest, study: null, diet: null },
+    }
+  }, [aiConsent, fitnessSession, profile, runtime.ai.report, runtime.mode, settings])
+  const aiObservation = useAiObservation({
+    enabled: Boolean(observationRequest && stats.doneSets > 0),
+    request: observationRequest,
+    dateKey: today,
+  })
+  const hasRecordedSets = stats.totalSets > 0
+  const localObservationTitle = hasRecordedSets
+    ? `${activeTemplate.name} 的动作节奏稳定，先把完成质量守住。`
+    : isGuest
+      ? '记录动作后，这里会展示 Mock 训练观察。'
+      : '记录第一组训练后生成观察。'
+  const localObservationSummary = hasRecordedSets
+    ? `今天还剩 ${stats.totalSets - stats.doneSets} 组。下一次继续维持当前重量与组数，不必为了容量提前加重量。`
+    : isGuest
+      ? '桌面体验模式不会调用真实 AI；填写训练后，仅用本机 Mock 规则展示示例观察。'
+      : '完成一组训练后，AI 会依据训练摘要给出本日观察。'
+  const observationTitle = aiObservation.content?.title ?? localObservationTitle
+  const observationSummary = aiObservation.content?.summary ?? localObservationSummary
+  const observationSourceLabel =
+    runtime.mode !== 'owner'
+      ? 'Mock 建议 · 非医疗意见'
+      : aiObservation.mode === 'loading'
+        ? '正在调用 DeepSeek…'
+        : aiObservation.mode === 'ai'
+          ? `${aiObservation.fromCache ? 'DeepSeek 今日缓存' : 'DeepSeek 生成'}${
+              aiObservation.stale ? ' · 数据已更新' : ''
+            } · 非医疗意见`
+          : aiObservation.mode === 'fallback'
+            ? 'AI 不可用 · 本地规则降级'
+            : '记录并开启授权后生成 AI 观察'
 
   const toggleSet = (exerciseId: string, setId: string) => {
     updateSession((current) => ({
@@ -1503,23 +1656,27 @@ export function FitnessPage() {
           <span className="status">
             <span className="dot" />
             {sessionStatus === 'active'
-              ? `训练中 · ${formatElapsed(elapsedSeconds)}`
+              ? exercises.length > 0
+                ? `训练中 · ${formatElapsed(elapsedSeconds)}`
+                : '等待记录'
               : '今日训练已完成'}
           </span>
-          <button
-            className="btn secondary"
-            type="button"
-            onClick={() => {
-              document.getElementById('templatesSection')?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-              })
-              showToast('可在下方切换今日训练模板')
-            }}
-          >
-            <Icon name="today" className="icon-sm" />
-            训练模板
-          </button>
+          {!isGuest && (
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => {
+                document.getElementById('templatesSection')?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'center',
+                })
+                showToast('可在下方切换今日训练模板')
+              }}
+            >
+              <Icon name="today" className="icon-sm" />
+              训练模板
+            </button>
+          )}
           <button
             className="btn primary"
             type="button"
@@ -1536,7 +1693,9 @@ export function FitnessPage() {
         <div className="progress-head">
           <span className="label">今日训练进度</span>
           <span className="count-note">
-            {activeTemplate.name} · 计划 {activeTemplate.duration} 分钟
+            {isGuest
+              ? '自由训练 · 按实际记录'
+              : `${activeTemplate.name} · 计划 ${activeTemplate.duration} 分钟`}
           </span>
         </div>
         <div className="metrics">
@@ -1639,6 +1798,12 @@ export function FitnessPage() {
             </div>
 
             <div className="fit-exercise-stack">
+              {exercises.length === 0 && (
+                <div className="surface-note">
+                  <Icon name="fitness" className="icon-sm" />
+                  <span>还没有动作。点击“记录运动”添加第一组训练。</span>
+                </div>
+              )}
               {exercises.map((exercise, exerciseIndex) => {
                 const exerciseDone = exercise.sets.filter((set) => set.done).length
                 const exerciseKind = getExerciseKind(exercise)
@@ -1784,10 +1949,12 @@ export function FitnessPage() {
                 <h2 id="weeklyTrainingTitle">近 7 天训练</h2>
                 <p>观察节奏，不为中断制造压力。</p>
               </div>
-              <span className="week-total">3 次</span>
+              <span className="week-total">
+                {isGuest ? `${guestTrainingSummary.sessions} 次` : '3 次'}
+              </span>
             </div>
             <div className="fit-volume-chart" aria-label="近七天力量训练容量">
-              {WEEK_VOLUME.map((day, index) => (
+              {(isGuest ? guestTrainingSummary.points : WEEK_VOLUME).map((day, index) => (
                 <div
                   className={index === 6 ? 'fit-chart-day today' : 'fit-chart-day'}
                   key={day.day}
@@ -1804,8 +1971,14 @@ export function FitnessPage() {
             </div>
             <div className="fit-week-foot">
               <span>本周力量容量</span>
-              <strong>18,420 kg</strong>
-              <span>比上周 +8%</span>
+              <strong>
+                {isGuest
+                  ? guestTrainingSummary.volume > 0
+                    ? `${guestTrainingSummary.volume.toLocaleString('zh-CN')} kg`
+                    : '暂无'
+                  : '18,420 kg'}
+              </strong>
+              <span>{isGuest ? '完成训练后自动汇总' : '比上周 +8%'}</span>
             </div>
           </section>
 
@@ -1815,10 +1988,18 @@ export function FitnessPage() {
                 <h2 id="muscleTitle">训练分布</h2>
                 <p>按本周已完成组数估算。</p>
               </div>
-              <span className="fit-muscle-total">42 组</span>
+              <span className="fit-muscle-total">
+                {isGuest ? `${guestTrainingSummary.sets} 组` : '42 组'}
+              </span>
             </div>
             <div className="fit-muscle-list">
-              {MUSCLE_GROUPS.map((group) => (
+              {isGuest && muscleGroups.length === 0 && (
+                <div className="surface-note">
+                  <Icon name="fitness" className="icon-sm" />
+                  <span>完成训练后显示肌群分布。</span>
+                </div>
+              )}
+              {muscleGroups.map((group) => (
                 <div className="fit-muscle-row" key={group.label}>
                   <div>
                     <span>{group.label}</span>
@@ -1840,13 +2021,15 @@ export function FitnessPage() {
               </span>
               <span className="updated">基于本组记录</span>
             </div>
-            <h2 id="fitnessAiTitle">{activeTemplate.name} 的动作节奏稳定，先把完成质量守住。</h2>
-            <p>
-              今天还剩 {stats.totalSets - stats.doneSets} 组。下一次继续维持当前重量与组数，
-              不必为了容量提前加重量。
-            </p>
+            <h2 id="fitnessAiTitle">{observationTitle}</h2>
+            <p>{observationSummary}</p>
             <div className="ai-foot">
-              <span className="ai-source">Mock 建议 · 非医疗意见</span>
+              <span className="ai-source">{observationSourceLabel}</span>
+              {aiObservation.mode === 'ai' && (
+                <button className="link" type="button" onClick={aiObservation.regenerate}>
+                  重新生成
+                </button>
+              )}
               <button className="link" type="button" onClick={() => setEvidenceOpen(true)}>
                 查看依据
                 <Icon name="chev" />
@@ -1854,51 +2037,53 @@ export function FitnessPage() {
             </div>
           </section>
 
-          <section
-            className="panel fit-templates"
-            id="templatesSection"
-            aria-labelledby="templatesTitle"
-          >
-            <div className="side-head">
-              <div>
-                <h2 id="templatesTitle">常用模板</h2>
-                <p>切换模板会重置今日训练，并同步今日计划。</p>
+          {!isGuest && (
+            <section
+              className="panel fit-templates"
+              id="templatesSection"
+              aria-labelledby="templatesTitle"
+            >
+              <div className="side-head">
+                <div>
+                  <h2 id="templatesTitle">常用模板</h2>
+                  <p>切换模板会重置今日训练，并同步今日计划。</p>
+                </div>
               </div>
-            </div>
-            <div className="fit-template-list">
-              {WORKOUT_TEMPLATES.map((template) => {
-                const totalSets = template.exercises.reduce(
-                  (total, exercise) => total + exercise.sets.length,
-                  0,
-                )
-                return (
-                  <button
-                    className={
-                      template.id === activeTemplate.id
-                        ? 'fit-template-row active'
-                        : 'fit-template-row'
-                    }
-                    type="button"
-                    key={template.id}
-                    aria-pressed={template.id === activeTemplate.id}
-                    onClick={() => applyTemplate(template)}
-                  >
-                    <span className="fit-template-icon">
-                      <Icon name="fitness" className="icon-sm" />
-                    </span>
-                    <span>
-                      <strong>{template.name}</strong>
-                      <small>
-                        {template.exercises.length} 个动作 · {totalSets} 组 · {template.duration}{' '}
-                        分钟
-                      </small>
-                    </span>
-                    <Icon name="chev" className="icon-sm" />
-                  </button>
-                )
-              })}
-            </div>
-          </section>
+              <div className="fit-template-list">
+                {WORKOUT_TEMPLATES.map((template) => {
+                  const totalSets = template.exercises.reduce(
+                    (total, exercise) => total + exercise.sets.length,
+                    0,
+                  )
+                  return (
+                    <button
+                      className={
+                        template.id === activeTemplate.id
+                          ? 'fit-template-row active'
+                          : 'fit-template-row'
+                      }
+                      type="button"
+                      key={template.id}
+                      aria-pressed={template.id === activeTemplate.id}
+                      onClick={() => applyTemplate(template)}
+                    >
+                      <span className="fit-template-icon">
+                        <Icon name="fitness" className="icon-sm" />
+                      </span>
+                      <span>
+                        <strong>{template.name}</strong>
+                        <small>
+                          {template.exercises.length} 个动作 · {totalSets} 组 · {template.duration}{' '}
+                          分钟
+                        </small>
+                      </span>
+                      <Icon name="chev" className="icon-sm" />
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          )}
         </aside>
       </div>
 
@@ -1929,7 +2114,7 @@ export function FitnessPage() {
       {evidenceOpen && (
         <EvidenceSheet
           title="训练分析依据"
-          subtitle="按今日动作、完成组数、力量容量、运动时长、距离与 RPE 汇总，仅用于解释当前 Mock 建议。"
+          subtitle="按今日动作、完成组数、力量容量、运动时长、距离与 RPE 汇总，仅用于解释当前观察。"
           metrics={[
             {
               label: '完成组数',
@@ -1990,7 +2175,11 @@ export function FitnessPage() {
               value: `${historySessions.length} 次`,
             },
           ]}
-          note="当前为前端 Mock 依据。正式接入 DeepSeek 后，只发送训练摘要与你授权的档案字段。"
+          note={
+            aiObservation.mode === 'ai'
+              ? '本次观察由 DeepSeek 根据训练摘要生成；数字仍来自本地记录。'
+              : '当前为本地规则依据。真实 AI 不可用或尚未授权时不会发起模型请求。'
+          }
           onClose={() => setEvidenceOpen(false)}
         />
       )}

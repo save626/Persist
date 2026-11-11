@@ -27,7 +27,12 @@ const DB_VERSION = 1
 /** IndexedDB 打开超时：隐私模式/被策略禁用时不能让整页一直空白。 */
 const DB_OPEN_TIMEOUT_MS = 2_000
 
-let databasePromise: Promise<IDBDatabase | null> | null = null
+export interface PersistStorageOptions {
+  /** 业务数据 IndexedDB 名；owner 保持原库名。 */
+  dbName?: string
+}
+
+const databasePromises = new Map<string, Promise<IDBDatabase | null>>()
 
 /** jsdom、隐私模式、被浏览器策略禁用时是没有 indexedDB 的，此时整个 App 退回纯内存。 */
 export function isPersistStorageSupported() {
@@ -41,11 +46,12 @@ function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
-function openDatabase(): Promise<IDBDatabase | null> {
+function openDatabase(dbName = PERSIST_STATE_DB_NAME): Promise<IDBDatabase | null> {
   if (!isPersistStorageSupported()) return Promise.resolve(null)
-  if (databasePromise) return databasePromise
+  const cached = databasePromises.get(dbName)
+  if (cached) return cached
 
-  databasePromise = new Promise<IDBDatabase | null>((resolve) => {
+  const databasePromise = new Promise<IDBDatabase | null>((resolve) => {
     let settled = false
     const finish = (database: IDBDatabase | null) => {
       if (settled) return
@@ -55,7 +61,7 @@ function openDatabase(): Promise<IDBDatabase | null> {
 
     const timer = setTimeout(() => finish(null), DB_OPEN_TIMEOUT_MS)
     try {
-      const request = indexedDB.open(PERSIST_STATE_DB_NAME, DB_VERSION)
+      const request = indexedDB.open(dbName, DB_VERSION)
       request.onupgradeneeded = () => {
         const database = request.result
         if (!database.objectStoreNames.contains(PERSIST_STATE_STORE_NAME)) {
@@ -86,8 +92,10 @@ function openDatabase(): Promise<IDBDatabase | null> {
 }
 
 /** 启动时读回上一次的数据；任何失败都只是降级，不会阻塞渲染。 */
-export async function loadPersistedState(): Promise<PersistLoadResult> {
-  const database = await openDatabase()
+export async function loadPersistedState(
+  options: PersistStorageOptions = {},
+): Promise<PersistLoadResult> {
+  const database = await openDatabase(options.dbName)
   if (!database) return { status: 'unavailable', state: null }
 
   try {
@@ -114,8 +122,9 @@ export async function loadPersistedState(): Promise<PersistLoadResult> {
 export async function savePersistedState(
   data: ImportableMockData,
   snapshot: MockSnapshot | null,
+  options: PersistStorageOptions = {},
 ): Promise<boolean> {
-  const database = await openDatabase()
+  const database = await openDatabase(options.dbName)
   if (!database) return false
 
   try {
@@ -130,9 +139,9 @@ export async function savePersistedState(
   }
 }
 
-/** 预留：P4 备份恢复 / 「清空本机数据」会用到，本轮 UI 尚未接入。 */
-export async function clearPersistedState(): Promise<void> {
-  const database = await openDatabase()
+/** 删除当前运行模式对应的本机业务数据记录。 */
+export async function clearPersistedState(options: PersistStorageOptions = {}): Promise<void> {
+  const database = await openDatabase(options.dbName)
   if (!database) return
 
   try {

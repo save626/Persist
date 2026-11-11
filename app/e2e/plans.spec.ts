@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { chooseDate } from './date-time'
 
 const ONBOARD_INPUT = '我今年 28 岁，身高 175，体重 80 公斤，想减脂，每周练 4 次，帮我生成计划'
 
@@ -79,6 +80,13 @@ test('手工新建计划后归档并重新启用', async ({ page }) => {
   await expect(draft).toBeVisible()
 
   await draft.getByLabel('计划标题').fill('E2E 十二周力量计划')
+  const start = new Date()
+  const end = new Date()
+  end.setDate(end.getDate() + 30)
+  const iso = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  await chooseDate(page, '开始日期', iso(start), draft)
+  await chooseDate(page, '结束日期（可选）', iso(end), draft)
   await page.getByRole('button', { name: '确认并启用' }).click()
 
   await expect(page.locator('.toast')).toContainText('已启用长期计划')

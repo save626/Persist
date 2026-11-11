@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../components/PageSheet'
 import { PlanChatSheet, type PlanChatReviewPayload } from '../components/PlanChatSheet'
 import { PlanDraftSheet } from '../components/PlanDraftSheet'
 import { useMockData } from '../context/mock-data-context'
+import { useRuntimeMode } from '../context/runtime-mode-context'
 import { useUI } from '../context/ui-context'
 import {
   describeDroppedProfileFields,
@@ -41,6 +42,7 @@ interface PlansDraftState {
 }
 
 export function PlansPage() {
+  const runtime = useRuntimeMode()
   const {
     profile,
     updateProfile,
@@ -171,15 +173,24 @@ export function PlansPage() {
         <div className="head-actions plans-head-actions">
           <span className="plans-local-badge">
             <Icon name="lock" className="icon-sm" />
-            {profile.aiConsent ? 'AI 对话 · Mock 兜底' : '本地生成 · Mock 对话'}
+            {runtime.mode === 'demo'
+              ? '部署前预生成 · 只读'
+              : profile.aiConsent && runtime.ai.chat
+                ? 'AI 对话 · Mock 兜底'
+                : '本地生成 · Mock 对话'}
           </span>
-          <button className="btn secondary" type="button" onClick={openManual}>
+          <button
+            className="btn secondary"
+            type="button"
+            disabled={runtime.readOnly}
+            onClick={openManual}
+          >
             <Icon name="plus" className="icon-sm" />
             手工新建
           </button>
           <button className="btn primary" type="button" onClick={() => setChatOpen(true)}>
             <Icon name="spark" className="icon-sm" />
-            AI 建档
+            {runtime.mode === 'demo' ? '查看预置建档' : 'AI 建档'}
           </button>
         </div>
       </header>
@@ -253,12 +264,18 @@ export function PlansPage() {
               )}
 
               <div className="plans-actions">
-                <button className="btn secondary" type="button" onClick={() => openDraft(current)}>
+                <button
+                  className="btn secondary"
+                  type="button"
+                  disabled={runtime.readOnly}
+                  onClick={() => openDraft(current)}
+                >
                   调整计划
                 </button>
                 <button
                   className="btn secondary"
                   type="button"
+                  disabled={runtime.readOnly}
                   onClick={() => setPendingArchive(current)}
                 >
                   归档计划
@@ -279,9 +296,14 @@ export function PlansPage() {
               <div className="plans-empty-actions">
                 <button className="btn primary" type="button" onClick={() => setChatOpen(true)}>
                   <Icon name="spark" className="icon-sm" />
-                  开始 AI 建档
+                  {runtime.mode === 'demo' ? '查看预置建档' : '开始 AI 建档'}
                 </button>
-                <button className="btn secondary" type="button" onClick={openManual}>
+                <button
+                  className="btn secondary"
+                  type="button"
+                  disabled={runtime.readOnly}
+                  onClick={openManual}
+                >
                   手工新建
                 </button>
               </div>
@@ -310,6 +332,7 @@ export function PlansPage() {
                       <button
                         className="btn secondary"
                         type="button"
+                        disabled={runtime.readOnly}
                         onClick={() => openDraft(plan)}
                       >
                         继续确认
@@ -317,6 +340,7 @@ export function PlansPage() {
                       <button
                         className="btn secondary"
                         type="button"
+                        disabled={runtime.readOnly}
                         onClick={() => setPendingArchive(plan)}
                       >
                         归档
@@ -339,8 +363,11 @@ export function PlansPage() {
               <li>确认后计划才启用，档案改动也才写入。</li>
             </ol>
             <p className="plans-hint">
-              默认使用本地 Mock；在档案页开启 AI 数据授权且服务端可用时，才会经本站代理调用
-              DeepSeek。确认前不会改档案。
+              {runtime.mode === 'demo'
+                ? '这份 AI 建档对话与长期计划均在部署前真实生成；演示模式只读，不会再次调用模型。'
+                : runtime.ai.chat
+                  ? '默认使用本地 Mock；在档案页开启 AI 数据授权且服务端可用时，才会经本站代理调用 DeepSeek。确认前不会改档案。'
+                  : '桌面体验模式固定使用本地 Mock，不向服务端发送记录。确认前不会改档案。'}
             </p>
           </section>
 
@@ -367,6 +394,7 @@ export function PlansPage() {
                       <button
                         className="btn secondary"
                         type="button"
+                        disabled={runtime.readOnly}
                         onClick={() => requestActivate(plan)}
                       >
                         重新启用

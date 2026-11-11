@@ -303,6 +303,8 @@ export interface AppChatClient extends ChatClient {
 export interface AppChatOptions {
   /** 用户是否已开启 AI 数据处理授权；关闭时永远走本地 Mock，不发任何请求。 */
   consent: boolean
+  /** false: public experience mode; keep all chat traffic on the local mock. */
+  allowRealAi?: boolean
   endpoint?: string
   healthEndpoint?: string
   fetchImpl?: FetchLike
@@ -316,22 +318,24 @@ export interface AppChatOptions {
  * 已输出内容后的失败原样抛出，由页面显示错误让用户重试。
  */
 export function createAppChatClient(options: AppChatOptions): AppChatClient {
+  const realAiEnabled = options.allowRealAi !== false
   const mock = createMockChatClient(options.mockOptions)
   const http = createHttpChatClient({
     endpoint: options.endpoint,
     fetchImpl: options.fetchImpl,
   })
-  let status: ChatStatus = options.consent
-    ? { source: 'unknown', fallback: false }
-    : { source: 'mock', fallback: false }
-  let probed: boolean | null = options.consent ? null : false
+  let status: ChatStatus =
+    options.consent && realAiEnabled
+      ? { source: 'unknown', fallback: false }
+      : { source: 'mock', fallback: false }
+  let probed: boolean | null = options.consent && realAiEnabled ? null : false
 
   const client: AppChatClient = {
     get label() {
       return status.source === 'ai' ? AI_CHAT_LABEL : MOCK_CHAT_LABEL
     },
     async probe() {
-      if (!options.consent) {
+      if (!options.consent || !realAiEnabled) {
         status = { source: 'mock', fallback: false }
         probed = false
         return 'mock'
@@ -348,7 +352,7 @@ export function createAppChatClient(options: AppChatOptions): AppChatClient {
       return { ...status }
     },
     async *send(request: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
-      if (!options.consent) {
+      if (!options.consent || !realAiEnabled) {
         status = { source: 'mock', fallback: false }
         yield* mock.send(request, signal)
         return

@@ -121,6 +121,26 @@ describe('createSyncClient', () => {
     expect(result.applied).toBe(2)
     expect(new URL(calls[0]?.url ?? '', 'http://localhost').pathname).toBe('/api/v1/sync/bootstrap')
   })
+
+  it('deleteAccount 使用 DELETE + confirm:true + Bearer，并解析删除结果', async () => {
+    const { fetchImpl, calls } = fakeFetch([
+      jsonResponse({
+        deleted: true,
+        deletedAt: 1_762_761_600_000,
+        counts: { profile: 1, settings: 1 },
+      }),
+    ])
+    const client = createSyncClient({ fetchImpl, baseUrl: 'http://localhost:3100/' })
+    const result = await client.deleteAccount('token-delete')
+
+    expect(result.deleted).toBe(true)
+    expect(result.deletedAt).toBe(1_762_761_600_000)
+    expect(calls[0]?.url).toBe('http://localhost:3100/api/v1/account')
+    expect(calls[0]?.init.method).toBe('DELETE')
+    const headers = calls[0]?.init.headers as Record<string, string>
+    expect(headers.authorization).toBe('Bearer token-delete')
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ confirm: true })
+  })
 })
 
 describe('失败分类', () => {

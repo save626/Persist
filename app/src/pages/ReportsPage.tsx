@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
+import { PREBUILT_AI_LABEL } from '../data/prebuilt-demo-ai'
+import { useRuntimeMode } from '../context/runtime-mode-context'
 import { useUI } from '../context/ui-context'
 import { calculateProfileCompleteness, countProfileFields } from '../data/profile'
 import {
@@ -42,8 +44,8 @@ import type { DataSource, PlanItem, ReportRecord } from '../types'
 
 type GenerationState = 'idle' | 'loading' | 'success' | 'error'
 type RangeKey = '7' | '30' | '90'
-/** 当前生成引擎：正在检测 / 真实模型（经服务端代理）/ 本地 Mock。 */
-type ReportSource = 'probing' | 'ai' | 'mock'
+/** 当前报告来源：正在检测 / 真实模型（经服务端代理）/ 本地 Mock / demo 预生成。 */
+type ReportSource = 'probing' | 'ai' | 'mock' | 'prebuilt'
 
 function updatePlanItem(items: PlanItem[], id: string, patch: Partial<PlanItem>) {
   return items.map((item) => (item.id === id && !item.done ? { ...item, ...patch } : item))
@@ -94,6 +96,21 @@ function applyReportSuggestions(items: PlanItem[], report: ReportRecord) {
     )
   }
 
+  if (report.origin === 'prebuilt') {
+    const slots = ['19:00', '19:30', '20:00']
+    return report.actions.slice(0, slots.length).reduce(
+      (next, action, index) =>
+        upsertPlanItem(next, {
+          id: `prebuilt-action-${reportId}-${index}`,
+          name: action.length > 20 ? `${action.slice(0, 20)}…` : action,
+          time: slots[index],
+          detail: `${report.period} · 查看报告后加入`,
+          kind: 'default',
+          done: false,
+        }),
+      items,
+    )
+  }
   if (reportId === 'report-week-current') {
     return updatePlanItem(items, 'math', {
       time: '18:10',
@@ -136,6 +153,8 @@ function applyReportSuggestions(items: PlanItem[], report: ReportRecord) {
 
   return items
 }
+
+const ANALYSIS_EXPERIENCE_MODE_LABEL = '桌面体验模式'
 
 const TYPE_CARDS = [
   {
@@ -206,12 +225,26 @@ function buildDailyReport(draft: DailyDraft, content?: ReportContent): ReportRec
   }
 }
 
+function formatPrebuiltGeneratedAt(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value))
+}
+
 function ReportDetailSheet({
   report,
+  readOnly = false,
   onClose,
   onApply,
 }: {
   report: ReportRecord
+  readOnly?: boolean
   onClose: () => void
   onApply: () => void
 }) {
@@ -275,16 +308,20 @@ function ReportDetailSheet({
               ? '本报告由服务端规则基于真实记录生成，模型暂时不可用，未调用外部模型。'
               : report.origin === 'mock'
                 ? '本报告由本地 Mock 规则生成，未调用真实模型。'
-                : '这条报告来自本地示例数据，用于展示报告结构。'}
+                : report.origin === 'prebuilt' && report.prebuilt
+                  ? `本报告在部署前通过 ${report.prebuilt.model} 生成（${formatPrebuiltGeneratedAt(report.prebuilt.generatedAt)}）；部署后只读，不再调用 AI。`
+                  : '这条报告来自本地示例数据，用于展示报告结构。'}
         </span>
       </div>
       <div className="surface-form-actions">
         <button className="btn secondary" type="button" onClick={onClose}>
           关闭
         </button>
-        <button className="btn primary" type="button" onClick={onApply}>
-          应用建议
-        </button>
+        {!readOnly && (
+          <button className="btn primary" type="button" onClick={onApply}>
+            应用建议
+          </button>
+        )}
       </div>
     </PageSheet>
   )
@@ -292,6 +329,8 @@ function ReportDetailSheet({
 
 /** 服务端综合分析页内状态：两种入口不可用 + 加载 + 两种成功来源 + 两种失败分支。 */
 type ServerAnalysisView =
+  | { kind: 'experience-off' }
+  | { kind: 'prebuilt'; report: ReportRecord | null }
   | { kind: 'sync-off' }
   | { kind: 'consent-off' }
   | { kind: 'loading' }
@@ -380,7 +419,16 @@ function AnalysisReportContent({ report }: { report: AnalysisReportResponse }) {
 }
 
 /** 服务端不可用时展示本机已有报告：明确标注「本地生成 · Mock 报告」，不冒充 AI。 */
-function LocalAnalysisFallback({ report }: { report: ReportRecord }) {
+function LocalAnalysisFallback({ report }: { report: ReportRecord | null }) {
+  if (!report) {
+    return (
+      <div className="reports-analysis-local-report">
+        <h3>本机还没有历史报告</h3>
+        <p>先生成一份今日简报，再查看可用的本地分析内容。</p>
+      </div>
+    )
+  }
+
   return (
     <div className="reports-analysis-local-report">
       <h3>{report.title}</h3>
@@ -500,33 +548,41 @@ function ServerAnalysisPanel({
   onGoSettings: () => void
 }) {
   const variant =
-    view.kind === 'ai'
-      ? 'ai'
-      : view.kind === 'rules'
-        ? 'rules'
-        : view.kind === 'local'
-          ? 'local'
-          : view.kind === 'loading'
-            ? 'loading'
-            : view.kind === 'sync-off'
-              ? 'sync-off'
-              : view.kind === 'consent-off'
-                ? 'consent'
-                : 'error'
+    view.kind === 'experience-off'
+      ? 'experience-mode'
+      : view.kind === 'prebuilt'
+        ? 'experience-mode'
+        : view.kind === 'ai'
+          ? 'ai'
+          : view.kind === 'rules'
+            ? 'rules'
+            : view.kind === 'local'
+              ? 'local'
+              : view.kind === 'loading'
+                ? 'loading'
+                : view.kind === 'sync-off'
+                  ? 'sync-off'
+                  : view.kind === 'consent-off'
+                    ? 'consent'
+                    : 'error'
   const badge =
-    view.kind === 'ai'
-      ? ANALYSIS_SERVER_LABEL
-      : view.kind === 'rules'
-        ? ANALYSIS_RULES_LABEL
-        : view.kind === 'local'
-          ? ANALYSIS_LOCAL_LABEL
-          : view.kind === 'error'
-            ? view.error.kind === 'consent-off'
-              ? ANALYSIS_CONSENT_LABEL
-              : view.error.kind === 'invalid-response'
-                ? ANALYSIS_INVALID_LABEL
-                : ANALYSIS_UNAVAILABLE_LABEL
-            : null
+    view.kind === 'experience-off'
+      ? `${ANALYSIS_EXPERIENCE_MODE_LABEL} · 仅本地 Mock`
+      : view.kind === 'prebuilt'
+        ? PREBUILT_AI_LABEL
+        : view.kind === 'ai'
+          ? ANALYSIS_SERVER_LABEL
+          : view.kind === 'rules'
+            ? ANALYSIS_RULES_LABEL
+            : view.kind === 'local'
+              ? ANALYSIS_LOCAL_LABEL
+              : view.kind === 'error'
+                ? view.error.kind === 'consent-off'
+                  ? ANALYSIS_CONSENT_LABEL
+                  : view.error.kind === 'invalid-response'
+                    ? ANALYSIS_INVALID_LABEL
+                    : ANALYSIS_UNAVAILABLE_LABEL
+                : null
 
   return (
     <section
@@ -541,6 +597,23 @@ function ServerAnalysisPanel({
         </div>
         {badge && <span className="reports-analysis-badge">{badge}</span>}
       </div>
+
+      {view.kind === 'experience-off' && (
+        <div className="reports-analysis-state">
+          <h3>{ANALYSIS_EXPERIENCE_MODE_LABEL}固定使用本地 Mock</h3>
+          <p>桌面体验模式不调用服务端综合分析，也不会上传本机记录。下方本地报告与历史不受影响。</p>
+        </div>
+      )}
+
+      {view.kind === 'prebuilt' && (
+        <div className="reports-analysis-state">
+          <p className="reports-analysis-note" role="status">
+            以下内容在部署前通过 DeepSeek
+            生成并固化进前端包；当前只读，部署后不会再次调用模型或上传记录。
+          </p>
+          <LocalAnalysisFallback report={view.report} />
+        </div>
+      )}
 
       {view.kind === 'sync-off' && (
         <div className="reports-analysis-state">
@@ -666,6 +739,7 @@ export function ReportsPage() {
     syncStatus,
     syncToken,
   } = useMockData()
+  const runtime = useRuntimeMode()
   const navigate = useNavigate()
   // 顶部「生成状态」原本只是本页的临时状态：跳到别的页面再回来会重置为「尚未生成」，
   // 看上去像刚生成的报告丢了。这里按「今天是否已经生成过今日简报」派生展示状态；
@@ -677,14 +751,23 @@ export function ReportsPage() {
   // 卡片指向同一份记录，不会出现「顶部说已生成、卡片却是另一份」的分裂。
   const todayBriefReport = useMemo(() => {
     const latest = reports[0]
+    if (runtime.mode === 'demo') {
+      return (
+        reports.find((report) => report.id === 'report-demo-daily') ??
+        reports.find((report) => report.origin === 'prebuilt') ??
+        latest ??
+        null
+      )
+    }
     if (!latest || latest.type !== '今日简报' || latest.date !== todayReportDate) return null
     return latest
-  }, [reports, todayReportDate])
+  }, [reports, runtime.mode, todayReportDate])
   const [range, setRange] = useState<RangeKey>('7')
   const [generation, setGeneration] = useState<GenerationState>('idle')
   const [probeState, setProbeState] = useState<ReportSource>('probing')
   // 没有授权时一律视为本地 Mock，不等待、也不发起健康检查。
-  const reportSource: ReportSource = aiConsent ? probeState : 'mock'
+  const reportSource: ReportSource =
+    runtime.mode === 'demo' ? 'prebuilt' : aiConsent && runtime.ai.report ? probeState : 'mock'
   const [fallbackNote, setFallbackNote] = useState<string | null>(null)
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [summaryOpen, setSummaryOpen] = useState(false)
@@ -695,7 +778,7 @@ export function ReportsPage() {
   const [generatedReport, setGeneratedReport] = useState<ReportRecord | null>(null)
   // 本页没有正在生成/报错时，以「今天已生成的今日简报」作为成功态展示。
   const generationDisplay: GenerationState =
-    generation === 'idle' && todayBriefReport ? 'success' : generation
+    runtime.mode === 'demo' || (generation === 'idle' && todayBriefReport) ? 'success' : generation
   const displayReport = generatedReport ?? todayBriefReport
 
   // ——— 服务端综合分析（设计 §8）———
@@ -709,11 +792,20 @@ export function ReportsPage() {
     settings.sources.diet ||
     settings.sources.study ||
     settings.sources.profile
-  const analysisGate: 'sync-off' | 'consent-off' | 'ready' = !analysisSyncReady
-    ? 'sync-off'
-    : !aiConsent || !analysisAnySourceEnabled
-      ? 'consent-off'
-      : 'ready'
+  const prebuiltAnalysisReport = useMemo(
+    () => reports.find((report) => report.id === 'report-demo-analysis') ?? null,
+    [reports],
+  )
+  const analysisGate: 'prebuilt' | 'experience-off' | 'sync-off' | 'consent-off' | 'ready' =
+    runtime.mode === 'demo'
+      ? 'prebuilt'
+      : !runtime.ai.serverAnalysis
+        ? 'experience-off'
+        : !analysisSyncReady
+          ? 'sync-off'
+          : !aiConsent || !analysisAnySourceEnabled
+            ? 'consent-off'
+            : 'ready'
   const [analysisNonce, setAnalysisNonce] = useState(0)
   const analysisForceRef = useRef(false)
   // 「加载中」由「请求键是否已产出结果」派生：effect 里不再同步 setState，避免级联渲染。
@@ -732,13 +824,17 @@ export function ReportsPage() {
   const [analysisDetailId, setAnalysisDetailId] = useState<string | null>(null)
   // 门禁关闭时不展示上次的旧结果；门禁恢复后由下面的 effect 重新请求。
   const displayAnalysisView: ServerAnalysisView =
-    analysisGate === 'sync-off'
-      ? { kind: 'sync-off' }
-      : analysisGate === 'consent-off'
-        ? { kind: 'consent-off' }
-        : analysisResult && analysisResult.key === analysisRequestKey
-          ? analysisResult.view
-          : { kind: 'loading' }
+    analysisGate === 'prebuilt'
+      ? { kind: 'prebuilt', report: prebuiltAnalysisReport }
+      : analysisGate === 'experience-off'
+        ? { kind: 'experience-off' }
+        : analysisGate === 'sync-off'
+          ? { kind: 'sync-off' }
+          : analysisGate === 'consent-off'
+            ? { kind: 'consent-off' }
+            : analysisResult && analysisResult.key === analysisRequestKey
+              ? analysisResult.view
+              : { kind: 'loading' }
 
   const sourceEnabled = (source: DataSource) => aiConsent && settings.sources[source]
 
@@ -883,7 +979,20 @@ export function ReportsPage() {
     ],
   )
 
-  const latestReport = reports[0]
+  const latestReport: ReportRecord = reports[0] ?? {
+    id: `empty-report-${todayReportDate}`,
+    type: '今日简报',
+    title: '还没有报告',
+    date: todayReportDate,
+    period: rangeLabel,
+    summary: '先留下一段真实记录，再点击上方「生成今日简报」建立第一份报告。',
+    status: '待生成',
+    metric: [],
+    conclusions: [],
+    actions: ['先完成一次记录，再生成今日简报。'],
+    evidence: [],
+    origin: 'mock',
+  }
 
   const todayBriefDraft = useMemo(() => {
     // 「今天」的饮水缺口仍按今日切片算（2 L 目标是每日目标）；窗口内累计只用于汇总口径。
@@ -1023,7 +1132,7 @@ export function ReportsPage() {
 
   // 打开页面时检测服务端是否真的能调用模型：只有明确可用才展示 DeepSeek 标签。
   useEffect(() => {
-    if (!aiConsent) return
+    if (!aiConsent || !runtime.ai.report) return
     let active = true
     void probeAiReport().then((available) => {
       if (active) setProbeState(available ? 'ai' : 'mock')
@@ -1031,10 +1140,13 @@ export function ReportsPage() {
     return () => {
       active = false
     }
-  }, [aiConsent])
+  }, [aiConsent, runtime.ai.report])
 
   const canUseAi =
-    aiConsent && reportSource === 'ai' && (referencedRecordTotal > 0 || profileSourceEnabled)
+    aiConsent &&
+    runtime.ai.report &&
+    reportSource === 'ai' &&
+    (referencedRecordTotal > 0 || profileSourceEnabled)
 
   const finishGeneration = (content?: ReportContent) => {
     const next = buildDailyReport(todayBriefDraft, content)
@@ -1044,6 +1156,10 @@ export function ReportsPage() {
   }
 
   const generate = async () => {
+    if (runtime.mode === 'demo') {
+      setSelectedReport(todayBriefReport)
+      return
+    }
     if (generation === 'loading') return
     setGeneration('loading')
     setGenerationError(null)
@@ -1168,6 +1284,10 @@ export function ReportsPage() {
   }
 
   const requestApply = (report: ReportRecord) => {
+    if (runtime.mode === 'demo') {
+      showToast('演示模式为部署前预生成内容，仅可查看。')
+      return
+    }
     setSelectedReport(null)
     setPendingReport(report)
     setConfirmApply(true)
@@ -1202,8 +1322,9 @@ export function ReportsPage() {
             下一步。
           </h1>
           <p className="subtitle">
-            报告只在你主动生成时运行。它引用近 7 / 30 / 90
-            天窗口内的训练、饮食、学习与个人档案摘要，帮助你看见趋势，而不是制造新的任务压力。
+            {runtime.mode === 'demo'
+              ? '演示中的报告和简报均在部署前通过真实模型生成并固化；当前只读，不会再次调用 AI。'
+              : '报告只在你主动生成时运行。它引用近 7 / 30 / 90 天窗口内的训练、饮食、学习与个人档案摘要，帮助你看见趋势，而不是制造新的任务压力。'}
           </p>
         </div>
         <div className="head-actions reports-head-actions">
@@ -1213,7 +1334,9 @@ export function ReportsPage() {
               ? '正在检测模型服务…'
               : reportSource === 'ai'
                 ? AI_REPORT_LABEL
-                : MOCK_REPORT_LABEL}
+                : reportSource === 'prebuilt'
+                  ? PREBUILT_AI_LABEL
+                  : MOCK_REPORT_LABEL}
           </span>
           <button
             className="btn primary"
@@ -1224,7 +1347,11 @@ export function ReportsPage() {
             disabled={generation === 'loading'}
           >
             <Icon name="spark" className="icon-sm" />
-            {generation === 'loading' ? '正在生成…' : '生成今日简报'}
+            {runtime.mode === 'demo'
+              ? '查看预生成简报'
+              : generation === 'loading'
+                ? '正在生成…'
+                : '生成今日简报'}
           </button>
         </div>
       </header>
@@ -1275,7 +1402,7 @@ export function ReportsPage() {
           )}
           {generationDisplay === 'success' && (
             <>
-              <h2>今日简报已生成</h2>
+              <h2>{runtime.mode === 'demo' ? '部署前生成的今日简报' : '今日简报已生成'}</h2>
               <p>{displayReport?.summary ?? latestReport.summary}</p>
               {fallbackNote && (
                 <p className="reports-fallback-note" role="status">
@@ -1345,6 +1472,7 @@ export function ReportsPage() {
                     className={range === key ? 'active' : ''}
                     type="button"
                     key={key}
+                    disabled={runtime.mode === 'demo'}
                     onClick={() => setRange(key)}
                   >
                     {RANGE_LABELS[key]}
@@ -1438,6 +1566,7 @@ export function ReportsPage() {
                 <button
                   className="btn primary"
                   type="button"
+                  disabled={reports.length === 0}
                   onClick={() => requestApply(latestReport)}
                 >
                   应用建议
@@ -1450,7 +1579,7 @@ export function ReportsPage() {
             view={displayAnalysisView}
             rangeLabel={rangeLabel}
             rangeDays={analysisRangeDays}
-            localReport={latestReport}
+            localReport={latestReport ?? null}
             onReanalyze={() => requestAnalysis(true)}
             onRetry={() => requestAnalysis(false)}
             onGoProfile={() => navigate('/profile')}
@@ -1577,7 +1706,7 @@ export function ReportsPage() {
                   <span>
                     <strong>{card.title}</strong>
                     <small>{card.detail}</small>
-                    <em>{card.tag}</em>
+                    <em>{runtime.mode === 'demo' ? '部署前预生成' : card.tag}</em>
                   </span>
                   <Icon name="chev" className="icon-sm" />
                 </button>
@@ -1632,13 +1761,18 @@ export function ReportsPage() {
               <div>
                 <small>DEEPSEEK SERVICE</small>
                 <h2 id="reportServiceTitle">
-                  {reportSource === 'ai' ? '服务端代理已连接' : '本地 Mock 模式'}
+                  {reportSource === 'ai'
+                    ? '服务端代理已连接'
+                    : reportSource === 'prebuilt'
+                      ? '部署前生成 · 当前只读'
+                      : '本地 Mock 模式'}
                 </h2>
               </div>
             </div>
             <p>
-              生成报告时，浏览器只把你在设置中授权的摘要发给本站服务端，由服务端携带 API Key 调用
-              DeepSeek；浏览器接触不到 Key，也拿不到除了报告文字之外的模型输出。
+              {runtime.mode === 'demo'
+                ? '演示中的报告文字已经在部署前通过本站服务端调用 DeepSeek 生成，并随前端包一起发布；部署后只读取静态内容。'
+                : '生成报告时，浏览器只把你在设置中授权的摘要发给本站服务端，由服务端携带 API Key 调用 DeepSeek；浏览器接触不到 Key，也拿不到除了报告文字之外的模型输出。'}
             </p>
             <div className="reports-service-status">
               <span className="dot" />
@@ -1647,12 +1781,16 @@ export function ReportsPage() {
                   ? '状态：正在检测'
                   : reportSource === 'ai'
                     ? '状态：已连接 DeepSeek'
-                    : '状态：生成时使用本地 Mock'}
+                    : reportSource === 'prebuilt'
+                      ? '状态：读取部署前快照'
+                      : '状态：生成时使用本地 Mock'}
               </strong>
               <small>
                 {reportSource === 'ai'
                   ? '请求经 /api/report 代理转发'
-                  : '本地规则生成，不发送任何模型请求'}
+                  : reportSource === 'prebuilt'
+                    ? '当前不请求 /api/health、/api/report 或 /api/chat'
+                    : '本地规则生成，不发送任何模型请求'}
               </small>
             </div>
           </section>
@@ -1662,6 +1800,7 @@ export function ReportsPage() {
       {selectedReport && (
         <ReportDetailSheet
           report={selectedReport}
+          readOnly={runtime.mode === 'demo'}
           onClose={() => setSelectedReport(null)}
           onApply={() => requestApply(selectedReport)}
         />
@@ -1670,6 +1809,7 @@ export function ReportsPage() {
       {analysisDetail && (
         <ReportDetailSheet
           report={analysisDetail}
+          readOnly={runtime.mode === 'demo'}
           onClose={() => setAnalysisDetail(null)}
           onApply={() => requestApply(analysisDetail)}
         />

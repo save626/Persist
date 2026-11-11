@@ -22,7 +22,7 @@ async function openReportsFromStudy(page: Page) {
 async function loadCompleteDemoData(page: Page) {
   await page.goto('/settings')
   await page.getByRole('button', { name: /加载完整演示数据/ }).click()
-  await expect(page.getByText(/完整演示数据已加载/).first()).toBeVisible()
+  await expect(page.getByText(/已加载完整演示数据/).first()).toBeVisible()
 }
 
 test('complete demo data populates every primary module', async ({ page }) => {
@@ -64,7 +64,7 @@ test('complete demo data populates every primary module', async ({ page }) => {
 
   await page.goBack()
   await openReportsFromStudy(page)
-  await expect(page.locator('.reports-history-count')).toHaveText('4 份')
+  await expect(page.locator('.reports-history-count')).toHaveText('5 份')
   await expect(page.locator('.reports-history-list')).toContainText('训练建议')
   await expect(page.locator('.reports-history-list')).toContainText('学习观察')
   await expect(page.locator('.reports-history-list')).toContainText('饮食观察')
@@ -104,21 +104,23 @@ test('complete demo data supports report generation and applying suggestions to 
 
   await page.getByRole('button', { name: '生成今日简报', exact: true }).click()
   await expect(page.getByText('今日简报已生成')).toBeVisible()
-  await expect(page.locator('.reports-history-count')).toHaveText('5 份')
+  await expect(page.locator('.reports-history-count')).toHaveText('6 份')
 
   await page.getByRole('button', { name: '查看简报', exact: true }).click()
   const generated = page.getByRole('dialog', { name: /训练已经落地|先把训练安排好/ })
   await expect(generated).toBeVisible()
   await generated.locator('.surface-form-actions').getByRole('button', { name: '关闭' }).click()
 
-  await page.locator('.reports-history-row').filter({ hasText: '完整演示：训练稳定' }).click()
-  const weeklyReport = page.getByRole('dialog', { name: '完整演示：训练稳定，学习与补水节奏清晰' })
-  await expect(weeklyReport).toBeVisible()
-  await weeklyReport.getByRole('button', { name: '应用建议' }).click()
+  const trainingReportRow = page
+    .locator('.reports-history-row')
+    .filter({ hasText: '训练建议' })
+    .first()
+  await trainingReportRow.click()
+  const trainingReport = page.getByRole('dialog')
+  await expect(trainingReport).toBeVisible()
+  await trainingReport.getByRole('button', { name: '应用建议' }).click()
   await page.getByRole('button', { name: '应用并查看今日' }).click()
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByText('已应用「每周复盘」建议')).toBeVisible()
-  const mathPlan = page.locator('.plan-item').filter({ hasText: '高数：极限与连续' })
-  await expect(mathPlan).toContainText('18:10')
-  await expect(mathPlan).toContainText('45 分钟 · 晚饭前练习 12 题')
+  await expect(page.locator('.plan-panel .plan-item')).toHaveCount(10)
+  await expect(page.locator('.plan-panel')).toContainText('近 7 天训练记录 · 查看报告后加入')
 })

@@ -105,6 +105,24 @@ const pages = [
   { slug: 'fitness-new', path: '/fitness?new=1', waitFor: OPEN_DIALOG },
   { slug: 'diet-new', path: '/diet?new=1', waitFor: OPEN_DIALOG },
   { slug: 'study-new', path: '/study?new=1', waitFor: OPEN_DIALOG },
+  {
+    slug: 'study-date-picker',
+    path: '/study?new=1',
+    waitFor: '.date-time-backdrop.open',
+    setup: async (page) => {
+      await page.locator(OPEN_DIALOG).waitFor({ state: 'visible' })
+      await page.getByLabel('日期').click()
+    },
+  },
+  {
+    slug: 'study-time-picker',
+    path: '/study?new=1',
+    waitFor: '.date-time-backdrop.open',
+    setup: async (page) => {
+      await page.locator(OPEN_DIALOG).waitFor({ state: 'visible' })
+      await page.getByLabel('开始时间').click()
+    },
+  },
   { slug: 'plans', path: '/plans', ready: '.plans-head' },
   { slug: 'plans-active', path: '/plans', setup: (page) => createPlan(page, MANUAL_PLAN) },
   { slug: 'plans-draft', path: '/plans', waitFor: OPEN_DIALOG, setup: openDraftSheet },

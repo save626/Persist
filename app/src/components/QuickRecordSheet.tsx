@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
+import { useRuntimeMode } from '../context/runtime-mode-context'
 import { Icon, type IconName } from './Icon'
 
 const QUICK_ACTIONS: Array<{
@@ -17,6 +18,7 @@ const QUICK_ACTIONS: Array<{
 
 export function QuickRecordSheet() {
   const { quickOpen, closeQuickRecord, showToast } = useUI()
+  const runtime = useRuntimeMode()
   const { addWater } = useMockData()
   const navigate = useNavigate()
 
@@ -30,6 +32,10 @@ export function QuickRecordSheet() {
   }, [closeQuickRecord, quickOpen])
 
   const handleQuickAction = (type: (typeof QUICK_ACTIONS)[number]['type']) => {
+    if (runtime.readOnly) {
+      showToast('演示模式为只读，不能新增记录。')
+      return
+    }
     if (type === 'water') {
       addWater(250)
       showToast('已记录 250 ml 饮水')

@@ -1,4 +1,5 @@
 import type { ImportableMockData } from '../types'
+import type { AccountDeleteResponse } from '@persist/shared/contract/account'
 import {
   DEFAULT_PULL_LIMIT,
   MAX_BOOTSTRAP_ENTITIES,
@@ -93,6 +94,7 @@ export class SyncEngine {
   private meta: SyncMetaRecord = createEmptySyncMeta()
   private queue: SyncQueue
   private syncing = false
+  private accountDeleting = false
   private applyingRemote = false
   private retryAttempt = 0
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -311,6 +313,37 @@ export class SyncEngine {
     this.emit()
   }
 
+  /**
+   * 删除当前服务端账号。成功后清空同步凭据与 outbox，但业务数据保持不动；
+   * Provider 会在本方法成功后继续执行本机数据清空。
+   */
+  async deleteAccount(): Promise<AccountDeleteResponse> {
+    const token = this.meta.token
+    if (!token) throw new Error('当前没有已绑定的服务端账号。')
+    if (this.syncing) throw new Error('正在同步，请稍后再删除账号。')
+
+    this.accountDeleting = true
+    this.clearDebounce()
+    this.clearRetry()
+    try {
+      await this.noteChain
+      const result = await this.deps.client.deleteAccount(token)
+      await this.queue.clear()
+      this.meta = createEmptySyncMeta()
+      await this.saveMeta()
+      this.syncing = false
+      this.retryAttempt = 0
+      this.lastError = null
+      this.error = null
+      this.warning = null
+      this.needsAttention = false
+      this.emit()
+      return result
+    } finally {
+      this.accountDeleting = false
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // 本地写入 → outbox
   // ---------------------------------------------------------------------------
@@ -324,6 +357,7 @@ export class SyncEngine {
    */
   noteDataChange(): void {
     if (!this.meta.enabled || !this.meta.token) return
+    if (this.accountDeleting) return
     if (this.applyingRemote) return
 
     const entities = collectLocalEntities(this.deps.getData())
@@ -405,6 +439,7 @@ export class SyncEngine {
 
   /** 手动「立即同步」与定时触发共用；并发调用会直接复用当前这次。 */
   async flush(_reason: string): Promise<SyncStatusSnapshot> {
+    if (this.accountDeleting) return this.status()
     if (this.syncing) return this.status()
     if (!this.meta.enabled || !this.meta.token) return this.status()
     if (!this.online) {

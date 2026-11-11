@@ -1,9 +1,13 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { DatePickerField, TimePickerField } from '../components/DateTimePicker'
 import { Icon } from '../components/Icon'
 import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
+import { useRuntimeMode } from '../context/runtime-mode-context'
 import { useUI } from '../context/ui-context'
+import { buildReportDigest } from '../lib/report-digest'
+import { useAiObservation } from '../lib/use-ai-observation'
 import { useNewRecordParam } from '../lib/use-new-record-param'
 import type { StudyCategory, StudyRecord } from '../types'
 
@@ -27,6 +31,12 @@ const WEEK_TREND = [
   { label: '一', english: 52, math: 36 },
   { label: '今天', english: 35, math: 20 },
 ]
+
+const STUDY_SOURCES: Record<StudyCategory, readonly string[]> = {
+  english: ['百词斩', '不背单词', '英语真题', '听力精练'],
+  math: ['高数练习', '错题整理', '课程学习'],
+}
+const CUSTOM_SOURCE_OPTION = '__custom__'
 
 function displayDate(value: string) {
   const date = new Date(`${value}T12:00:00`)
@@ -68,12 +78,16 @@ function StudyEditor({
 }) {
   const [draft, setDraft] = useState<StudyRecord>(record ?? { ...EMPTY_RECORD })
   const [error, setError] = useState('')
+  const [sourceMode, setSourceMode] = useState<'preset' | 'custom'>(() =>
+    record?.source && !STUDY_SOURCES[record.category].includes(record.source) ? 'custom' : 'preset',
+  )
 
   const patch = (values: Partial<StudyRecord>) => setDraft((current) => ({ ...current, ...values }))
 
   /** 来源是科目相关的（英语是单词书、高数是练习/错题），换科后旧来源留着会张冠李戴。 */
   const chooseCategory = (category: StudyCategory) => {
     if (category === draft.category) return
+    setSourceMode('preset')
     patch({ category, source: '' })
   }
 
@@ -143,32 +157,54 @@ function StudyEditor({
         </div>
 
         <div className="surface-form-grid">
-          <label className="form-field">
+          <div className="form-field">
             <span>学习来源</span>
-            <input
-              className="form-input"
-              value={draft.source}
-              list="study-sources"
-              placeholder={draft.category === 'english' ? '例如：百词斩' : '例如：高数练习'}
-              onChange={(event) => patch({ source: event.target.value })}
-            />
-            <datalist id="study-sources">
-              {draft.category === 'english' ? (
-                <>
-                  <option value="百词斩" />
-                  <option value="不背单词" />
-                  <option value="英语真题" />
-                  <option value="听力精练" />
-                </>
-              ) : (
-                <>
-                  <option value="高数练习" />
-                  <option value="错题整理" />
-                  <option value="课程学习" />
-                </>
-              )}
-            </datalist>
-          </label>
+            {sourceMode === 'custom' ? (
+              <>
+                <input
+                  className="form-input"
+                  aria-label="学习来源"
+                  value={draft.source}
+                  placeholder={
+                    draft.category === 'english' ? '输入自定义英语来源' : '输入自定义高数来源'
+                  }
+                  onChange={(event) => patch({ source: event.target.value })}
+                />
+                <button
+                  className="study-source-back"
+                  type="button"
+                  onClick={() => {
+                    setSourceMode('preset')
+                    patch({ source: '' })
+                  }}
+                >
+                  返回常用来源
+                </button>
+              </>
+            ) : (
+              <select
+                className="form-input"
+                aria-label="学习来源"
+                value={draft.source}
+                onChange={(event) => {
+                  if (event.target.value === CUSTOM_SOURCE_OPTION) {
+                    setSourceMode('custom')
+                    patch({ source: '' })
+                    return
+                  }
+                  patch({ source: event.target.value })
+                }}
+              >
+                <option value="">请选择学习来源</option>
+                {STUDY_SOURCES[draft.category].map((source) => (
+                  <option value={source} key={source}>
+                    {source}
+                  </option>
+                ))}
+                <option value={CUSTOM_SOURCE_OPTION}>自定义来源…</option>
+              </select>
+            )}
+          </div>
           <label className="form-field">
             <span>学习时长 / min</span>
             <input
@@ -180,24 +216,20 @@ function StudyEditor({
               onChange={(event) => patch({ duration: Number(event.target.value) })}
             />
           </label>
-          <label className="form-field">
-            <span>日期</span>
-            <input
-              className="form-input"
-              type="date"
-              value={draft.date}
-              onChange={(event) => patch({ date: event.target.value })}
-            />
-          </label>
-          <label className="form-field">
-            <span>开始时间</span>
-            <input
-              className="form-input"
-              type="time"
-              value={draft.startTime}
-              onChange={(event) => patch({ startTime: event.target.value })}
-            />
-          </label>
+          <DatePickerField
+            className="form-field"
+            triggerClassName="form-input"
+            label="日期"
+            value={draft.date}
+            onChange={(date) => patch({ date })}
+          />
+          <TimePickerField
+            className="form-field"
+            triggerClassName="form-input"
+            label="开始时间"
+            value={draft.startTime}
+            onChange={(startTime) => patch({ startTime })}
+          />
         </div>
 
         {draft.category === 'english' ? (
@@ -209,7 +241,7 @@ function StudyEditor({
                 type="number"
                 min="0"
                 inputMode="numeric"
-                value={draft.newWords}
+                value={draft.newWords || ''}
                 onChange={(event) => patch({ newWords: Number(event.target.value) })}
               />
             </label>
@@ -220,7 +252,7 @@ function StudyEditor({
                 type="number"
                 min="0"
                 inputMode="numeric"
-                value={draft.reviewWords}
+                value={draft.reviewWords || ''}
                 onChange={(event) => patch({ reviewWords: Number(event.target.value) })}
               />
             </label>
@@ -232,7 +264,7 @@ function StudyEditor({
                 min="0"
                 max="100"
                 inputMode="numeric"
-                value={draft.accuracy}
+                value={draft.accuracy || ''}
                 onChange={(event) => patch({ accuracy: Number(event.target.value) })}
               />
             </label>
@@ -243,7 +275,7 @@ function StudyEditor({
                 type="number"
                 min="0"
                 inputMode="numeric"
-                value={draft.listening}
+                value={draft.listening || ''}
                 onChange={(event) => patch({ listening: Number(event.target.value) })}
               />
             </label>
@@ -266,7 +298,7 @@ function StudyEditor({
                 type="number"
                 min="0"
                 inputMode="numeric"
-                value={draft.questions}
+                value={draft.questions || ''}
                 onChange={(event) => patch({ questions: Number(event.target.value) })}
               />
             </label>
@@ -277,7 +309,7 @@ function StudyEditor({
                 type="number"
                 min="0"
                 inputMode="numeric"
-                value={draft.wrong}
+                value={draft.wrong || ''}
                 onChange={(event) => patch({ wrong: Number(event.target.value) })}
               />
             </label>
@@ -333,7 +365,15 @@ function recordDetail(record: StudyRecord) {
 
 export function StudyPage() {
   const { showToast } = useUI()
-  const { studyRecords: records, setStudyRecords: setRecords } = useMockData()
+  const {
+    studyRecords: records,
+    setStudyRecords: setRecords,
+    aiConsent,
+    settings,
+    profile,
+    today,
+  } = useMockData()
+  const runtime = useRuntimeMode()
   const navigate = useNavigate()
   const newRecord = useNewRecordParam()
   const [filter, setFilter] = useState<Filter>('all')
@@ -348,7 +388,6 @@ export function StudyPage() {
     newRecord.clear()
   }
 
-  const today = todayInputValue()
   const todayRecords = useMemo(
     () =>
       records
@@ -380,6 +419,54 @@ export function StudyPage() {
   const weekTrend = WEEK_TREND.map((day, index) =>
     index === WEEK_TREND.length - 1 ? { ...day, english: englishMinutes, math: mathMinutes } : day,
   )
+
+  const observationRequest = useMemo(() => {
+    if (
+      runtime.mode !== 'owner' ||
+      !runtime.ai.report ||
+      !aiConsent ||
+      !settings.sources.study ||
+      todayRecords.length === 0
+    ) {
+      return null
+    }
+    const digest = buildReportDigest({
+      aiConsent,
+      settings,
+      profile,
+      fitnessSession: null,
+      studyRecords: todayRecords,
+      meals: [],
+      waterLiters: 0,
+      waterLog: [],
+    })
+    return {
+      type: '学习观察' as const,
+      rangeDays: 7 as const,
+      digest: { ...digest, fitness: null, diet: null },
+    }
+  }, [aiConsent, profile, runtime.ai.report, runtime.mode, settings, todayRecords])
+  const aiObservation = useAiObservation({
+    enabled: Boolean(observationRequest),
+    request: observationRequest,
+    dateKey: today,
+  })
+  const localObservationTitle = '今天已经足够形成一次小复盘。'
+  const localObservationSummary = totalMinutes
+    ? `今天已记录英语 ${englishMinutes} 分钟、高数 ${mathMinutes} 分钟。${mathWrong ? `高数错题共 ${mathWrong} 道，晚间复盘可以先整理错题，不必重做整套练习。` : '当前没有登记高数错题，可以按原计划结束学习。'}`
+    : '今天还没有学习记录。先补一条真实投入，再让分析建立在可核对的数据上。'
+  const observationTitle = aiObservation.content?.title ?? localObservationTitle
+  const observationSummary = aiObservation.content?.summary ?? localObservationSummary
+  const observationStatus =
+    runtime.mode !== 'owner'
+      ? '桌面体验模式 · 本地规则'
+      : aiObservation.mode === 'loading'
+        ? '正在调用 DeepSeek…'
+        : aiObservation.mode === 'ai'
+          ? `${aiObservation.fromCache ? 'DeepSeek 今日缓存' : 'DeepSeek 生成'}${aiObservation.stale ? ' · 数据已更新' : ''}`
+          : aiObservation.mode === 'fallback'
+            ? 'AI 不可用 · 本地规则降级'
+            : '记录并开启授权后生成 AI 观察'
 
   const saveRecord = (record: StudyRecord) => {
     const exists = records.some((item) => item.id === record.id)
@@ -637,14 +724,10 @@ export function StudyPage() {
               </span>
               <div>
                 <span>Persist AI · 学习观察</span>
-                <h2 id="studyAiTitle">今天已经足够形成一次小复盘。</h2>
+                <h2 id="studyAiTitle">{observationTitle}</h2>
               </div>
             </div>
-            <p>
-              {totalMinutes
-                ? `今天已记录英语 ${englishMinutes} 分钟、高数 ${mathMinutes} 分钟。${mathWrong ? `高数错题共 ${mathWrong} 道，晚间复盘可以先整理错题，不必重做整套练习。` : '当前没有登记高数错题，可以按原计划结束学习。'}`
-                : '今天还没有学习记录。先补一条真实投入，再让分析建立在可核对的数据上。'}
-            </p>
+            <p>{observationSummary}</p>
             <button
               className="study-ai-toggle"
               type="button"
@@ -666,8 +749,17 @@ export function StudyPage() {
                 </div>
                 <div>
                   <span>数据状态</span>
-                  <strong>仅为前端 Mock 分析</strong>
+                  <strong>{observationStatus}</strong>
                 </div>
+                {aiObservation.mode === 'ai' && (
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={aiObservation.regenerate}
+                  >
+                    重新生成观察
+                  </button>
+                )}
                 <button
                   className="btn secondary"
                   type="button"

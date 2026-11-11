@@ -303,7 +303,7 @@ stage(collect) → delta* → questions? → profilePatch? → stage(propose) �
 
 ## 备份、恢复、导出与删除 API（`/api/v1`，步骤 14a/14b/14c/14d）
 
-> **生产部署（2026-11-10）**：14b / 14c / 14d 与 `GET/POST /api/v1/backups` 已部署到生产。切换停机 501 ms，health 200 / schema 2；5 条新路由未鉴权请求均为 401；部署后备份实跑成功（229376 B，`integrity:"ok"`）。14d 前端删除入口仍未接线。
+> **生产部署（2026-11-10）**：14b / 14c / 14d 与 `GET/POST /api/v1/backups` 已部署到生产。切换停机 501 ms，health 200 / schema 2；5 条新路由未鉴权请求均为 401；部署后备份实跑成功（229376 B，`integrity:"ok"`）。14d 前端「先删服务端、成功后清本机」入口已在本机接线，待双端验收。
 
 - **14a 快照**：每日 systemd timer 调 `dist/db/backup-cli.js` 执行 `VACUUM INTO`，快照与 `.sha256` 旁车同目录保存；保留瀑布 7 日 / 4 周 / 3 月。CLI 仍可用于 SSH 运维。
 - **`POST /api/v1/backups`（本机实现并验证，已于 2026-11-10 部署到生产）**：设备令牌鉴权，共用 `/api/v1` 限流，固定生成 `manual` 快照（忽略客户端传入的 reason），使用 `BACKUP_KEEP_*` 配置执行保留清理；成功 `201`，返回 `{ backup: { id, bytes, createdAt, reason, sha256 } }`。同一秒已有同名快照返回 `409 backup_already_exists`，内存库返回 `409 backup_unavailable`；全部响应 `no-store`。
@@ -475,4 +475,4 @@ curl http://127.0.0.1:3101/api/health
 - ✅ 步骤 14b（2026-11-09，`821eabb`）：安全快照恢复端点（预览 / 显式 `confirm:true` / `pre-restore` / sha256 / integrity / schema / 账号校验 / 原子替换与回滚）。完成时为 **23 文件 / 208 条**，其中新增 `db-restore` 与 `backup-routes` 共 2 文件 / 11 条。**本机验证，已于 2026-11-10 部署到生产。**
 - ✅ 步骤 14c（2026-11-10）：`GET /api/v1/export` 账号级 0.3.0 JSON 导出；新增 `shared/src/contract/export.ts`、`server/src/export/account-export.ts`、`server/src/routes/export.ts` 与 `server/test/export-routes.test.ts`；客户端允许空 `reports` 数组以兼容空账号导出。**本机验证，已于 2026-11-10 部署到生产。**
 - ✅ 步骤 14d（2026-11-10，`ca10b42`）：`DELETE /api/v1/account` 显式 `confirm:true` + 单事务硬删除 + 规范快照清理 + 多 active 账号整库快照保护；新增 `shared/src/contract/account.ts`、`server/src/account/delete-account.ts`、`server/src/routes/account.ts` 与 `server/test/account-delete-routes.test.ts`（7 条）。**本机验证，已于 2026-11-10 部署到生产。**
-- ✅ 备份列表 / 手动创建 HTTP 端点（2026-11-10，`c309001`）：`GET /api/v1/backups` 只列规范快照并按新到旧排序，`POST /api/v1/backups` 固定 `manual`、使用配置保留策略；补齐共享契约与 7 条路由测试，覆盖鉴权、排序、路径脱敏、旁车缺失、同秒冲突与内存库 409。当前 server **25 文件 / 226 条**、app **24 文件 / 335 条**。**本机验证，已于 2026-11-10 部署到生产。**
+- ✅ 备份列表 / 手动创建 HTTP 端点（2026-11-10，`c309001`）：`GET /api/v1/backups` 只列规范快照并按新到旧排序，`POST /api/v1/backups` 固定 `manual`、使用配置保留策略；补齐共享契约与 7 条路由测试，覆盖鉴权、排序、路径脱敏、旁车缺失、同秒冲突与内存库 409。当前 server **25 文件 / 226 条**、app **27 文件 / 352 条**。**本机验证，已于 2026-11-10 部署到生产。**

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { AccountDeleteResponse } from '@persist/shared/contract/account'
+import { createCompleteDemoData } from '../data/complete-mock-data'
 import { createEmptyMeals, INITIAL_MEALS } from '../data/diet'
+import { createEmptyMockData } from '../data/empty-mock-data'
 import { INITIAL_PROFILE } from '../data/profile'
 import { INITIAL_REPORTS } from '../data/reports'
 import { INITIAL_SETTINGS } from '../data/settings'
@@ -25,6 +28,7 @@ import { clearPersistedState, loadPersistedState, savePersistedState } from '../
 import { createSyncClient } from '../lib/sync-client'
 import { SyncEngine, type SyncStatusSnapshot } from '../lib/sync-engine'
 import { createSyncStore } from '../lib/sync-store'
+import type { RuntimeMode } from '../lib/runtime-mode'
 import type {
   DietDay,
   EveningReviewPayload,
@@ -43,6 +47,8 @@ import type {
   WaterLogEntry,
 } from '../types'
 import { MockDataContext } from './mock-data-context'
+import { useRuntimeMode } from './runtime-mode-context'
+import { useUI } from './ui-context'
 
 const INITIAL_GOALS: Goal[] = [
   {
@@ -108,8 +114,6 @@ const INITIAL_PLAN: Array<Omit<PlanItem, 'date'>> = [
   },
 ]
 
-const INITIAL_WATER_MILLILITERS = 1_200
-
 /** 把不带日期的演示计划盖上指定日期。 */
 function planForDate(date: string): PlanItem[] {
   return INITIAL_PLAN.map((item) => ({ ...item, date }))
@@ -139,6 +143,13 @@ function createInitialMockData(now: Date = new Date()): ImportableMockData {
   }
 }
 
+/** 根据入口模式选择首次启动数据：owner 保持原样例，demo 载入完整演示，guest 从空白开始。 */
+function createDataForRuntimeMode(mode: RuntimeMode, now: Date = new Date()): ImportableMockData {
+  if (mode === 'demo') return createCompleteDemoData(now)
+  if (mode === 'guest') return createEmptyMockData()
+  return createInitialMockData(now)
+}
+
 /** 同步尚未初始化时的展示状态：默认关闭，页面上只有一个空壳。 */
 const INITIAL_SYNC_STATUS: SyncStatusSnapshot = {
   enabled: false,
@@ -163,32 +174,41 @@ function defaultSyncDeviceLabel(): string {
 }
 
 export function MockDataProvider({ children }: { children: ReactNode }) {
-  /** 本次会话的「今天」。日期只在挂载时取一次，避免跨零点后页面数据整体跳变。 */
+  const runtime = useRuntimeMode()
+  const { showToast } = useUI()
+  /** 演示数据的日期随打开日期平移；AI 内容仍固定为部署前预生成版本。 */
   const [today] = useState(() => todayDateKey())
+  const [initialData] = useState(() => createDataForRuntimeMode(runtime.mode))
 
-  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS)
+  const [goals, setGoals] = useState<Goal[]>(initialData.goals)
   /** 全部日期的计划项（0.3.0 起每条都带 `date`）。 */
-  const [planItems, setPlanItemsState] = useState<PlanItem[]>(() => planForDate(today))
+  const [planItems, setPlanItemsState] = useState<PlanItem[]>(initialData.planItems)
   /** 全部日期的饮水记录。 */
-  const [waterLog, setWaterLogState] = useState<WaterLogEntry[]>([])
-  const [studyRecords, setStudyRecords] = useState<StudyRecord[]>(INITIAL_STUDY_RECORDS)
+  const [waterLog, setWaterLogState] = useState<WaterLogEntry[]>(initialData.waterLog)
+  const [studyRecords, setStudyRecordsState] = useState<StudyRecord[]>(initialData.studyRecords)
   /** 饮食按日台账；页面仍通过 `meals` 拿「今天」的切片。 */
-  const [dietDays, setDietDaysState] = useState<DietDay[]>(() => [
-    { date: today, meals: INITIAL_MEALS },
-  ])
-  const [fitnessSession, setFitnessSession] = useState<FitnessSessionState | null>(null)
+  const [dietDays, setDietDaysState] = useState<DietDay[]>(initialData.dietDays)
+  const [fitnessSession, setFitnessSessionState] = useState<FitnessSessionState | null>(
+    initialData.fitnessSession,
+  )
   /** 已完成训练的归档历史（新→旧）。 */
-  const [fitnessHistory, setFitnessHistory] = useState<FitnessSessionRecord[]>([])
-  const [profile, setProfileState] = useState<ProfileData>(INITIAL_PROFILE)
-  const [settings, setSettings] = useState<MockSettings>(INITIAL_SETTINGS)
-  const [aiConsent, setAiConsentState] = useState(INITIAL_PROFILE.aiConsent)
-  const [eveningReview, setEveningReview] = useState<EveningReviewPayload | null>(null)
-  const [reports, setReports] = useState<ReportRecord[]>(INITIAL_REPORTS)
+  const [fitnessHistory, setFitnessHistory] = useState<FitnessSessionRecord[]>(
+    initialData.fitnessHistory,
+  )
+  const [profile, setProfileState] = useState<ProfileData>(initialData.profile)
+  const [settings, setSettings] = useState<MockSettings>(initialData.settings)
+  const [aiConsent, setAiConsentState] = useState(initialData.aiConsent)
+  const [eveningReview, setEveningReviewState] = useState<EveningReviewPayload | null>(
+    initialData.eveningReview,
+  )
+  const [reports, setReportsState] = useState<ReportRecord[]>(initialData.reports)
   const [snapshot, setSnapshot] = useState<MockSnapshot | null>(null)
-  const [longTermPlans, setLongTermPlans] = useState<LongTermPlan[]>([])
+  const [longTermPlans, setLongTermPlans] = useState<LongTermPlan[]>(
+    initialData.longTermPlans ?? [],
+  )
 
   /** 数据是否已从 IndexedDB 读完（或确认没有本地存储能力）。 */
-  const [hydrated, setHydrated] = useState(false)
+  const [hydrated, setHydrated] = useState(() => !runtime.persist)
   /** 是否允许写回本地：读到「未来版本」的数据时置 false，避免旧代码覆盖新数据。 */
   const persistEnabledRef = useRef(false)
   /** 最近一次状态，供 pagehide 补写使用（effect 闭包里拿不到最新值）。 */
@@ -199,7 +219,9 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   const saveTimerRef = useRef<number | null>(null)
 
   /** 同步状态：引擎每次状态变化都映射到这里，页面只读不写。 */
-  const [syncStatus, setSyncStatus] = useState<SyncStatusSnapshot>(INITIAL_SYNC_STATUS)
+  const [syncStatus, setSyncStatus] = useState<SyncStatusSnapshot>(() =>
+    runtime.sync ? INITIAL_SYNC_STATUS : INITIAL_SYNC_STATUS,
+  )
   /** 恢复码、设备名与令牌只在绑定/恢复/吊销后变化，避免每次状态推送都放进 context。 */
   const [syncInfo, setSyncInfo] = useState<{
     recoveryCode: string | null
@@ -218,16 +240,56 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   /** 跨日后的第一次打开还没有今天的 `dietDays`，这里给页面四个空餐次骨架。 */
   const meals = useMemo(() => dayMeals(dietDays, today), [dietDays, today])
 
+  /** demo 为只读快照：所有写入口统一拦截，避免某个页面漏掉按钮门禁后改到内存数据。 */
+  const blockReadOnly = useCallback(() => {
+    if (!runtime.readOnly) return false
+    showToast('演示模式为部署前预生成内容，仅可查看。')
+    return true
+  }, [runtime.readOnly, showToast])
+
+  const setStudyRecords = useCallback(
+    (action: React.SetStateAction<StudyRecord[]>) => {
+      if (blockReadOnly()) return
+      setStudyRecordsState(action)
+    },
+    [blockReadOnly],
+  )
+
+  const setFitnessSession = useCallback(
+    (action: React.SetStateAction<FitnessSessionState | null>) => {
+      if (blockReadOnly()) return
+      setFitnessSessionState(action)
+    },
+    [blockReadOnly],
+  )
+
+  const setEveningReview = useCallback(
+    (action: React.SetStateAction<EveningReviewPayload | null>) => {
+      if (blockReadOnly()) return
+      setEveningReviewState(action)
+    },
+    [blockReadOnly],
+  )
+
+  const setReports = useCallback(
+    (action: React.SetStateAction<ReportRecord[]>) => {
+      if (blockReadOnly()) return
+      setReportsState(action)
+    },
+    [blockReadOnly],
+  )
+
   /** 兼容旧调用点：写「今日计划」时只替换今天这一块，其他日期原样保留。 */
   const setPlanItems = useCallback(
     (action: React.SetStateAction<PlanItem[]>) => {
+      if (blockReadOnly()) return
       setPlanItemsState((current) =>
         patchPlanItemsForDate(current, today, (items) =>
           typeof action === 'function' ? action(items) : action,
         ),
       )
     },
-    [today],
+    [blockReadOnly, today],
   )
 
   /**
@@ -236,6 +298,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
    */
   const setMeals = useCallback(
     (action: React.SetStateAction<Meal[]>) => {
+      if (blockReadOnly()) return
       setDietDaysState((current) =>
         patchMealsForDate(current, today, (items) => {
           const base = items.length > 0 ? items : createEmptyMeals()
@@ -243,25 +306,31 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
         }),
       )
     },
-    [today],
+    [blockReadOnly, today],
   )
 
   /** 把已完成的训练会话归档进历史；返回生成的记录，方便调用方立即用到 id。 */
   const archiveFitnessSession = useCallback(
     (session: FitnessSessionState, now: Date = new Date()) => {
       const record = createFitnessSessionRecord(session, now)
+      if (blockReadOnly()) return record
       setFitnessHistory((current) => sortFitnessHistoryDesc([record, ...current]))
       return record
     },
-    [],
+    [blockReadOnly],
   )
 
-  const updateGoal = useCallback((id: string, patch: Partial<Goal>) => {
-    setGoals((current) => current.map((goal) => (goal.id === id ? { ...goal, ...patch } : goal)))
-  }, [])
+  const updateGoal = useCallback(
+    (id: string, patch: Partial<Goal>) => {
+      if (blockReadOnly()) return
+      setGoals((current) => current.map((goal) => (goal.id === id ? { ...goal, ...patch } : goal)))
+    },
+    [blockReadOnly],
+  )
 
   const addWater = useCallback(
     (milliliters: number) => {
+      if (blockReadOnly()) return
       if (!Number.isFinite(milliliters) || milliliters <= 0) return
       const amount = Math.round(milliliters)
       const time = new Intl.DateTimeFormat('zh-CN', {
@@ -274,33 +343,47 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
         { id: `water-${Date.now()}`, milliliters: amount, time, date: today },
       ])
     },
-    [today],
+    [blockReadOnly, today],
   )
 
   /** 撤销「今天」的最后一次饮水；其他日期的历史不受影响。 */
   const undoWater = useCallback(() => {
+    if (blockReadOnly()) return
     setWaterLogState((current) => {
       const todayEntries = waterForDate(current, today)
       const last = todayEntries[todayEntries.length - 1]
       return last ? current.filter((entry) => entry.id !== last.id) : current
     })
-  }, [today])
+  }, [blockReadOnly, today])
 
-  const setAiConsent = useCallback((enabled: boolean) => {
-    setAiConsentState(enabled)
-    setProfileState((current) => ({ ...current, aiConsent: enabled }))
-  }, [])
+  const setAiConsent = useCallback(
+    (enabled: boolean) => {
+      if (blockReadOnly()) return
+      setAiConsentState(enabled)
+      setProfileState((current) => ({ ...current, aiConsent: enabled }))
+    },
+    [blockReadOnly],
+  )
 
-  const updateProfile = useCallback((patch: Partial<ProfileData>) => {
-    if (patch.aiConsent !== undefined) setAiConsentState(patch.aiConsent)
-    setProfileState((current) => ({ ...current, ...patch }))
-  }, [])
+  const updateProfile = useCallback(
+    (patch: Partial<ProfileData>) => {
+      if (blockReadOnly()) return
+      if (patch.aiConsent !== undefined) setAiConsentState(patch.aiConsent)
+      setProfileState((current) => ({ ...current, ...patch }))
+    },
+    [blockReadOnly],
+  )
 
-  const updateSettings = useCallback((patch: Partial<MockSettings>) => {
-    setSettings((current) => ({ ...current, ...patch }))
-  }, [])
+  const updateSettings = useCallback(
+    (patch: Partial<MockSettings>) => {
+      if (blockReadOnly()) return
+      setSettings((current) => ({ ...current, ...patch }))
+    },
+    [blockReadOnly],
+  )
 
   const resetSettings = useCallback(() => {
+    if (blockReadOnly()) return
     setSettings({
       ...INITIAL_SETTINGS,
       reminders: INITIAL_SETTINGS.reminders.map((reminder) => ({
@@ -310,53 +393,81 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       sources: { fitness: false, diet: false, study: false, profile: false },
     })
     setAiConsent(false)
-  }, [setAiConsent])
+  }, [blockReadOnly, setAiConsent])
 
-  const appendStudyRecords = useCallback((records: StudyRecord[]) => {
-    if (records.length === 0) return
-    setStudyRecords((current) => [...current, ...records])
-  }, [])
+  const appendStudyRecords = useCallback(
+    (records: StudyRecord[]) => {
+      if (blockReadOnly()) return
+      if (records.length === 0) return
+      setStudyRecordsState((current) => [...current, ...records])
+    },
+    [blockReadOnly],
+  )
 
-  const addLongTermPlan = useCallback((draft: LongTermPlanDraft) => {
-    const plan = createLongTermPlan(draft)
-    if (!plan) return null
-    setLongTermPlans((current) => [plan, ...current])
-    return plan
-  }, [])
+  const addLongTermPlan = useCallback(
+    (draft: LongTermPlanDraft) => {
+      if (blockReadOnly()) return null
+      const plan = createLongTermPlan(draft)
+      if (!plan) return null
+      setLongTermPlans((current) => [plan, ...current])
+      return plan
+    },
+    [blockReadOnly],
+  )
 
-  const updateLongTermPlan = useCallback((id: string, patch: Partial<LongTermPlan>) => {
-    setLongTermPlans((current) =>
-      current.map((plan) => (plan.id === id ? { ...plan, ...patch } : plan)),
-    )
-  }, [])
+  const updateLongTermPlan = useCallback(
+    (id: string, patch: Partial<LongTermPlan>) => {
+      if (blockReadOnly()) return
+      setLongTermPlans((current) =>
+        current.map((plan) => (plan.id === id ? { ...plan, ...patch } : plan)),
+      )
+    },
+    [blockReadOnly],
+  )
 
-  const archiveLongTermPlan = useCallback((id: string) => {
-    setLongTermPlans((current) =>
-      current.map((plan) => (plan.id === id ? { ...plan, status: 'archived' } : plan)),
-    )
-  }, [])
+  const archiveLongTermPlan = useCallback(
+    (id: string) => {
+      if (blockReadOnly()) return
+      setLongTermPlans((current) =>
+        current.map((plan) => (plan.id === id ? { ...plan, status: 'archived' } : plan)),
+      )
+    },
+    [blockReadOnly],
+  )
 
   /** 设为进行中：原来那份进行中的计划会被归档，逻辑集中在纯函数里。 */
-  const activatePlan = useCallback((id: string) => {
-    setLongTermPlans((current) => activateLongTermPlan(current, id))
-  }, [])
+  const activatePlan = useCallback(
+    (id: string) => {
+      if (blockReadOnly()) return
+      setLongTermPlans((current) => activateLongTermPlan(current, id))
+    },
+    [blockReadOnly],
+  )
 
-  const replaceMockData = useCallback((data: ImportableMockData) => {
+  const applyMockData = useCallback((data: ImportableMockData) => {
     setGoals(data.goals)
     setPlanItemsState(data.planItems)
     setWaterLogState(data.waterLog)
-    setStudyRecords(data.studyRecords)
+    setStudyRecordsState(data.studyRecords)
     setDietDaysState(data.dietDays)
-    setFitnessSession(data.fitnessSession)
+    setFitnessSessionState(data.fitnessSession)
     setFitnessHistory(sortFitnessHistoryDesc(data.fitnessHistory))
     setProfileState({ ...data.profile, aiConsent: data.aiConsent })
     setSettings(data.settings)
     setAiConsentState(data.aiConsent)
-    setEveningReview(data.eveningReview)
-    setReports(data.reports)
+    setEveningReviewState(data.eveningReview)
+    setReportsState(data.reports)
     setLongTermPlans(data.longTermPlans ?? [])
     setSnapshot(null)
   }, [])
+
+  const replaceMockData = useCallback(
+    (data: ImportableMockData) => {
+      if (blockReadOnly()) return
+      applyMockData(data)
+    },
+    [applyMockData, blockReadOnly],
+  )
 
   /**
    * 删除本机数据（IndexedDB 记录）并还原到首次启动基线。
@@ -365,19 +476,20 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
    * `hydrated` 保持不变，不重新水合，避免再次读到刚删掉的记录。
    */
   const clearLocalData = useCallback(async () => {
+    if (blockReadOnly()) return
     persistEnabledRef.current = false
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
-    await clearPersistedState()
-    const initialData = createInitialMockData()
-    replaceMockData(initialData)
+    await clearPersistedState({ dbName: runtime.storageDbName })
+    const nextInitialData = createDataForRuntimeMode(runtime.mode)
+    applyMockData(nextInitialData)
     // 同步刷新 pagehide 补写用的镜像，避免「清空后立刻关页面」把旧数据又写回去。
-    latestStateRef.current = { data: initialData, snapshot: null }
+    latestStateRef.current = { data: nextInitialData, snapshot: null }
     // 记录已删除，此后写入的是本版本基线；即使之前读到过未来版本数据，用户主动清空后也由本版本接管。
     persistEnabledRef.current = true
-  }, [replaceMockData])
+  }, [applyMockData, blockReadOnly, runtime.mode, runtime.storageDbName])
 
   /**
    * 同步引擎只在挂载 effect 里创建，实例放 ref：渲染期间不读 ref，
@@ -389,10 +501,11 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   const syncEngineRef = useRef<SyncEngine | null>(null)
 
   const requireSyncEngine = useCallback(() => {
+    if (!runtime.sync) throw new Error('桌面体验模式不启用跨设备同步。')
     const engine = syncEngineRef.current
     if (!engine) throw new Error('同步引擎尚未准备好，请稍后重试。')
     return engine
-  }, [])
+  }, [runtime.sync])
 
   /** 恢复码/设备名/令牌不随每次状态推送变化，只在绑定类操作后刷新。 */
   const refreshSyncInfo = useCallback((engine: SyncEngine) => {
@@ -437,6 +550,15 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     const engine = requireSyncEngine()
     await engine.revokeDevice()
     refreshSyncInfo(engine)
+  }, [refreshSyncInfo, requireSyncEngine])
+
+  const deleteServerAccount = useCallback(async (): Promise<AccountDeleteResponse> => {
+    const engine = requireSyncEngine()
+    try {
+      return await engine.deleteAccount()
+    } finally {
+      refreshSyncInfo(engine)
+    }
   }, [refreshSyncInfo, requireSyncEngine])
 
   const syncNow = useCallback(async () => requireSyncEngine().flush('manual'), [requireSyncEngine])
@@ -484,11 +606,15 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
    * 没有 IndexedDB（jsdom / 隐私模式）时只降级为纯内存，不让页面卡住。
    */
   useEffect(() => {
+    if (!runtime.persist) {
+      persistEnabledRef.current = false
+      return
+    }
     let cancelled = false
-    void loadPersistedState().then((result) => {
+    void loadPersistedState({ dbName: runtime.storageDbName }).then((result) => {
       if (cancelled) return
       if (result.status === 'loaded' && result.state) {
-        replaceMockData(result.state.data)
+        applyMockData(result.state.data)
         setSnapshot(result.state.snapshot)
       }
       persistEnabledRef.current =
@@ -501,7 +627,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [replaceMockData])
+  }, [applyMockData, runtime.persist, runtime.storageDbName])
 
   /** 待持久化的切片与备份 0.3.0 的 data 完全一致：本地存储、导出文件、导入校验同构。 */
   const persistableData = useMemo<ImportableMockData>(
@@ -543,11 +669,12 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
 
   /** 引擎初始化：只读本机同步元数据（不联网），随后绑定在线/离线与兜底轮询。 */
   useEffect(() => {
+    if (!runtime.sync) return
     const engine = new SyncEngine({
       client: createSyncClient(),
       metaStorage: createSyncStore(),
       queueStorage: createSyncStore(),
-      getData: () => latestStateRef.current?.data ?? createInitialMockData(),
+      getData: () => latestStateRef.current?.data ?? createDataForRuntimeMode(runtime.mode),
       applyData: (data) => replaceMockData(data),
       onChange: (status) => setSyncStatus(status),
       isOnline: () => (typeof navigator === 'undefined' ? true : navigator.onLine),
@@ -569,7 +696,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       engine.stop()
       if (syncEngineRef.current === engine) syncEngineRef.current = null
     }
-  }, [replaceMockData])
+  }, [replaceMockData, runtime.mode, runtime.sync])
 
   /**
    * 本地数据变化时通知同步引擎：它自己算差分并在 5 秒后合并推送。
@@ -582,25 +709,25 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
 
   /** 交互后防抖写入，把连续操作合并成一次事务；严格模式重复执行也只是多写一次同样的数据。 */
   useEffect(() => {
-    if (!hydrated || !persistEnabledRef.current) return
+    if (!runtime.persist || !hydrated || !persistEnabledRef.current) return
     const timer = window.setTimeout(() => {
       saveTimerRef.current = null
-      void savePersistedState(persistableData, snapshot)
+      void savePersistedState(persistableData, snapshot, { dbName: runtime.storageDbName })
     }, PERSIST_SAVE_DEBOUNCE_MS)
     saveTimerRef.current = timer
     return () => {
       window.clearTimeout(timer)
       if (saveTimerRef.current === timer) saveTimerRef.current = null
     }
-  }, [hydrated, persistableData, snapshot])
+  }, [hydrated, persistableData, runtime.persist, runtime.storageDbName, snapshot])
 
   /** 页面隐藏 / 关闭时补写一次，避免防抖窗口内直接关页面丢数据。 */
   useEffect(() => {
-    if (!hydrated) return
+    if (!runtime.persist || !hydrated) return
     const flush = () => {
       const latest = latestStateRef.current
       if (!latest || !persistEnabledRef.current) return
-      void savePersistedState(latest.data, latest.snapshot)
+      void savePersistedState(latest.data, latest.snapshot, { dbName: runtime.storageDbName })
     }
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') flush()
@@ -611,15 +738,15 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [hydrated])
+  }, [hydrated, runtime.persist, runtime.storageDbName])
 
   /** 今日饮水 = 基线 1.2 L + 今天的记录；其他日期的历史不计入今日进度。 */
   const waterLiters = useMemo(
     () =>
-      (INITIAL_WATER_MILLILITERS +
+      (runtime.waterBaselineMilliliters +
         todayWaterLog.reduce((total, entry) => total + entry.milliliters, 0)) /
       1000,
-    [todayWaterLog],
+    [runtime.waterBaselineMilliliters, todayWaterLog],
   )
   const lastWaterMilliliters = todayWaterLog.at(-1)?.milliliters ?? null
 
@@ -678,6 +805,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       disableSync,
       restoreSync,
       revokeSync,
+      deleteServerAccount,
       syncNow,
       longTermPlans,
       addLongTermPlan,
@@ -696,6 +824,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       clearLocalData,
       createMockSnapshot,
       disableSync,
+      deleteServerAccount,
       dietDays,
       enableSync,
       eveningReview,
@@ -713,7 +842,11 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       restoreSync,
       revokeSync,
       setAiConsent,
+      setEveningReview,
+      setFitnessSession,
       setMeals,
+      setReports,
+      setStudyRecords,
       setPlanItems,
       settings,
       snapshot,

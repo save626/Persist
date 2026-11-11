@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { useMemo, useState } from 'react'
@@ -17,12 +17,34 @@ const UI_VALUE: UIContextValue = {
   showToast: vi.fn(),
 }
 
+const ACCOUNT_DELETE_RESULT: Awaited<ReturnType<MockDataContextValue['deleteServerAccount']>> = {
+  deleted: true,
+  deletedAt: 1_762_761_600_000,
+  counts: {
+    profile: 1,
+    settings: 1,
+    planItems: 1,
+    studyRecords: 0,
+    fitnessSessions: 0,
+    dietEntries: 0,
+    waterLogs: 0,
+    goals: 0,
+    longTermPlans: 0,
+    analysisReports: 0,
+    jobRuns: 0,
+    syncOps: 1,
+    devices: 1,
+    backupFiles: 2,
+  },
+}
+
 // vitest 未开启 globals，RTL 的自动清理不会生效，这里显式清理避免用例间 DOM 叠加。
 afterEach(cleanup)
 
 function buildContextValue(
   settings: MockSettings,
   updateSettings: (patch: Partial<MockSettings>) => void,
+  overrides: Partial<MockDataContextValue> = {},
 ): MockDataContextValue {
   return {
     goals: [],
@@ -94,12 +116,16 @@ function buildContextValue(
     disableSync: vi.fn(async () => {}),
     restoreSync: vi.fn(async () => {}),
     revokeSync: vi.fn(async () => {}),
+    deleteServerAccount: vi.fn(async () => {
+      throw new Error('not used in brief tests')
+    }),
     syncNow: vi.fn(),
     longTermPlans: [],
     addLongTermPlan: vi.fn(),
     updateLongTermPlan: vi.fn(),
     archiveLongTermPlan: vi.fn(),
     activatePlan: vi.fn(),
+    ...overrides,
   }
 }
 
@@ -107,18 +133,24 @@ function buildContextValue(
 function Harness({
   initial,
   onUpdate,
+  contextOverrides,
 }: {
   initial: MockSettings
   onUpdate: (patch: Partial<MockSettings>) => void
+  contextOverrides?: Partial<MockDataContextValue>
 }) {
   const [settings, setSettings] = useState(initial)
   const value = useMemo(
     () =>
-      buildContextValue(settings, (patch) => {
-        onUpdate(patch)
-        setSettings((current) => ({ ...current, ...patch }))
-      }),
-    [onUpdate, settings],
+      buildContextValue(
+        settings,
+        (patch) => {
+          onUpdate(patch)
+          setSettings((current) => ({ ...current, ...patch }))
+        },
+        contextOverrides,
+      ),
+    [contextOverrides, onUpdate, settings],
   )
   return (
     <MemoryRouter initialEntries={['/settings']}>
@@ -131,9 +163,14 @@ function Harness({
   )
 }
 
-function renderSettings(initial: MockSettings = INITIAL_SETTINGS) {
+function renderSettings(
+  initial: MockSettings = INITIAL_SETTINGS,
+  contextOverrides: Partial<MockDataContextValue> = {},
+) {
   const updateSettings = vi.fn()
-  render(<Harness initial={initial} onUpdate={updateSettings} />)
+  render(
+    <Harness initial={initial} onUpdate={updateSettings} contextOverrides={contextOverrides} />,
+  )
   return { updateSettings }
 }
 
@@ -141,7 +178,7 @@ function briefToggle() {
   return screen.getByRole('checkbox', { name: '每日简报' })
 }
 
-function briefTimeInput() {
+function briefTimeTrigger() {
   return screen.getByLabelText('每日简报时间')
 }
 
@@ -152,7 +189,7 @@ describe('SettingsPage 每日简报', () => {
     expect(screen.getByRole('heading', { name: '每日简报' })).toBeInTheDocument()
     expect(screen.getByText('05')).toBeInTheDocument()
     expect(briefToggle()).not.toBeChecked()
-    expect(briefTimeInput()).toHaveValue('21:00')
+    expect(briefTimeTrigger()).toHaveTextContent('21:00')
     expect(screen.getByText('默认关闭')).toBeInTheDocument()
     expect(screen.getByText('每天自动生成服务端简报')).toBeInTheDocument()
     expect(screen.getByText(/365 天后自动删除/)).toBeInTheDocument()
@@ -172,29 +209,33 @@ describe('SettingsPage 每日简报', () => {
     expect(screen.getByText('已开启')).toBeInTheDocument()
   })
 
-  it('修改时间时写入 dailyBrief.at', async () => {
+  it('通过统一定时弹层修改时间时写入 dailyBrief.at', async () => {
+    const user = userEvent.setup()
     const { updateSettings } = renderSettings()
 
-    fireTimeChange('07:30')
+    await user.click(briefTimeTrigger())
+    await user.click(screen.getByRole('button', { name: '07 时' }))
+    await user.click(screen.getByRole('button', { name: '30 分' }))
+    await user.click(screen.getByRole('button', { name: '确定' }))
 
     expect(updateSettings).toHaveBeenCalledWith({
       dailyBrief: { enabled: false, at: '07:30' },
     })
-    expect(briefTimeInput()).toHaveValue('07:30')
+    expect(briefTimeTrigger()).toHaveTextContent('07:30')
   })
 
-  it('非法时间回落到 21:00 并给出提示', async () => {
+  it('取消统一定时弹层时不写入时间', async () => {
+    const user = userEvent.setup()
     const { updateSettings } = renderSettings()
 
-    fireTimeChange('')
+    await user.click(briefTimeTrigger())
+    await user.click(screen.getByRole('button', { name: '07 时' }))
+    await user.click(screen.getByRole('button', { name: '30 分' }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
 
-    expect(updateSettings).toHaveBeenCalledWith({
-      dailyBrief: { enabled: false, at: '21:00' },
-    })
-    expect(screen.getByRole('alert')).toHaveTextContent('时间格式无效，已改回 21:00。')
-    expect(briefTimeInput()).toHaveValue('21:00')
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(briefTimeTrigger()).toHaveTextContent('21:00')
   })
-
   it('旧快照没有 dailyBrief 时按默认值展示', () => {
     renderSettings({
       reminders: INITIAL_SETTINGS.reminders,
@@ -203,15 +244,67 @@ describe('SettingsPage 每日简报', () => {
     })
 
     expect(briefToggle()).not.toBeChecked()
-    expect(briefTimeInput()).toHaveValue('21:00')
+    expect(briefTimeTrigger()).toHaveTextContent('21:00')
     expect(screen.getByText('默认关闭')).toBeInTheDocument()
   })
 })
 
-/** `<input type="time">` 的受控 value 只能整体替换，用 change 事件模拟用户输入。 */
-function fireTimeChange(value: string) {
-  const input = briefTimeInput() as HTMLInputElement
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-  setter?.call(input, value)
-  input.dispatchEvent(new Event('input', { bubbles: true }))
-}
+describe('SettingsPage 账号删除', () => {
+  it('已绑定账号时先删服务端，成功后再清空本机', async () => {
+    const user = userEvent.setup()
+    const deleteServerAccount = vi.fn(async () => ACCOUNT_DELETE_RESULT)
+    const clearLocalData = vi.fn(async () => {})
+    vi.mocked(UI_VALUE.showToast).mockClear()
+    renderSettings(INITIAL_SETTINGS, {
+      syncToken: 'token-delete',
+      syncStatus: {
+        enabled: true,
+        pending: 0,
+        lastSyncAt: '2026-11-10 16:00',
+        online: true,
+        syncing: false,
+        error: null,
+        needsAttention: false,
+        state: '已同步',
+      },
+      deleteServerAccount,
+      clearLocalData,
+    })
+
+    expect(screen.getByRole('heading', { name: '删除同步账号与全部数据' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '删除账号与数据' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('永久删除同步账号与全部数据？')
+    await user.click(screen.getByRole('button', { name: '永久删除' }))
+
+    await waitFor(() => expect(clearLocalData).toHaveBeenCalledTimes(1))
+    expect(deleteServerAccount).toHaveBeenCalledTimes(1)
+    expect(deleteServerAccount.mock.invocationCallOrder[0]).toBeLessThan(
+      clearLocalData.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    )
+    expect(UI_VALUE.showToast).toHaveBeenCalledWith('同步账号和本机数据已永久删除')
+  })
+
+  it('服务端删除失败时不调用本机清空，并提示可重试', async () => {
+    const user = userEvent.setup()
+    const deleteServerAccount = vi.fn(async () => {
+      throw new Error('服务端暂时不可用')
+    })
+    const clearLocalData = vi.fn(async () => {})
+    vi.mocked(UI_VALUE.showToast).mockClear()
+    renderSettings(INITIAL_SETTINGS, {
+      syncToken: 'token-delete',
+      deleteServerAccount,
+      clearLocalData,
+    })
+
+    await user.click(screen.getByRole('button', { name: '删除账号与数据' }))
+    await user.click(screen.getByRole('button', { name: '永久删除' }))
+
+    await waitFor(() =>
+      expect(UI_VALUE.showToast).toHaveBeenCalledWith(
+        '删除账号失败，本机数据未清空：服务端暂时不可用',
+      ),
+    )
+    expect(clearLocalData).not.toHaveBeenCalled()
+  })
+})

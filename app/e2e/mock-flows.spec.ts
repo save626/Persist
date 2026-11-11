@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { chooseTime } from './date-time'
 
 async function mainNav(page: Page, label: '今日' | '健身' | '饮食' | '学习') {
   const mobile = (page.viewportSize()?.width ?? 1280) <= 900
@@ -33,9 +34,11 @@ test('new study record survives navigation and updates today', async ({ page }) 
 
   const dialog = page.getByRole('dialog', { name: '新增学习记录' })
   await expect(dialog).toBeVisible()
-  await page.getByLabel('学习来源').fill('Mock 英语专项')
+  const source = dialog.getByLabel('学习来源')
+  await source.selectOption('__custom__')
+  await source.fill('Mock 英语专项')
   await page.getByLabel('学习时长 / min').fill('25')
-  await page.getByLabel('开始时间').fill('17:20')
+  await chooseTime(page, '开始时间', '17:20')
   await page.getByRole('button', { name: '添加记录' }).click()
 
   await expect(page.getByText('学习记录已添加')).toBeVisible()
@@ -62,16 +65,56 @@ test('switching study category clears the subject-specific source', async ({ pag
   const dialog = page.getByRole('dialog', { name: '新增学习记录' })
   const source = dialog.getByLabel('学习来源')
 
-  await source.fill('百词斩')
-  await dialog.getByRole('button', { name: /高数/ }).click()
-  // 换科后旧来源不能留在输入框里，占位符与候选列表要同步换成该科的。
-  await expect(source).toHaveValue('')
-  await expect(source).toHaveAttribute('placeholder', '例如：高数练习')
+  await expect(source.locator('option')).toHaveText([
+    '请选择学习来源',
+    '百词斩',
+    '不背单词',
+    '英语真题',
+    '听力精练',
+    '自定义来源…',
+  ])
 
-  await source.fill('高数练习')
+  const newWords = dialog.getByLabel('新学单词')
+  await expect(newWords).toHaveValue('')
+  await newWords.fill('12')
+  await expect(newWords).toHaveValue('12')
+  await newWords.fill('')
+  await expect(newWords).toHaveValue('')
+
+  await source.selectOption('百词斩')
+  await dialog.getByRole('button', { name: /高数/ }).click()
+  // 换科后旧来源不能留在选择框里，候选列表要同步换成该科的。
+  await expect(source).toHaveValue('')
+  await expect(source.locator('option')).toHaveText([
+    '请选择学习来源',
+    '高数练习',
+    '错题整理',
+    '课程学习',
+    '自定义来源…',
+  ])
+
+  const questions = dialog.getByLabel('练习题量')
+  const wrong = dialog.getByLabel('错题数')
+  await expect(questions).toHaveValue('')
+  await expect(wrong).toHaveValue('')
+  await questions.fill('20')
+  await questions.fill('')
+  await wrong.fill('3')
+  await wrong.fill('')
+  await expect(questions).toHaveValue('')
+  await expect(wrong).toHaveValue('')
+
+  await source.selectOption('高数练习')
   await dialog.getByRole('button', { name: /英语/ }).click()
   await expect(source).toHaveValue('')
-  await expect(source).toHaveAttribute('placeholder', '例如：百词斩')
+  await expect(source.locator('option')).toHaveText([
+    '请选择学习来源',
+    '百词斩',
+    '不背单词',
+    '英语真题',
+    '听力精练',
+    '自定义来源…',
+  ])
 })
 
 test('meal food survives navigation and updates the daily calorie total', async ({ page }) => {
@@ -139,7 +182,7 @@ test('profile edits survive navigation and persist in the mock session', async (
   await page.getByRole('button', { name: '继续', exact: true }).click()
   await page.getByRole('button', { name: '继续', exact: true }).click()
   await page.getByLabel('过敏与忌口').fill('花生')
-  await page.getByLabel('通常入睡时间').fill('23:15')
+  await chooseTime(page, '通常入睡时间', '23:15')
   await page.getByLabel('近期压力状态').selectOption('中等')
   await page.getByRole('button', { name: '保存档案' }).click()
 
@@ -157,13 +200,13 @@ test('profile edits survive navigation and persist in the mock session', async (
 
 test('settings and profile record consent stay in sync across routes', async ({ page }) => {
   await page.goto('/settings')
-  await page.getByLabel('饮水提醒时间').fill('10:15')
+  await chooseTime(page, '饮水提醒时间', '10:15')
   await page.getByLabel('启用饮水提醒').uncheck()
   await aiSource(page, '学习记录').uncheck()
 
   await mainNav(page, '今日')
   await openSettings(page)
-  await expect(page.getByLabel('饮水提醒时间')).toHaveValue('10:15')
+  await expect(page.getByLabel('饮水提醒时间')).toContainText('10:15')
   await expect(page.getByLabel('启用饮水提醒')).not.toBeChecked()
   await expect(aiSource(page, '学习记录')).not.toBeChecked()
 
@@ -202,9 +245,9 @@ test('evening review survives leaving and returning to today', async ({ page }) 
 test('report summaries update from study, diet and water changes', async ({ page }) => {
   await page.goto('/study')
   await page.getByRole('button', { name: '新增记录' }).click()
-  await page.getByLabel('学习来源').fill('报告联动测试')
+  await page.getByLabel('学习来源').selectOption('英语真题')
   await page.getByLabel('学习时长 / min').fill('25')
-  await page.getByLabel('开始时间').fill('16:40')
+  await chooseTime(page, '开始时间', '16:40')
   await page.getByRole('button', { name: '添加记录' }).click()
   await expect(page.getByText('学习记录已添加')).toBeVisible()
 

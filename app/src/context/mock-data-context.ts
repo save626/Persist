@@ -1,4 +1,5 @@
 import { createContext, useContext, type Dispatch, type SetStateAction } from 'react'
+import type { AccountDeleteResponse } from '@persist/shared/contract/account'
 import type { LongTermPlanDraft } from '../lib/long-term-plan'
 import type { SyncStatusSnapshot } from '../lib/sync-engine'
 import type {
@@ -96,6 +97,8 @@ export interface MockDataContextValue {
   restoreSync: (recoveryCode: string, label?: string) => Promise<void>
   /** 吊销本机令牌并关闭同步。 */
   revokeSync: () => Promise<void>
+  /** 删除服务端账号并清空本机同步凭据/outbox；调用方随后负责清空本机业务数据。 */
+  deleteServerAccount: () => Promise<AccountDeleteResponse>
   /** 立刻同步一次（不等待 5 秒防抖）；返回本次同步后的状态，便于页面提示成功/失败。 */
   syncNow: () => Promise<SyncStatusSnapshot>
   longTermPlans: LongTermPlan[]

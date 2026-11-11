@@ -25,7 +25,8 @@ export const MORNING_BRIEF_TYPE = '今日简报' as const
 export const MORNING_BRIEF_RANGE_DAYS = 7 as const
 export const MORNING_BRIEF_CACHE_PREFIX = 'persist.morning-brief.'
 
-export type MorningBriefStatus = 'ai' | 'no-consent' | 'no-data' | 'unavailable' | 'contract'
+export type MorningBriefStatus =
+  'ai' | 'prebuilt' | 'experience-mock' | 'no-consent' | 'no-data' | 'unavailable' | 'contract'
 
 export interface MorningBriefResult {
   status: MorningBriefStatus
@@ -101,6 +102,10 @@ export function morningBriefNote(status: MorningBriefStatus, digest: ReportDiges
       return `文字由 DeepSeek 生成 · 经本站服务端代理；数字与引用依据来自本机记录${
         labels ? `（${labels}）` : ''
       }。`
+    case 'prebuilt':
+      return '这份简报在部署前通过 DeepSeek 生成并固化；演示模式只读，不会再次调用 AI。'
+    case 'experience-mock':
+      return '桌面体验模式固定使用本机 Mock，不向服务端发送任何记录。'
     case 'no-consent':
       return '未开启 AI 数据授权，本次使用本机规则生成，不向服务端发送任何记录。'
     case 'no-data':
@@ -123,6 +128,8 @@ function isAbortError(error: unknown): boolean {
 export interface GenerateMorningBriefOptions {
   digest: ReportDigest
   aiConsent: boolean
+  /** false: public experience mode must not touch /api/health or /api/report. */
+  allowRealAi?: boolean
   /** 用于按天缓存，避免第二天继续展示昨天的文字。 */
   date: string
   /** 显式传 null 表示不缓存；不传则使用 sessionStorage。 */
@@ -137,6 +144,7 @@ export async function generateMorningBrief(
   const { aiConsent, digest, date, signal } = options
   const storage = options.storage === undefined ? safeSessionStorage() : options.storage
 
+  if (options.allowRealAi === false) return { status: 'experience-mock', content: null }
   if (!aiConsent) return { status: 'no-consent', content: null }
   if (!hasDigestSources(digest)) return { status: 'no-data', content: null }
 

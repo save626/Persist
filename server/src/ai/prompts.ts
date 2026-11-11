@@ -183,6 +183,16 @@ export const REPORT_SYSTEM_PROMPT = `你是「Persist」App 的复盘助手，�
 - actions：2–3 条，每条 10–60 字，必须具体到时间、动作或已有记录节点；其中的数量只能引用摘要里出现的数字，没有可引用数字时不要编造，可写「按目标补齐」这类表述；不要写「保持良好习惯」这类空话。
 - warnings：0–2 条，每条 10–60 字，只写摘要里真实存在的风险；没有风险就给空数组。`
 
+export const REPORT_TYPE_GUIDANCE: Record<ReportRequest['type'], string> = {
+  今日简报: '聚焦一天的整体节奏，在已授权来源之间建立克制、可核对的联系，不停留在单条记录。',
+  训练建议:
+    '只围绕本次训练的动作、完成组数、容量、时长与距离给出观察；不要扩展到饮食、学习或训练之外的生活建议，也不要把未提供的目标差值写成事实。',
+  饮食观察:
+    '只围绕今日餐次、食物条目与饮水记录给出观察；不推断具体营养素、热量或体重变化，不评价体型，不做医疗营养诊断。',
+  学习观察:
+    '只围绕今日英语与高数的记录条数和投入时长给出观察；不推测正确率、掌握程度、考试分数或未来成绩。',
+}
+
 /** 把摘要渲染成紧凑文本：只列已授权来源，避免模型把缺失数据当成「零」。 */
 export function reportDigestSummary(request: ReportRequest): string {
   const lines: string[] = []
@@ -241,8 +251,15 @@ export function buildReportMessages(
     '',
     '请输出 JSON。',
   ].join('\n')
+  const systemContent = [
+    REPORT_SYSTEM_PROMPT,
+    '',
+    `本次报告类型为「${request.type}」。`,
+    REPORT_TYPE_GUIDANCE[request.type],
+    '只写本次类型需要的观察，不扩展到未授权的数据来源。',
+  ].join('\n')
   return [
-    { role: 'system', content: REPORT_SYSTEM_PROMPT },
+    { role: 'system', content: systemContent },
     { role: 'user', content: userContent },
   ]
 }

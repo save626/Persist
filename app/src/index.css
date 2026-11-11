@@ -10,6 +10,7 @@
 @import './styles/reports.css';
 @import './styles/settings.css';
 @import './styles/plans.css';
+@import './styles/date-time-picker.css';
 
 #root {
   min-height: 100vh;

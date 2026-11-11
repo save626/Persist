@@ -210,8 +210,16 @@ export interface ReportRecord {
   conclusions: string[]
   actions: string[]
   evidence: string[]
-  /** 这份报告的来源：经服务端调用 DeepSeek、服务端规则降级，或本地 Mock 规则生成；旧数据没有该字段。 */
-  origin?: 'ai' | 'rules' | 'mock'
+  /**
+   * 这份报告的来源：经服务端调用 DeepSeek、服务端规则降级、本地 Mock 规则生成，
+   * 或部署前已固化进前端包的 demo 预生成内容；旧数据没有该字段。
+   */
+  origin?: 'ai' | 'rules' | 'mock' | 'prebuilt'
+  /** 预生成内容的真实模型与生成时间；只有 origin === 'prebuilt' 时存在。 */
+  prebuilt?: {
+    model: string
+    generatedAt: string
+  }
 }
 
 export type PlanCadence = 'weekly' | 'cycle'

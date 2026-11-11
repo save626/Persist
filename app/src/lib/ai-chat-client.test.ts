@@ -234,6 +234,27 @@ describe('createAppChatClient', () => {
     expect(client.label).toBe(MOCK_CHAT_LABEL)
   })
 
+  it('allowRealAi=false keeps chat local even when consent is enabled', async () => {
+    const { fetchImpl, calls } = stubFetch(() => {
+      throw new Error('network must not be used')
+    })
+    const client = createAppChatClient({
+      consent: true,
+      allowRealAi: false,
+      fetchImpl,
+      mockOptions: { chunkDelayMs: 0 },
+    })
+
+    await expect(client.probe()).resolves.toBe('mock')
+    const events = await collect(client)
+
+    expect(calls).toHaveLength(0)
+    expect(events[0]).toEqual({ type: 'stage', stage: 'collect' })
+    expect(events.at(-1)).toEqual({ type: 'done' })
+    expect(client.status()).toEqual({ source: 'mock', fallback: false })
+    expect(client.label).toBe(MOCK_CHAT_LABEL)
+  })
+
   it('服务可用时走真实模型，来源标成 DeepSeek', async () => {
     const { fetchImpl, calls } = stubFetch((url) => {
       if (url === '/api/health') {

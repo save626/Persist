@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { DatePickerField, TimePickerField } from '../components/DateTimePicker'
 import { Icon } from '../components/Icon'
 import {
   EveningReviewSheet,
@@ -157,24 +158,20 @@ function GoalEditor({ goal, onClose }: { goal: Goal; onClose: () => void }) {
             />
           </label>
           <div className="form-grid">
-            <label className="form-field">
-              <span>目标日期</span>
-              <input
-                className="form-input"
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-              />
-            </label>
-            <label className="form-field">
-              <span>目标时间</span>
-              <input
-                className="form-input"
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-              />
-            </label>
+            <DatePickerField
+              className="form-field"
+              triggerClassName="form-input"
+              label="目标日期"
+              value={date}
+              onChange={setDate}
+            />
+            <TimePickerField
+              className="form-field"
+              triggerClassName="form-input"
+              label="目标时间"
+              value={time}
+              onChange={setTime}
+            />
           </div>
           <label className="toggle-row">
             <span className="toggle-copy">

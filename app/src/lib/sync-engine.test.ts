@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { AccountDeleteResponse } from '@persist/shared/contract/account'
 import { createCompleteMockData } from '../data/complete-mock-data'
 import type { ImportableMockData } from '../types'
 import type { BootstrapBody, PullEntity, PushBody, PushResult } from './sync-contract'
@@ -8,6 +9,27 @@ import { createEmptySyncMeta, type OutboxRecord, type SyncMetaRecord } from './s
 
 const NOW = new Date(2026, 10, 5, 9, 0, 0)
 const NOW_MS = NOW.getTime()
+
+const ACCOUNT_DELETE_RESULT = {
+  deleted: true,
+  deletedAt: NOW_MS,
+  counts: {
+    profile: 0,
+    settings: 0,
+    planItems: 0,
+    studyRecords: 0,
+    fitnessSessions: 0,
+    dietEntries: 0,
+    waterLogs: 0,
+    goals: 0,
+    longTermPlans: 0,
+    analysisReports: 0,
+    jobRuns: 0,
+    syncOps: 0,
+    devices: 0,
+    backupFiles: 0,
+  },
+} satisfies AccountDeleteResponse
 
 function sampleData(): ImportableMockData {
   return createCompleteMockData(NOW)
@@ -70,6 +92,7 @@ function createStorage(initial: OutboxRecord[] = []) {
 
 interface FakeClientState {
   pushError: Error | null
+  deleteAccountError: Error | null
   pushResults: PushResult[]
   pullBatches: PullEntity[][]
   bootstrapResult: PushResult
@@ -85,6 +108,10 @@ function createFakeClient(state: FakeClientState) {
     })),
     restore: vi.fn(async () => ({ userId: 'u1', deviceId: 'd2', token: 'token-2' })),
     revoke: vi.fn(async () => ({ revoked: true, deviceId: 'd1' })),
+    deleteAccount: vi.fn(async (_token: string) => {
+      if (state.deleteAccountError) throw state.deleteAccountError
+      return ACCOUNT_DELETE_RESULT
+    }),
     bootstrap: vi.fn(async (_token: string, _body: BootstrapBody) => state.bootstrapResult),
     push: vi.fn(async (_token: string, _body: PushBody): Promise<PushResult> => {
       if (state.pushError) throw state.pushError
@@ -105,6 +132,7 @@ function createEngine(overrides: Partial<SyncEngineDeps> = {}) {
   const scheduler = createScheduler()
   const state: FakeClientState = {
     pushError: null,
+    deleteAccountError: null,
     pushResults: [],
     pullBatches: [],
     bootstrapResult: { applied: 0, skipped: [], serverRev: 0 },
@@ -417,6 +445,51 @@ describe('SyncEngine', () => {
     expect(meta.enabled).toBe(false)
     expect(meta.token).toBeNull()
     expect(engine.status().state).toBe('未开启')
+  })
+
+  it('deleteAccount：服务端成功后清空同步凭据与 outbox，但不改业务数据', async () => {
+    const { engine, client, meta, storage, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+
+    const beforeDelete = {
+      ...getData(),
+      goals: getData().goals.map((goal) =>
+        goal.id === 'goal-1' ? { ...goal, title: '待删除前最后一条变更' } : goal,
+      ),
+    }
+    setData(beforeDelete)
+    engine.noteDataChange()
+    await tick()
+    expect(engine.outbox().length).toBeGreaterThan(0)
+
+    const result = await engine.deleteAccount()
+
+    expect(client.deleteAccount).toHaveBeenCalledWith('token-1')
+    expect(result.deleted).toBe(true)
+    expect(storage.snapshot()).toHaveLength(0)
+    expect(meta.token).toBeNull()
+    expect(meta.recoveryCode).toBeNull()
+    expect(engine.status().state).toBe('未开启')
+    expect(getData().goals[0]?.title).toBe('待删除前最后一条变更')
+  })
+
+  it('deleteAccount：服务端失败时保留同步凭据与 outbox，允许重试', async () => {
+    const { engine, state, meta, storage, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+    setData({ ...getData(), waterLog: getData().waterLog.slice(1) })
+    engine.noteDataChange()
+    await tick()
+    const pendingBefore = engine.outbox().length
+    state.deleteAccountError = new SyncRequestError('server', '服务端暂时不可用')
+
+    await expect(engine.deleteAccount()).rejects.toThrow('服务端暂时不可用')
+
+    expect(meta.token).toBe('token-1')
+    expect(engine.outbox()).toHaveLength(pendingBefore)
+    expect(storage.snapshot()).toHaveLength(pendingBefore)
+    expect(engine.status().enabled).toBe(true)
   })
 
   it('noteDataChange 会安排 5 秒防抖推送', async () => {

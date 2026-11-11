@@ -519,6 +519,13 @@
   width: 17px;
   height: 17px;
 }
+.study-source-back {
+  justify-self: start;
+  padding: 0;
+  color: var(--deep);
+  background: transparent;
+  font-size: 9px;
+}
 .study-metric-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
