@@ -16,6 +16,7 @@ export type IconName =
   | 'undo'
   | 'lock'
   | 'close'
+  | 'back'
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {
   return (
@@ -77,6 +78,9 @@ export function IconSprite() {
       </symbol>
       <symbol id="close" viewBox="0 0 24 24">
         <path d="M6 6l12 12M18 6L6 18" />
+      </symbol>
+      <symbol id="back" viewBox="0 0 24 24">
+        <path d="M15 18l-6-6 6-6" />
       </symbol>
     </svg>
   )

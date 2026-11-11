@@ -30,6 +30,7 @@ export function AppShell() {
   const runtime = useRuntimeMode()
   const { profile, aiConsent } = useMockData()
   const completeness = calculateProfileCompleteness({ ...profile, aiConsent })
+  const isPublicWeb = import.meta.env.MODE !== 'mobile'
 
   useEffect(() => {
     const current = NAV_ITEMS.find((item) => item.to === location.pathname)?.title
@@ -48,6 +49,13 @@ export function AppShell() {
             <span>长期主义记录</span>
           </span>
         </Link>
+
+        {isPublicWeb && (
+          <a className="back-home" href="/home.html">
+            <Icon name="back" />
+            <span>返回首页</span>
+          </a>
+        )}
 
         <nav className="side-nav">
           {NAV_ITEMS.map((item) => (
@@ -88,6 +96,12 @@ export function AppShell() {
           <strong>Persist</strong>
         </Link>
         <div className="mobile-bar-actions">
+          {isPublicWeb && (
+            <a className="mobile-home-link" href="/home.html" aria-label="返回产品介绍首页">
+              <Icon name="back" className="icon-sm" />
+              <span>首页</span>
+            </a>
+          )}
           <Link className="icon-btn" to="/settings" aria-label="打开设置">
             <Icon name="settings" className="icon-sm" />
           </Link>

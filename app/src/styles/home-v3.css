@@ -132,6 +132,30 @@ svg {
   font-size: 10px;
   letter-spacing: 0.12em;
 }
+.back-home {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  margin: -12px 0 20px;
+  border: 1px solid rgba(77, 125, 155, 0.16);
+  border-radius: 13px;
+  color: var(--deep);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  font-weight: 650;
+  transition: 0.18s;
+}
+.back-home:hover {
+  border-color: rgba(77, 125, 155, 0.28);
+  background: #fff;
+  transform: translateX(-2px);
+}
+.back-home .icon {
+  width: 18px;
+  height: 18px;
+}
 .side-nav {
   display: grid;
   gap: 7px;
@@ -1102,6 +1126,28 @@ h1 {
   display: flex;
   align-items: center;
   gap: 3px;
+}
+.mobile-home-link {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: 3px;
+  padding: 0 9px;
+  margin-right: 3px;
+  border: 1px solid rgba(77, 125, 155, 0.16);
+  border-radius: 999px;
+  color: var(--deep);
+  background: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  font-weight: 650;
+}
+.mobile-home-link:hover {
+  border-color: rgba(77, 125, 155, 0.3);
+  background: #fff;
+}
+.mobile-home-link .icon {
+  width: 15px;
+  height: 15px;
 }
 .fab {
   position: fixed;
