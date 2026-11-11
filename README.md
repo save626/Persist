@@ -4,9 +4,9 @@
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
 - 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成；服务端 2026-11-06、前端产物 2026-11-07 均已部署，同步默认关闭）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
-- 规模：八页面可完整点击验收；当前本机为 app 单测 356（28 文件）、server 单测 229（26 文件）、E2E 128 次执行（11 文件），Lint 0 错 0 警告；视觉脚本 91 张（demo / guest 已双端验收，owner 三张观察卡文案待真机验收）。
+- 规模：八页面可完整点击验收；当前本机为 app 单测 356（28 文件）、server 单测 229（26 文件）、E2E 128 次执行（11 文件，1.4 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest 与日期 / 时间选择器已双端验收；owner 三张观察卡与 14d 删除流程真机验收未在本轮记录中确认）。
 
-## 当前阶段（2026-11-11 复核：步骤 12/13 与 14a/14b/14c/14d 及备份 HTTP 端点已在生产启用，仍 IP 直连、未上线；运行模式改造、owner 三张观察卡与 14d 前端入口本机完成；demo / guest 已验收，14d 待验收）
+## 当前阶段（2026-11-11：步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；运行模式、owner 三张观察卡、14d 前端入口与统一日期 / 时间选择器已提交 `ec8f16f`，web 与后端已部署；仍 IP 直连、未上线）
 
 前端产品原型**已完成并通过双端视觉验收，视觉范围冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI，`9f9cc71`）：AI 引导建档 → 长期计划草案确认 → 启用/归档闭环已通；AI 建档对话（`POST /api/chat`）、AI 报告文字与今日页晨间简报文字（`POST /api/report`）在「档案页开启 AI 数据授权 + 服务端健康」时走真实 DeepSeek，失败或未授权时回退本地规则/Mock 并如实标注；**报告的指标数字、依据条目与简报 KPI 始终由前端按本地记录确定性生成，模型只写文字**。业务数据全部写入本机 IndexedDB（刷新/重开不丢，有「清空本机数据」入口，导出导入为 0.3.0 备份格式并兼容旧版）：步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（`schemaVersion` 2），报告页可按近 7 / 30 / 90 天窗口汇总真实历史。
 
@@ -14,7 +14,7 @@
 
 下一步（2026-11-06 更正口径）：**步骤 10 不再整步等备案号**。①**已完成（2026-11-06 / 11-07）**：服务器升 Node 22 LTS（`/opt/node22` v22.19.0）、建 `/var/lib/persist` + systemd `ReadWritePaths`、每日 `VACUUM INTO` 备份（`persist-backup.timer` 每日 03:00）、上传 `shared/dist` + `server/dist` 并部署步骤 12/13、前端产物上传（2026-11-07 14:14）；**未走 3100 端口预演，改为备份先行 + 版本化目录（`/opt/persist-next`）**。②**已完成（2026-11-10）**：SSH 仅密钥 + 禁用密码 + `fail2ban` 已启用并验证；安全组 3389 入方向规则已由用户删除，外部复验为超时不可达，22/80 正常。③**必须等备案号**：域名解析、443、证书、HTTP→HTTPS、页脚备案号、「已上线」表述。④14b / 14c / 14d 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产（停机 501 ms；部署后备份实跑 `integrity:"ok"`）；Nginx 根路径与 `/settings` 均 200，5 条新端点未鉴权请求均 401。逐项拆解见 [`HANDOFF.md`](HANDOFF.md) §13.3 与 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) §6。
 
-**对外入口（P7）**：桌面落地页与产品介绍首页由另一 Agent 负责，本仓库只处理跳转后的运行模式。网页域名 / IP 只部署 `npm run build` 产物，`owner` 在网页解析层不可达；无参数、非法参数或 `mode=owner` 一律进入 `guest`。桌面「查看演示」进入 `?mode=demo`，使用完整预置数据且全部 AI 内容均在部署前真实生成并固化，部署后只读、零 `/api/*`；「自己体验」进入 `?mode=guest`，从空白数据开始，全部 AI Mock、零 `/api/*`、同步关闭。作者自有移动端通过 USB 安装 `npm run build:mobile` 生成的 `app/dist-mobile` 包，默认 `owner`，保留完整真实 AI 与同步。三种模式使用独立 IndexedDB，demo / guest 模式用 `sessionStorage` 保持。**demo / guest 已于 2026-11-11 双端验收通过；整体仍未提交、未部署、未上线**。对外开放前仍须补 `/api/chat`、`/api/report` 服务端 token 门、来源限制、配额与审计，并完成生成式 AI 专门备案 / 安全评估。详见 [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)。
+**对外入口（P7）**：桌面落地页与产品介绍首页由另一 Agent 负责，本仓库只处理跳转后的运行模式。网页域名 / IP 只部署 `npm run build` 产物，`owner` 在网页解析层不可达；无参数、非法参数或 `mode=owner` 一律进入 `guest`。桌面「查看演示」进入 `?mode=demo`，使用完整预置数据且全部 AI 内容均在部署前真实生成并固化，部署后只读、零 `/api/*`；「自己体验」进入 `?mode=guest`，从空白数据开始，全部 AI Mock、零 `/api/*`、同步关闭。作者自有移动端通过 USB 安装 `npm run build:mobile` 生成的 `app/dist-mobile` 包，默认 `owner`，保留完整真实 AI 与同步。demo / guest 已于 2026-11-11 双端验收通过；产品端运行模式已提交并部署到生产 IP，公开落地页仍未部署，整体仍未上线。对外开放前仍须补 `/api/chat`、`/api/report` 服务端 token 门、来源限制、配额与审计，并完成生成式 AI 专门备案 / 安全评估。详见 [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)。
 
 ## 文档地图
 
@@ -37,7 +37,7 @@
 app/      React + Vite Web 客户端（主产物 app/dist）
 server/   Fastify 服务端：P3 的 /api/health、SSE /api/chat、POST /api/report；步骤 12 的 /api/v1/devices*、/api/v1/sync/* + SQLite；步骤 13 的 /api/v1/analysis/*、/api/v1/reports* + 每日简报 job + 报告归档（12/13 均已部署）；14b 恢复 / 14c 导出 / 14d 删除账号 / 备份列表与手动创建端点已于 2026-11-10 部署到生产
 shared/   跨端共享纯 TS 契约（`@persist/shared`）：同步实体与接口契约（步骤 12c）、综合分析契约（步骤 13），前后端同源，`shared/dist` 已 gitignore
-design/   视觉基线与截图（15 状态 × 6 视口 = 91 张，由 visual:check 生成）
+design/   视觉基线与截图（17 状态 × 6 视口 = 102 张页面截图 + 1 张快速记录，由 visual:check 生成）
 docs/     工程约定、部署现状、P4 设计方案
 ```
 
@@ -60,7 +60,7 @@ npm run typecheck
 npm test               # 356 条 / 28 个文件
 npx playwright test    # 64 用例 × 2 项目 = 128 次执行，11 个文件
 npm run build
-npm run visual:check   # 91 张截图 → design/；需先起无 Key 后端，改布局/弹层时跑
+npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；需先起无 Key 后端，改布局/弹层时跑
 ```
 
 > `app/` 与 `server/` 的 `predev` / `prebuild` / `pretypecheck` / `pretest` 等钩子会自动执行 `npm run shared:build`（编译 `shared/src` → `shared/dist`），一般不需要手动跑。

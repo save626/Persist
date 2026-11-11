@@ -1,12 +1,13 @@
 # Server
 
-Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**：步骤 12 的 12a–12f（服务端数据层与接口、共享契约、前端同步层、设置页「数据同步」卡片）**已于 2026-11-05 在本机完成并验收并推送，2026-11-06 已部署到生产**（Node v22.19.0，`/opt/persist-next`）；步骤 13（服务端 SQL 聚合 + AI 综合分析、每日简报 job、报告归档与 365 天保留）**已于 2026-11-05 在本机完成并验证，2026-11-06 随同一次切换部署**；步骤 14 的每日备份（14a）2026-11-06 已在生产启用；恢复端点（14b）2026-11-09、导出端点（14c）2026-11-10、删除账号端点（14d，`ca10b42`）与备份列表/手动创建端点（`c309001`，2026-11-10）均已在本机实现并验证，已于 2026-11-10 部署到生产。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
+Fastify 服务端。P3 阶段只做一件事：**DeepSeek 代理**——浏览器不接触 API Key，服务端把 `ChatEvent` 流原样转发给前端、并生成 AI 报告的文字结论。P4 开始加**本地 SQLite 数据副本、设备账号与增量同步**：步骤 12 的 12a–12f（服务端数据层与接口、共享契约、前端同步层、设置页「数据同步」卡片）**已于 2026-11-05 在本机完成并验收并推送，2026-11-06 已部署到生产**（Node v22.19.0，`/opt/persist-next`）；步骤 13（服务端 SQL 聚合 + AI 综合分析、每日简报 job、报告归档与 365 天保留）**已于 2026-11-05 在本机完成并验证，2026-11-06 随同一次切换部署**；步骤 14 的每日备份（14a）2026-11-06 已在生产启用；恢复端点（14b）2026-11-09、导出端点（14c）2026-11-10、删除账号端点（14d，`ca10b42`）与备份列表/手动创建端点（`c309001`，2026-11-10）均已在本机实现并验证，已于 2026-11-10 部署到生产；2026-11-11 又随提交 `ec8f16f` 部署运行模式、owner 观察卡与 14d 前端所需后端契约，停机 466 ms，health / schema 2 正常。设计见 `docs/P4-数据层与AI综合分析设计方案.md`。
 
 ## 约束（不要破坏）
 
 - 监听 `127.0.0.1:3000`，**不直接对外**；生产由 Nginx 反代 `/api/*`（见 `docs/部署与服务器现状.md`）。
 - 服务器运行时是 **Node.js v22.19.0**（2026-11-06 按步骤 10 A 段升级，本机同为 v22.19.0）——**步骤 12 起代码要求 Node ≥ 22.5**：SQLite 用内置 `node:sqlite`（`engines` 已写 `>=22.5`，无 native 编译依赖；启动时会打印 `ExperimentalWarning: SQLite is an experimental feature`，属预期）。设计选型见 `docs/P4-数据层与AI综合分析设计方案.md` §4/§18-1：**已定 node:sqlite**。升级完成后，步骤 12/13 的服务端已于 2026-11-06 部署到 `/opt/persist-next`，线上进程即该版本（`ExecStart=/opt/node22/bin/node /opt/persist-next/server/dist/index.js`）；`/opt/persist/server` 保留为步骤 9 的回滚锚点。
 - 任何 API Key 只能保存在服务器 `/etc/persist/server.env`（权限 `600`）；仓库只提交 `.env.example`，禁止 Key 进入 Web 构建产物或 Android 安装包。日志里也不打印 Key。
+- **后端部署必须同时包含 `shared/package.json`**：生产 `server/node_modules/@persist/shared` 是软链，指向 `/opt/persist-next/shared`。2026-11-11 首次部署只带 `shared/dist`，旧 `package.json` 缺少 `contract/report` export，导致启动报 `ERR_PACKAGE_PATH_NOT_EXPORTED` 并由部署脚本回滚。发布包必须同时带 `server/dist`、`server/package.json`、`shared/dist`、`shared/package.json`。
 - 步骤 12 起引入 **SQLite 单文件库**（生产 `/var/lib/persist/persist.sqlite`，本机默认 `server/data/persist.sqlite`，可用 `DB_PATH` 覆盖；WAL + `synchronous=NORMAL` + `foreign_keys=ON` + `busy_timeout=5000`）。**不装 MySQL/MariaDB**；不用 ORM，直接 SQL，驱动差异全部隔离在 `src/db/driver.ts`。**schema 现为 v2**（步骤 13 新增 `analysis_reports`、`job_runs` 两张表；迁移每个版本只跑一次、可重复执行，启动时自动升级，不需要手工建表）。
 - 前端只请求相对路径 `/api/*`；Mock 是「无 Key / 服务不可用」时的降级路径，降级时界面必须如实标注。
 - 流式接口是 SSE；Nginx 侧必须 `proxy_buffering off`，否则整段回答会一次性吐出。`/api/report` 是**非流式 JSON**（一次调用等 10–25 s 才返回），Nginx 侧 `proxy_read_timeout` 要 ≥60 s。综合分析同理是**非流式 JSON**（服务端超时 45 s，`ANALYSIS_TIMEOUT_MS`），Nginx 的 300 s 已足够覆盖。
