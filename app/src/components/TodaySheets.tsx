@@ -296,6 +296,7 @@ export function MorningBriefSheet({
   onClose: () => void
 }) {
   const runtime = useRuntimeMode()
+  const isDemo = runtime.mode === 'demo'
   const today = localDateValue()
   const digest = useMemo(
     () =>
@@ -349,11 +350,12 @@ export function MorningBriefSheet({
       (total, exercise) => total + exercise.sets.filter((set) => set.done).length,
       0,
     ) ?? 0
-  const waterGap = Math.max(0, 2 - waterLiters)
+  const waterGap = isDemo ? Math.max(0, 2 - waterLiters) : 0
   const waterGapMilliliters = Math.round(waterGap * 1000)
-  const waterRecordCount = waterLiters > 0 ? waterLog.length + 1 : waterLog.length
+  const waterRecordCount = waterLog.length
   const recordCount =
     todayMeals.length + todayStudyRecords.length + waterRecordCount + (doneSets > 0 ? 1 : 0)
+  const hasAnyRecord = recordCount > 0
   const pendingPlans = planItems
     .filter((item) => !item.done)
     .sort((left, right) => left.time.localeCompare(right.time))
@@ -361,13 +363,21 @@ export function MorningBriefSheet({
   const studyPlan = pendingPlans.find((item) => item.kind === 'study')
   const nextPlan = pendingPlans[0]
 
-  let priorityTitle = '今天的关键安排已经推进。'
-  let priorityDetail = `已留下 ${recordCount} 条记录，接下来按自己的节奏补齐饮水与晚间复盘即可。`
+  let priorityTitle = hasAnyRecord ? '今天的关键安排已经推进。' : '先留下第一条真实记录。'
+  let priorityDetail = hasAnyRecord
+    ? `已留下 ${recordCount} 条记录，接下来按自己的节奏补齐饮水与晚间复盘即可。`
+    : '今天还没有记录；晨间简报不会预设目标或建议。'
   if (trainingPlan) {
     priorityTitle = `先完成${trainingPlan.name}，再处理学习任务。`
-    priorityDetail = `训练计划在 ${trainingPlan.time}。${waterGapMilliliters > 0 ? `当前饮水还差约 ${waterGapMilliliters} ml，建议午后分两次补齐。` : '饮水已经达标，保持现有节奏即可。'}`
-  } else if (waterGapMilliliters > 0) {
-    priorityTitle = `先把饮水缺口补上，再安排学习。`
+    priorityDetail = `训练计划在 ${trainingPlan.time}。${
+      waterGapMilliliters > 0
+        ? `当前饮水还差约 ${waterGapMilliliters} ml，建议午后分两次补齐。`
+        : isDemo
+          ? '饮水已经达标，保持现有节奏即可。'
+          : '饮水目标未设置，按实际记录继续即可。'
+    }`
+  } else if (isDemo && waterGapMilliliters > 0) {
+    priorityTitle = '先把饮水缺口补上，再安排学习。'
     priorityDetail = `当前饮水 ${waterLiters.toFixed(1)} L，还差约 ${waterGapMilliliters} ml。不需要临时提高训练强度。`
   } else if (studyPlan) {
     priorityTitle = `把${studyPlan.name}放进一个固定时间块。`
@@ -377,29 +387,39 @@ export function MorningBriefSheet({
     priorityDetail = `这是当前最早的一项待办，计划在 ${nextPlan.time}。`
   }
 
-  const morningTitle = todayMeals.length > 0 ? '上午：保持常规记录' : '上午：先补一份早餐记录'
+  const morningTitle = todayMeals.length > 0 ? '上午：保持常规记录' : '上午：记录真实早餐'
   const morningDetail =
     todayMeals.length > 0
       ? '早餐已经记录，不需要为了完整性额外补造数据。'
       : '只记录真实吃下的内容，不为了热量数字额外加餐。'
 
-  const afternoonTitle =
-    waterGapMilliliters > 0 ? `下午：补水 ${waterGapMilliliters} ml` : '下午：保持补水节奏'
-  const afternoonDetail =
-    waterGapMilliliters > 0
+  const afternoonTitle = isDemo
+    ? waterGapMilliliters > 0
+      ? `下午：补水 ${waterGapMilliliters} ml`
+      : '下午：保持补水节奏'
+    : waterRecordCount > 0
+      ? '下午：按实际饮水继续记录'
+      : '下午：尚无饮水记录'
+  const afternoonDetail = isDemo
+    ? waterGapMilliliters > 0
       ? '分成两次记录更容易完成，也能避免晚间集中饮水。'
       : '饮水已经达标，按口渴程度小口补充即可。'
+    : '记录时只填写真实饮水量，不预设每日目标。'
 
   const eveningTitle = trainingPlan
     ? `晚间：守住${trainingPlan.name}`
     : studyPlan
       ? `晚间：完成${studyPlan.name}`
-      : '晚间：做一次轻量复盘'
+      : hasAnyRecord
+        ? '晚间：做一次轻量复盘'
+        : '晚间：记录后再复盘'
   const eveningDetail = trainingPlan
     ? '优先完成计划组数，不追求临时加重。'
     : studyPlan
       ? '完成既定内容即可，不为未完成的计划追加压力。'
-      : '用两分钟记录精力和状态，再结束今天。'
+      : hasAnyRecord
+        ? '用两分钟记录精力和状态，再结束今天。'
+        : '没有记录时不做复盘推断，先完成今天的第一条记录。'
 
   return (
     <PageSheet
@@ -426,13 +446,15 @@ export function MorningBriefSheet({
         </div>
         <div className="mock-kpi">
           <span>睡眠</span>
-          <strong>{sleepHours.toFixed(1)} h</strong>
-          <small>来自个人档案</small>
+          <strong>{sleepHours > 0 ? `${sleepHours.toFixed(1)} h` : '未填写'}</strong>
+          <small>{sleepHours > 0 ? '来自个人档案' : '填写档案后显示'}</small>
         </div>
         <div className="mock-kpi">
           <span>饮水缺口</span>
-          <strong>{waterGapMilliliters} ml</strong>
-          <small>{waterGapMilliliters > 0 ? '建议午后补齐' : '今日已达标'}</small>
+          <strong>{isDemo ? `${waterGapMilliliters} ml` : '未设置'}</strong>
+          <small>
+            {isDemo ? (waterGapMilliliters > 0 ? '建议午后补齐' : '今日已达标') : '未预设每日目标'}
+          </small>
         </div>
       </div>
       <div className="mock-detail-section">
@@ -460,7 +482,9 @@ export function MorningBriefSheet({
               <strong>{afternoonTitle}</strong>
               <p>{afternoonDetail}</p>
             </div>
-            <span className="mock-detail-value">{waterGapMilliliters > 0 ? '2 次' : '已达标'}</span>
+            <span className="mock-detail-value">
+              {isDemo ? (waterGapMilliliters > 0 ? '2 次' : '已达标') : `${waterRecordCount} 次`}
+            </span>
           </article>
           <article className="mock-detail-row">
             <span className="mock-detail-index">03</span>
@@ -469,7 +493,7 @@ export function MorningBriefSheet({
               <p>{eveningDetail}</p>
             </div>
             <span className="mock-detail-value">
-              {studyMinutes > 0 ? `${studyMinutes + 20} min` : '20 min'}
+              {studyMinutes > 0 ? `${studyMinutes + 20} min` : '尚无记录'}
             </span>
           </article>
         </div>

@@ -6,10 +6,10 @@
 
 - Node.js 22+
 - Android Studio（含 SDK Platform 36、Android SDK Build-Tools、Platform-Tools）
-- JDK 21+；建议把 `JAVA_HOME` 指向 Android Studio 自带 JBR，例如 Windows 的 `C:\Program Files\Android\Android Studio\jbr`
+- 仅使用 JDK 21.x；把 `JAVA_HOME` 指向 JDK 21，例如 `C:\Users\save\.jdks\jdk-21.0.13+9`。当前 Android Studio 自带 JBR 可能是 JDK 25，Gradle 8.14.3 会报 `Unsupported class file major version 69`，不要直接使用
 - 手机已开启开发者选项与 USB 调试，并已授权当前电脑
 
-当前仓库开发机如果仍是 JDK 8 且没有 adb / Android SDK，`npm run android:check` 会明确报错；完成 Android Studio 安装后再继续。
+当前验证环境为 JDK 21.0.13、Android SDK Platform 36、Build-Tools 与 Platform-Tools；`npm run android:check` 会检查 JDK、adb 与单台已授权设备。
 
 ## 配置 API 地址
 
@@ -71,9 +71,11 @@ npm run android:open
 ## 首次安装后确认
 
 - 启动后直接进入 owner 产品，不出现网页的“返回首页 / 首页”入口。
+- 全新安装或执行「清空本机数据」后应看到无业务占位的空白状态：没有目标、计划、训练、饮食、学习、档案或报告；饮水基线 0，AI 总授权保留开启，数据来源开关、提醒与每日简报默认关闭。
+- 新包首次读取 v2 本机记录时会迁移到 v3，并按精确内容指纹清理旧版 owner 样例；用户后来新增或修改的记录会保留。验证全新空白状态时仍可执行「清空本机数据」或卸载重装。
 - 设置页能看到“数据同步”卡片，owner 的 AI 入口不应回退为 demo / guest。
 - 真机上的数据位于 Android WebView 的 `persist-app` IndexedDB，与手机 Chrome 的站点数据隔离。
-- AI 观察卡、晨间简报和综合分析需要手机能访问配置的服务器 origin，并且服务端 `/api/health` 返回 `ai:"deepseek"`。
+- AI 观察卡、晨间简报和综合分析需要手机能访问配置的服务器 origin，服务端 `/api/health` 返回 `ai:"deepseek"`，且响应包含允许 `https://localhost` 的 CORS 头。请求失败或未授权时应显示本地 Mock / 规则来源。
 
 ## 不要提交
 

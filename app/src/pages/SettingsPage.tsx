@@ -105,7 +105,7 @@ export function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { reminders, summaryOnly, sources } = settings
   const [aiState, setAiState] = useState<AiState>('idle')
-  const [savedAt, setSavedAt] = useState('刚刚')
+  const [savedAt, setSavedAt] = useState('尚未保存')
   const [saving, setSaving] = useState(false)
   const [importName, setImportName] = useState('')
   const [importError, setImportError] = useState('')
@@ -124,6 +124,7 @@ export function SettingsPage() {
   const [briefTimeError, setBriefTimeError] = useState(false)
 
   const enabledReminderCount = reminders.filter((reminder) => reminder.enabled).length
+  const resetTargetLabel = '空白初始状态'
   const sourceCount = useMemo(() => Object.values(sources).filter(Boolean).length, [sources])
   // 旧快照没有 dailyBrief：normalize 会补「关闭 + 21:00」，不需要提升 state schema 版本。
   const dailyBrief = normalizeDailyBriefSettings(settings.dailyBrief)
@@ -271,7 +272,7 @@ export function SettingsPage() {
     setImportError('')
     setAiState('idle')
     setSavedAt('已清空 Mock 设置')
-    showToast('本地 Mock 设置已清空，示例记录仍会保留')
+    showToast('本地设置已清空，训练、饮食、学习与计划记录仍会保留')
   }
 
   /** 全量清空：删本机 IndexedDB 记录 + 内存态回到初始基线（含快照），成功后刷新也不会复现旧数据。 */
@@ -284,7 +285,7 @@ export function SettingsPage() {
     void clearAllLocalData()
       .then(() => {
         setSavedAt('本机数据已清空')
-        showToast('本机数据已清空 · 已恢复初始示例数据')
+        showToast(`本机数据已清空 · 已恢复${resetTargetLabel}`)
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : '未知错误'
@@ -451,12 +452,12 @@ export function SettingsPage() {
         <div className="settings-hero-stats">
           <div>
             <span>提醒开启</span>
-            <strong>{enabledReminderCount} / 3</strong>
+            <strong>{enabledReminderCount > 0 ? enabledReminderCount + ' / 3' : '未设置'}</strong>
             <small>可按训练日调整</small>
           </div>
           <div>
             <span>AI 数据范围</span>
-            <strong>{sourceCount} / 4</strong>
+            <strong>{sourceCount > 0 ? sourceCount + ' / 4' : '未设置'}</strong>
             <small>默认仅发摘要</small>
           </div>
           <div>
@@ -476,7 +477,9 @@ export function SettingsPage() {
                 <h2 id="reminderTitle">提醒</h2>
                 <p>只在真正需要行动时出现，不用通知制造连续性压力。</p>
               </div>
-              <span className="settings-card-tag">{enabledReminderCount} 项开启</span>
+              <span className="settings-card-tag">
+                {enabledReminderCount > 0 ? enabledReminderCount + ' 项开启' : '未设置'}
+              </span>
             </div>
             <div className="settings-reminder-list">
               {reminders.map((reminder) => (
@@ -876,9 +879,7 @@ export function SettingsPage() {
                 <h2 id="briefTitle">每日简报</h2>
                 <p>服务器按固定时间汇总最近 7 天记录，生成一份简报并存进服务端归档。</p>
               </div>
-              <span className="settings-card-tag">
-                {dailyBrief.enabled ? '已开启' : '默认关闭'}
-              </span>
+              <span className="settings-card-tag">{dailyBrief.enabled ? '已开启' : '未设置'}</span>
             </div>
 
             <div className="settings-brief-body">
@@ -902,9 +903,9 @@ export function SettingsPage() {
                 className="settings-time-field settings-brief-time"
                 label="生成时间"
                 ariaLabel="每日简报时间"
-                value={dailyBrief.at}
-                disabled={!runtime.sync}
-                helper={timeLabel(dailyBrief.at)}
+                value={dailyBrief.enabled ? dailyBrief.at : ''}
+                disabled={!runtime.sync || !dailyBrief.enabled}
+                helper={dailyBrief.enabled ? timeLabel(dailyBrief.at) : '未设置'}
                 onChange={updateDailyBriefTime}
               />
 
@@ -994,7 +995,7 @@ export function SettingsPage() {
             <span className="settings-kicker">DANGER ZONE</span>
             <h2 id="dangerTitle">清空本地 Mock 设置</h2>
             <p>
-              只重置本页设置，不会删除示例训练、饮食和学习记录。正式版会提供更细的数据删除范围。
+              只重置本页设置，不会删除训练、饮食、学习和计划记录。正式版会提供更细的数据删除范围。
             </p>
             <button
               className="settings-danger-button"
@@ -1027,8 +1028,8 @@ export function SettingsPage() {
             <span className="settings-kicker">RESET · LOCAL DATA</span>
             <h2 id="clearDataTitle">清空本机数据</h2>
             <p>
-              删除本机浏览器里的全部记录、设置、长期计划与快照，并恢复初始示例数据。此操作不可撤销，建议先导出
-              JSON 备份。
+              删除本机浏览器里的全部记录、设置、长期计划与快照，并恢复到{resetTargetLabel}
+              。此操作不可撤销，建议先导出 JSON 备份。
             </p>
             <button
               className="settings-danger-button"
@@ -1060,7 +1061,7 @@ export function SettingsPage() {
       {confirmClearAll && (
         <ConfirmDialog
           title="清空本机数据？"
-          description="本机浏览器里的全部记录、设置、长期计划与快照都会被删除，并恢复初始示例数据。此操作无法撤销，建议先导出 JSON 备份。"
+          description={`本机浏览器里的全部记录、设置、长期计划与快照都会被删除，并恢复到${resetTargetLabel}。此操作无法撤销，建议先导出 JSON 备份。`}
           confirmLabel="确认清空"
           danger
           onClose={() => setConfirmClearAll(false)}

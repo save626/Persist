@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AccountDeleteResponse } from '@persist/shared/contract/account'
-import { createCompleteDemoData } from '../data/complete-mock-data'
-import { createEmptyMeals, INITIAL_MEALS } from '../data/diet'
-import { createEmptyMockData } from '../data/empty-mock-data'
-import { INITIAL_PROFILE } from '../data/profile'
-import { INITIAL_REPORTS } from '../data/reports'
+import { createEmptyMeals } from '../data/diet'
+import { createInitialDataForRuntimeMode } from '../data/runtime-initial-data'
 import { INITIAL_SETTINGS } from '../data/settings'
-import { INITIAL_STUDY_RECORDS } from '../data/study'
 import {
   createFitnessSessionRecord,
   dayMeals,
@@ -50,104 +46,8 @@ import { MockDataContext } from './mock-data-context'
 import { useRuntimeMode } from './runtime-mode-context'
 import { useUI } from './ui-context'
 
-const INITIAL_GOALS: Goal[] = [
-  {
-    id: 'goal-1',
-    title: '高数阶段测验',
-    date: '2026-11-15',
-    time: '19:00',
-    enabled: true,
-    tone: 'primary',
-  },
-  {
-    id: 'goal-2',
-    title: '英语六级考试',
-    date: '2026-12-19',
-    time: '09:00',
-    enabled: true,
-    tone: 'alt',
-  },
-]
-
-/** 演示计划不带日期：首次启动时统一盖上「今天」，保证以后按日筛选也能命中。 */
-const INITIAL_PLAN: Array<Omit<PlanItem, 'date'>> = [
-  {
-    id: 'morning',
-    name: '早餐与晨间记录',
-    time: '08:20',
-    detail: '380 kcal · 睡眠 7 小时 10 分',
-    kind: 'default',
-    done: true,
-  },
-  {
-    id: 'lunch',
-    name: '午餐记录',
-    time: '12:25',
-    detail: '鸡胸肉藜麦碗 · 620 kcal',
-    kind: 'food',
-    done: true,
-  },
-  {
-    id: 'water',
-    name: '午后补水',
-    time: '15:40',
-    detail: '250 ml · 今日累计 1.2 L',
-    kind: 'water',
-    done: true,
-  },
-  {
-    id: 'training',
-    name: '上肢力量训练',
-    time: '18:30',
-    detail: '45 分钟 · 胸 / 肩 / 三头',
-    kind: 'default',
-    done: false,
-    actionable: true,
-  },
-  {
-    id: 'math',
-    name: '高数：极限与连续',
-    time: '20:30',
-    detail: '45 分钟 · 练习 12 题',
-    kind: 'study',
-    done: false,
-  },
-]
-
-/** 把不带日期的演示计划盖上指定日期。 */
-function planForDate(date: string): PlanItem[] {
-  return INITIAL_PLAN.map((item) => ({ ...item, date }))
-}
-
-/**
- * 首次启动的基线状态：各切片与上面 useState 的初值一一对应（快照与长期计划为空）。
- * 「清空本机数据」复用它，保证清空后与第一次打开 App 看到的内容完全一致。
- * v2 起演示数据只落在「当天」这一天：饮食进 `dietDays`，计划与饮水带 `date`。
- */
-function createInitialMockData(now: Date = new Date()): ImportableMockData {
-  const today = todayDateKey(now)
-  return {
-    goals: INITIAL_GOALS,
-    planItems: planForDate(today),
-    waterLog: [],
-    studyRecords: INITIAL_STUDY_RECORDS,
-    dietDays: [{ date: today, meals: INITIAL_MEALS }],
-    fitnessSession: null,
-    fitnessHistory: [],
-    profile: INITIAL_PROFILE,
-    settings: INITIAL_SETTINGS,
-    aiConsent: INITIAL_PROFILE.aiConsent,
-    eveningReview: null,
-    reports: INITIAL_REPORTS,
-    longTermPlans: [],
-  }
-}
-
-/** 根据入口模式选择首次启动数据：owner 保持原样例，demo 载入完整演示，guest 从空白开始。 */
-function createDataForRuntimeMode(mode: RuntimeMode, now: Date = new Date()): ImportableMockData {
-  if (mode === 'demo') return createCompleteDemoData(now)
-  if (mode === 'guest') return createEmptyMockData()
-  return createInitialMockData(now)
+function createRuntimeInitialData(mode: RuntimeMode): ImportableMockData {
+  return createInitialDataForRuntimeMode(mode)
 }
 
 /** 同步尚未初始化时的展示状态：默认关闭，页面上只有一个空壳。 */
@@ -178,7 +78,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   const { showToast } = useUI()
   /** 演示数据的日期随打开日期平移；AI 内容仍固定为部署前预生成版本。 */
   const [today] = useState(() => todayDateKey())
-  const [initialData] = useState(() => createDataForRuntimeMode(runtime.mode))
+  const [initialData] = useState(() => createRuntimeInitialData(runtime.mode))
 
   const [goals, setGoals] = useState<Goal[]>(initialData.goals)
   /** 全部日期的计划项（0.3.0 起每条都带 `date`）。 */
@@ -316,6 +216,14 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       if (blockReadOnly()) return record
       setFitnessHistory((current) => sortFitnessHistoryDesc([record, ...current]))
       return record
+    },
+    [blockReadOnly],
+  )
+
+  const addGoal = useCallback(
+    (goal: Goal) => {
+      if (blockReadOnly()) return
+      setGoals((current) => (current.length >= 2 ? current : [...current, goal]))
     },
     [blockReadOnly],
   )
@@ -483,7 +391,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       saveTimerRef.current = null
     }
     await clearPersistedState({ dbName: runtime.storageDbName })
-    const nextInitialData = createDataForRuntimeMode(runtime.mode)
+    const nextInitialData = createRuntimeInitialData(runtime.mode)
     applyMockData(nextInitialData)
     // 同步刷新 pagehide 补写用的镜像，避免「清空后立刻关页面」把旧数据又写回去。
     latestStateRef.current = { data: nextInitialData, snapshot: null }
@@ -674,7 +582,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       client: createSyncClient(),
       metaStorage: createSyncStore(),
       queueStorage: createSyncStore(),
-      getData: () => latestStateRef.current?.data ?? createDataForRuntimeMode(runtime.mode),
+      getData: () => latestStateRef.current?.data ?? createRuntimeInitialData(runtime.mode),
       applyData: (data) => replaceMockData(data),
       onChange: (status) => setSyncStatus(status),
       isOnline: () => (typeof navigator === 'undefined' ? true : navigator.onLine),
@@ -740,19 +648,21 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     }
   }, [hydrated, runtime.persist, runtime.storageDbName])
 
-  /** 今日饮水 = 基线 1.2 L + 今天的记录；其他日期的历史不计入今日进度。 */
+  /** owner / guest 都从 0 起算；demo 的预置基线由运行模式配置提供。 */
+  const waterBaselineMilliliters = runtime.waterBaselineMilliliters
   const waterLiters = useMemo(
     () =>
-      (runtime.waterBaselineMilliliters +
+      (waterBaselineMilliliters +
         todayWaterLog.reduce((total, entry) => total + entry.milliliters, 0)) /
       1000,
-    [runtime.waterBaselineMilliliters, todayWaterLog],
+    [waterBaselineMilliliters, todayWaterLog],
   )
   const lastWaterMilliliters = todayWaterLog.at(-1)?.milliliters ?? null
 
   const value = useMemo(
     () => ({
       goals,
+      addGoal,
       updateGoal,
       /** 「今天」的计划项切片。 */
       planItems: todayPlanItems,
@@ -830,6 +740,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       eveningReview,
       fitnessHistory,
       fitnessSession,
+      addGoal,
       goals,
       lastWaterMilliliters,
       longTermPlans,

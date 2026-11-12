@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
 import { chooseTime } from './date-time'
+import { seedOwnerFixture } from './owner-fixture'
+
+test.beforeEach(async ({ page }) => {
+  await seedOwnerFixture(page)
+})
 
 async function mainNav(page: Page, label: '今日' | '健身' | '饮食' | '学习') {
   const mobile = (page.viewportSize()?.width ?? 1280) <= 900
@@ -51,7 +56,7 @@ test('new study record survives navigation and updates today', async ({ page }) 
     .locator('.metric')
     .filter({ hasText: '学习' })
   await expect(studyMetric).toContainText('80')
-  await expect(page.getByText('今天已经留下 7 条记录')).toBeVisible()
+  await expect(page.getByText('今天已经留下 8 条记录')).toBeVisible()
 
   await mainNav(page, '学习')
   await expect(page.getByText('Mock 英语专项', { exact: true })).toBeVisible()
@@ -261,7 +266,7 @@ test('report summaries update from study, diet and water changes', async ({ page
 
   await openReportsFromStudy(page)
   await expect(
-    page.getByText('近 7 天共 10 条本地记录，本次可引用 10 条', { exact: false }),
+    page.getByText('近 7 天共 12 条本地记录，本次可引用 12 条', { exact: false }),
   ).toBeVisible()
   await page.getByRole('button', { name: '查看分析依据' }).click()
   await expect(
@@ -269,7 +274,7 @@ test('report summaries update from study, diet and water changes', async ({ page
   ).toBeVisible()
   await expect(page.getByText('饮食记录：近 7 天 3 个有食物的餐次，共 5 个食物条目')).toBeVisible()
   await expect(
-    page.getByText('饮水记录：近 7 天累计 0.25 L（1 次记录，日均 0.04 L）'),
+    page.getByText('饮水记录：近 7 天累计 1.45 L（2 次记录，日均 0.21 L）'),
   ).toBeVisible()
 })
 

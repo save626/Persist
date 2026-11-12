@@ -310,7 +310,7 @@ function ReportDetailSheet({
                 ? '本报告由本地 Mock 规则生成，未调用真实模型。'
                 : report.origin === 'prebuilt' && report.prebuilt
                   ? `本报告在部署前通过 ${report.prebuilt.model} 生成（${formatPrebuiltGeneratedAt(report.prebuilt.generatedAt)}）；部署后只读，不再调用 AI。`
-                  : '这条报告来自本地示例数据，用于展示报告结构。'}
+                  : '这份报告尚未生成，不包含预置业务数据。'}
         </span>
       </div>
       <div className="surface-form-actions">
@@ -740,6 +740,7 @@ export function ReportsPage() {
     syncToken,
   } = useMockData()
   const runtime = useRuntimeMode()
+  const isDemo = runtime.mode === 'demo'
   const navigate = useNavigate()
   // 顶部「生成状态」原本只是本页的临时状态：跳到别的页面再回来会重置为「尚未生成」，
   // 看上去像刚生成的报告丢了。这里按「今天是否已经生成过今日简报」派生展示状态；
@@ -929,6 +930,12 @@ export function ReportsPage() {
     ],
   )
   const localRecordTotal = dataRows.reduce((total, row) => total + row.count, 0)
+  const isBlankStart =
+    !isDemo &&
+    reports.length === 0 &&
+    localRecordTotal === 0 &&
+    analysisArchive.length === 0 &&
+    !analysisSyncReady
   const referencedRecordTotal = dataRows.reduce(
     (total, row) => total + (row.enabled ? row.count : 0),
     0,
@@ -955,7 +962,7 @@ export function ReportsPage() {
         ? `饮水记录：${rangeLabel}累计 ${waterFacts.liters.toFixed(2)} L（${waterCount} 次记录，日均 ${waterFacts.dailyAverage.toFixed(2)} L）`
         : '饮水记录：本次不引用',
       profileSourceEnabled
-        ? `个人档案：已填写 ${profileFieldCount} / 14 项，完整度 ${profileCompleteness}%`
+        ? `个人档案：已填写 ${profileFieldCount} / 13 项，完整度 ${profileCompleteness}%`
         : '个人档案：本次不引用',
     ],
     [
@@ -991,51 +998,75 @@ export function ReportsPage() {
     conclusions: [],
     actions: ['先完成一次记录，再生成今日简报。'],
     evidence: [],
-    origin: 'mock',
   }
 
   const todayBriefDraft = useMemo(() => {
-    // 「今天」的饮水缺口仍按今日切片算（2 L 目标是每日目标）；窗口内累计只用于汇总口径。
-    const todayWaterGap = Math.max(0, 2 - todayWaterLiters)
+    // demo 保留完整演示目标；owner / guest 只汇总真实记录，不凭空补目标。
+    const todayWaterGap = isDemo ? Math.max(0, 2 - todayWaterLiters) : 0
     const trainingDone = trainingCount > 0 || fitnessFacts.hasSession
-    const status = todayWaterGap > 0.05 ? '先补饮水' : trainingDone ? '节奏稳定' : '待推进'
+    const status =
+      localRecordTotal === 0
+        ? '待记录'
+        : todayWaterGap > 0.05
+          ? '先补饮水'
+          : trainingDone
+            ? '节奏稳定'
+            : '待推进'
     const planSummary =
       planFacts.total > 0 ? `${rangeLabel}计划完成 ${planFacts.done} / ${planFacts.total} 项。` : ''
-    const summary = `${rangeLabel}已留下 ${localRecordTotal} 条本地记录，其中可引用 ${referencedRecordTotal} 条。${planSummary}${
-      trainingDone
-        ? '训练记录已经进入窗口，晚间更适合安排一次轻量学习复盘。'
-        : '窗口内还没有训练，建议先守住今天最重要的训练安排。'
-    }${
-      todayWaterGap > 0.05
-        ? `今天饮水还差约 ${Math.round(todayWaterGap * 1000)} ml。`
-        : '今天饮水已达到目标。'
-    }`
+    const summary =
+      localRecordTotal === 0
+        ? '还没有可分析的本地记录。先完成一次真实记录，再生成今日简报。'
+        : `${rangeLabel}已留下 ${localRecordTotal} 条本地记录，其中可引用 ${referencedRecordTotal} 条。${planSummary}${
+            trainingDone
+              ? isDemo
+                ? '训练记录已经进入窗口，晚间更适合安排一次轻量学习复盘。'
+                : '训练记录已经进入窗口，可继续按实际感受安排恢复。'
+              : isDemo
+                ? '窗口内还没有训练，建议先守住今天最重要的训练安排。'
+                : '窗口内还没有训练记录。'
+          }${
+            isDemo
+              ? todayWaterGap > 0.05
+                ? `今天饮水还差约 ${Math.round(todayWaterGap * 1000)} ml。`
+                : '今天饮水已达到目标。'
+              : `今天饮水记录 ${todayWaterLiters.toFixed(2)} L。`
+          }`
 
     const conclusions = [
       trainingCount > 0
         ? `${rangeLabel}训练 ${trainingCount} 次：${trainingSummaryText}。`
         : fitnessFacts.hasSession
           ? `今天已经开始训练：${trainingSummaryText}，尚未完成任何一组。`
-          : `${rangeLabel}还没有训练记录，先完成今天计划中的训练，再决定是否追加学习任务。`,
+          : isDemo
+            ? `${rangeLabel}还没有训练记录，先完成今天计划中的训练，再决定是否追加学习任务。`
+            : `${rangeLabel}还没有训练记录。`,
       `${rangeLabel}学习累计 ${studyMinutes} 分钟，英语 ${englishCount} 条、高数 ${mathCount} 条。`,
-      `${rangeLabel}饮水累计 ${waterFacts.liters.toFixed(2)} L（${waterCount} 次记录，日均 ${waterFacts.dailyAverage.toFixed(2)} L）；今天${
-        todayWaterGap > 0.05
-          ? `距离 2 L 目标还有 ${Math.round(todayWaterGap * 1000)} ml`
-          : '已达到 2 L 目标'
-      }。`,
+      isDemo
+        ? `${rangeLabel}饮水累计 ${waterFacts.liters.toFixed(2)} L（${waterCount} 次记录，日均 ${waterFacts.dailyAverage.toFixed(2)} L）；今天${
+            todayWaterGap > 0.05
+              ? `距离 2 L 目标还有 ${Math.round(todayWaterGap * 1000)} ml`
+              : '已达到 2 L 目标'
+          }。`
+        : `${rangeLabel}饮水累计 ${waterFacts.liters.toFixed(2)} L（${waterCount} 次记录，日均 ${waterFacts.dailyAverage.toFixed(2)} L）。`,
     ]
 
-    const actions = [
-      todayWaterGap > 0.05
-        ? `下午分两次补水，每次约 ${Math.max(150, Math.min(300, Math.round((todayWaterGap * 1000) / 2)))} ml。`
-        : '保持当前饮水节奏，不额外增加集中饮水。',
-      trainingDone
-        ? '训练后 2 小时内补充一餐含蛋白质的主食，并按实际运动量安排恢复。'
-        : '把训练放在晚饭前，完成后根据实际记录决定是否追加运动量。',
-      studyMinutes >= 45 * reportWindow.days
-        ? '窗口内学习投入已足，晚间只做一次 20 分钟轻量复盘，不再新增高数任务。'
-        : '先用 20 分钟完成高数错题复盘，再结束今天的学习。',
-    ]
+    const actions =
+      localRecordTotal === 0
+        ? ['先完成一次真实记录，再生成今日简报。']
+        : isDemo
+          ? [
+              todayWaterGap > 0.05
+                ? `下午分两次补水，每次约 ${Math.max(150, Math.min(300, Math.round((todayWaterGap * 1000) / 2)))} ml。`
+                : '保持当前饮水节奏，不额外增加集中饮水。',
+              trainingDone
+                ? '训练后 2 小时内补充一餐含蛋白质的主食，并按实际运动量安排恢复。'
+                : '把训练放在晚饭前，完成后根据实际记录决定是否追加运动量。',
+              studyMinutes >= 45 * reportWindow.days
+                ? '窗口内学习投入已足，晚间只做一次 20 分钟轻量复盘，不再新增高数任务。'
+                : '先用 20 分钟完成高数错题复盘，再结束今天的学习。',
+            ]
+          : ['继续补全真实记录，按自己的节奏决定下一步安排。']
 
     const metric = [
       {
@@ -1058,7 +1089,14 @@ export function ReportsPage() {
 
     return {
       type: '今日简报',
-      title: trainingDone ? '训练已经落地，接下来守住补水与复盘' : '先把训练安排好，再收住晚间学习',
+      title:
+        localRecordTotal === 0
+          ? '还没有可分析记录'
+          : trainingDone
+            ? '训练已经落地，继续按记录调整'
+            : isDemo
+              ? '先把训练安排好，再收住晚间学习'
+              : '等待更多真实记录',
       period: rangeLabel,
       summary,
       status,
@@ -1070,6 +1108,7 @@ export function ReportsPage() {
   }, [
     doneSets,
     englishCount,
+    isDemo,
     evidenceItems,
     fitnessFacts.hasSession,
     foodEntryCount,
@@ -1327,475 +1366,508 @@ export function ReportsPage() {
               : '报告只在你主动生成时运行。它引用近 7 / 30 / 90 天窗口内的训练、饮食、学习与个人档案摘要，帮助你看见趋势，而不是制造新的任务压力。'}
           </p>
         </div>
-        <div className="head-actions reports-head-actions">
-          <span className="reports-mock-badge">
-            <Icon name={reportSource === 'ai' ? 'spark' : 'lock'} className="icon-sm" />
-            {reportSource === 'probing'
-              ? '正在检测模型服务…'
-              : reportSource === 'ai'
-                ? AI_REPORT_LABEL
-                : reportSource === 'prebuilt'
-                  ? PREBUILT_AI_LABEL
-                  : MOCK_REPORT_LABEL}
-          </span>
-          <button
-            className="btn primary"
-            type="button"
-            onClick={() => {
-              void generate()
-            }}
-            disabled={generation === 'loading'}
-          >
-            <Icon name="spark" className="icon-sm" />
-            {runtime.mode === 'demo'
-              ? '查看预生成简报'
-              : generation === 'loading'
-                ? '正在生成…'
-                : '生成今日简报'}
-          </button>
-        </div>
-      </header>
-
-      <section
-        className={`reports-generation ${generationDisplay}`}
-        aria-live="polite"
-        aria-label="AI 报告生成状态"
-      >
-        <div className="reports-generation-mark">
-          <Icon
-            name={
-              generationDisplay === 'error'
-                ? 'close'
-                : generationDisplay === 'success'
-                  ? 'check'
-                  : 'spark'
-            }
-          />
-        </div>
-        <div className="reports-generation-copy">
-          <span>AI REPORT ENGINE</span>
-          {generationDisplay === 'idle' && (
-            <>
-              <h2>今日简报尚未生成</h2>
-              <p>
-                {rangeLabel}
-                {'共 '}
-                {localRecordTotal}
-                {' 条本地记录，本次可引用 '}
-                {referencedRecordTotal}
-                {' 条。'}
-                {canUseAi
-                  ? '将由本站服务端调用 DeepSeek 生成一份约 200 字的简报。'
-                  : '将用本地 Mock 规则生成一份约 200 字的简报。'}
-              </p>
-            </>
-          )}
-          {generationDisplay === 'loading' && (
-            <>
-              <h2>正在整理今天的记录</h2>
-              <p>
-                {canUseAi
-                  ? '正在经本站服务端读取授权摘要并请求模型，通常需要几秒到十几秒。'
-                  : '正在本地按规则整理训练、饮食、学习与个人档案摘要。'}
-              </p>
-            </>
-          )}
-          {generationDisplay === 'success' && (
-            <>
-              <h2>{runtime.mode === 'demo' ? '部署前生成的今日简报' : '今日简报已生成'}</h2>
-              <p>{displayReport?.summary ?? latestReport.summary}</p>
-              {fallbackNote && (
-                <p className="reports-fallback-note" role="status">
-                  {fallbackNote}
-                </p>
-              )}
-            </>
-          )}
-          {generationDisplay === 'error' && (
-            <>
-              <h2>这次生成没有完成</h2>
-              <p>{generationError ?? '报告服务返回了错误。记录本身没有受影响，可以直接重试。'}</p>
-            </>
-          )}
-        </div>
-        <div className="reports-generation-actions">
-          {generationDisplay === 'loading' && (
-            <span className="reports-loading-dots">
-              <i />
-              <i />
-              <i />
+        {!isBlankStart && (
+          <div className="head-actions reports-head-actions">
+            <span className="reports-mock-badge">
+              <Icon name={reportSource === 'ai' ? 'spark' : 'lock'} className="icon-sm" />
+              {reportSource === 'probing'
+                ? '正在检测模型服务…'
+                : reportSource === 'ai'
+                  ? AI_REPORT_LABEL
+                  : reportSource === 'prebuilt'
+                    ? PREBUILT_AI_LABEL
+                    : MOCK_REPORT_LABEL}
             </span>
-          )}
-          {generationDisplay === 'success' && (
-            <button
-              className="btn primary"
-              type="button"
-              onClick={() => setSelectedReport(displayReport ?? latestReport)}
-            >
-              查看简报
-            </button>
-          )}
-          {generationDisplay === 'error' && (
             <button
               className="btn primary"
               type="button"
               onClick={() => {
                 void generate()
               }}
+              disabled={generation === 'loading'}
             >
-              <Icon name="undo" className="icon-sm" />
-              重试
+              <Icon name="spark" className="icon-sm" />
+              {runtime.mode === 'demo'
+                ? '查看预生成简报'
+                : generation === 'loading'
+                  ? '正在生成…'
+                  : '生成今日简报'}
             </button>
-          )}
-        </div>
-      </section>
+          </div>
+        )}
+      </header>
 
-      <div className="reports-layout">
-        <div className="reports-main-column">
-          <section className="panel reports-brief" aria-labelledby="weeklyBriefTitle">
-            <div className="reports-brief-top">
-              <div>
-                <span className="reports-kicker">LATEST SYNTHESIS · {RANGE_LABELS[range]}</span>
-                <h2 id="weeklyBriefTitle">{latestReport.title}</h2>
-                <p>{latestReport.summary}</p>
-              </div>
-              <span className="reports-status-pill">
-                <span className="dot" />
-                {latestReport.status}
-              </span>
+      {isBlankStart ? (
+        <section className="panel reports-empty-state" aria-labelledby="reportsEmptyTitle">
+          <div className="panel-head">
+            <div>
+              <h2 className="panel-title" id="reportsEmptyTitle">
+                还没有可复盘的记录
+              </h2>
+              <p className="panel-sub">不预填报告、引用数、档案完整度或 AI 结论。</p>
             </div>
-
-            <div className="reports-range-row">
-              <div className="segmented" aria-label="报告时间范围">
-                {(['7', '30', '90'] as RangeKey[]).map((key) => (
-                  <button
-                    className={range === key ? 'active' : ''}
-                    type="button"
-                    key={key}
-                    disabled={runtime.mode === 'demo'}
-                    onClick={() => setRange(key)}
-                  >
-                    {RANGE_LABELS[key]}
-                  </button>
-                ))}
-              </div>
-              <span>
-                {RANGE_LABELS[range]} · 更新于 {latestReport.updatedAt ?? latestReport.date}
-              </span>
-            </div>
-
-            <div className="reports-brief-metrics">
-              {latestReport.metric.map((metric) => (
-                <div key={metric.label}>
-                  <span>{metric.label}</span>
-                  <strong>{metric.value}</strong>
-                  <small>{metric.detail}</small>
-                </div>
-              ))}
-            </div>
-
-            <div className="reports-conclusions">
-              {latestReport.conclusions.map((item, index) => (
-                <div key={item}>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                  <p>{item}</p>
-                </div>
-              ))}
-            </div>
-
-            {summaryOpen && (
-              <div className="reports-summary-expand">
-                <div>
-                  <span>建议动作</span>
-                  <strong>{latestReport.actions[0]}</strong>
-                  <p>{latestReport.actions.slice(1).join(' ')}</p>
-                </div>
-                <div>
-                  <span>引用范围</span>
-                  <strong>
-                    {referencedRecordTotal}
-                    {' 条记录 · '}
-                    {sourceEnabled('profile') ? `${profileFieldCount} 项档案字段` : '档案不引用'}
-                  </strong>
-                  <p>
-                    {citationSummary || '当前没有开启任何业务记录来源。'}
-                    {sourceEnabled('profile')
-                      ? `；档案完整度 ${profileCompleteness}%。`
-                      : '；个人档案本次不引用。'}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {evidenceOpen && (
-              <div className="reports-evidence">
-                <h3>分析依据</h3>
-                {evidenceItems.map((item) => (
-                  <p key={item}>
-                    <Icon name="check" className="icon-sm" />
-                    {item}
-                  </p>
-                ))}
-                <div>
-                  <Icon name="lock" className="icon-sm" />
-                  <span>
-                    API Key
-                    只保存在你的服务器；发送内容由设置中的来源开关控制，未授权来源不会出现在摘要里。
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="reports-brief-actions">
-              <button
-                className="btn quiet"
-                type="button"
-                onClick={() => setEvidenceOpen((open) => !open)}
-              >
-                {evidenceOpen ? '收起依据' : '查看分析依据'}
-                <Icon name="chev" className="icon-sm" />
+          </div>
+          <div className="surface-note">
+            <Icon name="spark" className="icon-sm" />
+            <span>先完成一次真实记录，再生成第一份简报或综合分析。</span>
+          </div>
+          <div className="surface-form-actions">
+            <div className="surface-form-actions-right">
+              <button className="btn primary" type="button" onClick={() => navigate('/')}>
+                <Icon name="plus" className="icon-sm" />
+                去记录
               </button>
-              <div>
-                <button
-                  className="btn secondary"
-                  type="button"
-                  onClick={() => setSummaryOpen((open) => !open)}
-                >
-                  {summaryOpen ? '收起摘要' : '展开详情'}
-                </button>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section
+            className={`reports-generation ${generationDisplay}`}
+            aria-live="polite"
+            aria-label="AI 报告生成状态"
+          >
+            <div className="reports-generation-mark">
+              <Icon
+                name={
+                  generationDisplay === 'error'
+                    ? 'close'
+                    : generationDisplay === 'success'
+                      ? 'check'
+                      : 'spark'
+                }
+              />
+            </div>
+            <div className="reports-generation-copy">
+              <span>AI REPORT ENGINE</span>
+              {generationDisplay === 'idle' && (
+                <>
+                  <h2>今日简报尚未生成</h2>
+                  <p>
+                    {rangeLabel}
+                    {'共 '}
+                    {localRecordTotal}
+                    {' 条本地记录，本次可引用 '}
+                    {referencedRecordTotal}
+                    {' 条。'}
+                    {canUseAi
+                      ? '将由本站服务端调用 DeepSeek 生成一份约 200 字的简报。'
+                      : '将用本地 Mock 规则生成一份约 200 字的简报。'}
+                  </p>
+                </>
+              )}
+              {generationDisplay === 'loading' && (
+                <>
+                  <h2>正在整理今天的记录</h2>
+                  <p>
+                    {canUseAi
+                      ? '正在经本站服务端读取授权摘要并请求模型，通常需要几秒到十几秒。'
+                      : '正在本地按规则整理训练、饮食、学习与个人档案摘要。'}
+                  </p>
+                </>
+              )}
+              {generationDisplay === 'success' && (
+                <>
+                  <h2>{runtime.mode === 'demo' ? '部署前生成的今日简报' : '今日简报已生成'}</h2>
+                  <p>{displayReport?.summary ?? latestReport.summary}</p>
+                  {fallbackNote && (
+                    <p className="reports-fallback-note" role="status">
+                      {fallbackNote}
+                    </p>
+                  )}
+                </>
+              )}
+              {generationDisplay === 'error' && (
+                <>
+                  <h2>这次生成没有完成</h2>
+                  <p>
+                    {generationError ?? '报告服务返回了错误。记录本身没有受影响，可以直接重试。'}
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="reports-generation-actions">
+              {generationDisplay === 'loading' && (
+                <span className="reports-loading-dots">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              )}
+              {generationDisplay === 'success' && (
                 <button
                   className="btn primary"
                   type="button"
-                  disabled={reports.length === 0}
-                  onClick={() => requestApply(latestReport)}
+                  onClick={() => setSelectedReport(displayReport ?? latestReport)}
                 >
-                  应用建议
+                  查看简报
                 </button>
-              </div>
+              )}
+              {generationDisplay === 'error' && (
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={() => {
+                    void generate()
+                  }}
+                >
+                  <Icon name="undo" className="icon-sm" />
+                  重试
+                </button>
+              )}
             </div>
           </section>
 
-          <ServerAnalysisPanel
-            view={displayAnalysisView}
-            rangeLabel={rangeLabel}
-            rangeDays={analysisRangeDays}
-            localReport={latestReport ?? null}
-            onReanalyze={() => requestAnalysis(true)}
-            onRetry={() => requestAnalysis(false)}
-            onGoProfile={() => navigate('/profile')}
-            onGoSettings={() => navigate('/settings')}
-          />
-
-          {analysisGate === 'ready' && (
-            <section
-              className="panel reports-analysis-archive"
-              aria-labelledby="analysisArchiveTitle"
-            >
-              <div className="panel-head">
-                <div>
-                  <h2 className="panel-title" id="analysisArchiveTitle">
-                    服务端归档
-                  </h2>
-                  <p className="panel-sub">服务端保存的综合分析报告，保留 365 天后自动删除。</p>
+          <div className="reports-layout">
+            <div className="reports-main-column">
+              <section className="panel reports-brief" aria-labelledby="weeklyBriefTitle">
+                <div className="reports-brief-top">
+                  <div>
+                    <span className="reports-kicker">LATEST SYNTHESIS · {RANGE_LABELS[range]}</span>
+                    <h2 id="weeklyBriefTitle">{latestReport.title}</h2>
+                    <p>{latestReport.summary}</p>
+                  </div>
+                  <span className="reports-status-pill">
+                    <span className="dot" />
+                    {latestReport.status}
+                  </span>
                 </div>
-                {archiveState === 'ready' && (
-                  <span className="reports-history-count">{analysisArchive.length} 份</span>
+
+                <div className="reports-range-row">
+                  <div className="segmented" aria-label="报告时间范围">
+                    {(['7', '30', '90'] as RangeKey[]).map((key) => (
+                      <button
+                        className={range === key ? 'active' : ''}
+                        type="button"
+                        key={key}
+                        disabled={runtime.mode === 'demo'}
+                        onClick={() => setRange(key)}
+                      >
+                        {RANGE_LABELS[key]}
+                      </button>
+                    ))}
+                  </div>
+                  <span>
+                    {RANGE_LABELS[range]} · 更新于 {latestReport.updatedAt ?? latestReport.date}
+                  </span>
+                </div>
+
+                <div className="reports-brief-metrics">
+                  {latestReport.metric.map((metric) => (
+                    <div key={metric.label}>
+                      <span>{metric.label}</span>
+                      <strong>{metric.value}</strong>
+                      <small>{metric.detail}</small>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="reports-conclusions">
+                  {latestReport.conclusions.map((item, index) => (
+                    <div key={item}>
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                      <p>{item}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {summaryOpen && (
+                  <div className="reports-summary-expand">
+                    <div>
+                      <span>建议动作</span>
+                      <strong>{latestReport.actions[0]}</strong>
+                      <p>{latestReport.actions.slice(1).join(' ')}</p>
+                    </div>
+                    <div>
+                      <span>引用范围</span>
+                      <strong>
+                        {referencedRecordTotal}
+                        {' 条记录 · '}
+                        {sourceEnabled('profile')
+                          ? `${profileFieldCount} 项档案字段`
+                          : '档案不引用'}
+                      </strong>
+                      <p>
+                        {citationSummary || '当前没有开启任何业务记录来源。'}
+                        {sourceEnabled('profile')
+                          ? `；档案完整度 ${profileCompleteness}%。`
+                          : '；个人档案本次不引用。'}
+                      </p>
+                    </div>
+                  </div>
                 )}
-              </div>
-              {archiveState === 'loading' && (
-                <p className="reports-analysis-archive-state">正在读取归档…</p>
+
+                {evidenceOpen && (
+                  <div className="reports-evidence">
+                    <h3>分析依据</h3>
+                    {evidenceItems.map((item) => (
+                      <p key={item}>
+                        <Icon name="check" className="icon-sm" />
+                        {item}
+                      </p>
+                    ))}
+                    <div>
+                      <Icon name="lock" className="icon-sm" />
+                      <span>
+                        API Key
+                        只保存在你的服务器；发送内容由设置中的来源开关控制，未授权来源不会出现在摘要里。
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="reports-brief-actions">
+                  <button
+                    className="btn quiet"
+                    type="button"
+                    onClick={() => setEvidenceOpen((open) => !open)}
+                  >
+                    {evidenceOpen ? '收起依据' : '查看分析依据'}
+                    <Icon name="chev" className="icon-sm" />
+                  </button>
+                  <div>
+                    <button
+                      className="btn secondary"
+                      type="button"
+                      onClick={() => setSummaryOpen((open) => !open)}
+                    >
+                      {summaryOpen ? '收起摘要' : '展开详情'}
+                    </button>
+                    <button
+                      className="btn primary"
+                      type="button"
+                      disabled={reports.length === 0}
+                      onClick={() => requestApply(latestReport)}
+                    >
+                      应用建议
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <ServerAnalysisPanel
+                view={displayAnalysisView}
+                rangeLabel={rangeLabel}
+                rangeDays={analysisRangeDays}
+                localReport={latestReport ?? null}
+                onReanalyze={() => requestAnalysis(true)}
+                onRetry={() => requestAnalysis(false)}
+                onGoProfile={() => navigate('/profile')}
+                onGoSettings={() => navigate('/settings')}
+              />
+
+              {analysisGate === 'ready' && (
+                <section
+                  className="panel reports-analysis-archive"
+                  aria-labelledby="analysisArchiveTitle"
+                >
+                  <div className="panel-head">
+                    <div>
+                      <h2 className="panel-title" id="analysisArchiveTitle">
+                        服务端归档
+                      </h2>
+                      <p className="panel-sub">服务端保存的综合分析报告，保留 365 天后自动删除。</p>
+                    </div>
+                    {archiveState === 'ready' && (
+                      <span className="reports-history-count">{analysisArchive.length} 份</span>
+                    )}
+                  </div>
+                  {archiveState === 'loading' && (
+                    <p className="reports-analysis-archive-state">正在读取归档…</p>
+                  )}
+                  {archiveState === 'error' && (
+                    <p className="reports-analysis-archive-state" role="status">
+                      {archiveError}
+                    </p>
+                  )}
+                  {archiveState === 'ready' && analysisArchive.length === 0 && (
+                    <p className="reports-analysis-archive-state">
+                      服务端还没有归档报告，生成一次后就会出现在这里。
+                    </p>
+                  )}
+                  {analysisArchive.length > 0 && (
+                    <div className="reports-analysis-archive-list">
+                      {analysisArchive.map((item) => (
+                        <button
+                          type="button"
+                          className="reports-analysis-archive-row"
+                          key={item.id}
+                          onClick={() => {
+                            void openAnalysisArchive(item)
+                          }}
+                          disabled={analysisDetailId === item.id}
+                        >
+                          <span className="reports-analysis-archive-date">
+                            <strong>{formatReportDate(new Date(item.createdAt))}</strong>
+                            <small>{item.type}</small>
+                          </span>
+                          <span className="reports-analysis-archive-copy">
+                            <strong>{item.title}</strong>
+                            <small>
+                              近 {item.rangeDays} 天 · {item.status}
+                            </small>
+                          </span>
+                          <span className="reports-analysis-archive-origin">
+                            {item.origin === 'ai' ? ANALYSIS_SERVER_LABEL : ANALYSIS_RULES_LABEL}
+                          </span>
+                          <Icon name="chev" className="icon-sm" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
               )}
-              {archiveState === 'error' && (
-                <p className="reports-analysis-archive-state" role="status">
-                  {archiveError}
-                </p>
-              )}
-              {archiveState === 'ready' && analysisArchive.length === 0 && (
-                <p className="reports-analysis-archive-state">
-                  服务端还没有归档报告，生成一次后就会出现在这里。
-                </p>
-              )}
-              {analysisArchive.length > 0 && (
-                <div className="reports-analysis-archive-list">
-                  {analysisArchive.map((item) => (
+
+              <section className="panel reports-history" aria-labelledby="reportHistoryTitle">
+                <div className="panel-head">
+                  <div>
+                    <h2 className="panel-title" id="reportHistoryTitle">
+                      历史报告
+                    </h2>
+                    <p className="panel-sub">保留当时的上下文，不覆盖旧结论。</p>
+                  </div>
+                  <span className="reports-history-count">{reports.length} 份</span>
+                </div>
+                <div className="reports-history-list">
+                  {reports.map((report) => (
                     <button
                       type="button"
-                      className="reports-analysis-archive-row"
-                      key={item.id}
-                      onClick={() => {
-                        void openAnalysisArchive(item)
-                      }}
-                      disabled={analysisDetailId === item.id}
+                      className="reports-history-row"
+                      key={report.id}
+                      onClick={() => setSelectedReport(report)}
                     >
-                      <span className="reports-analysis-archive-date">
-                        <strong>{formatReportDate(new Date(item.createdAt))}</strong>
-                        <small>{item.type}</small>
+                      <span className="reports-history-date">
+                        <strong>{report.date}</strong>
+                        <small>{report.type}</small>
                       </span>
-                      <span className="reports-analysis-archive-copy">
-                        <strong>{item.title}</strong>
-                        <small>
-                          近 {item.rangeDays} 天 · {item.status}
-                        </small>
+                      <span className="reports-history-copy">
+                        <strong>{report.title}</strong>
+                        <small>{report.summary}</small>
                       </span>
-                      <span className="reports-analysis-archive-origin">
-                        {item.origin === 'ai' ? ANALYSIS_SERVER_LABEL : ANALYSIS_RULES_LABEL}
+                      <span className="reports-history-tag">{report.status}</span>
+                      <Icon name="chev" className="icon-sm" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <aside className="reports-side-column">
+              <section className="panel reports-types" aria-labelledby="reportTypesTitle">
+                <div className="panel-head">
+                  <div>
+                    <h2 className="panel-title" id="reportTypesTitle">
+                      报告类型
+                    </h2>
+                    <p className="panel-sub">按当前记录可生成的内容。</p>
+                  </div>
+                </div>
+                <div className="reports-type-list">
+                  {TYPE_CARDS.map((card) => (
+                    <button
+                      type="button"
+                      className="reports-type-row"
+                      key={card.title}
+                      onClick={() => openReportType(card.title)}
+                    >
+                      <span className="reports-type-icon">
+                        <Icon name={card.icon} />
+                      </span>
+                      <span>
+                        <strong>{card.title}</strong>
+                        <small>{card.detail}</small>
+                        <em>{runtime.mode === 'demo' ? '部署前预生成' : card.tag}</em>
                       </span>
                       <Icon name="chev" className="icon-sm" />
                     </button>
                   ))}
                 </div>
-              )}
-            </section>
-          )}
+              </section>
 
-          <section className="panel reports-history" aria-labelledby="reportHistoryTitle">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title" id="reportHistoryTitle">
-                  历史报告
-                </h2>
-                <p className="panel-sub">保留当时的上下文，不覆盖旧结论。</p>
-              </div>
-              <span className="reports-history-count">{reports.length} 份</span>
-            </div>
-            <div className="reports-history-list">
-              {reports.map((report) => (
-                <button
-                  type="button"
-                  className="reports-history-row"
-                  key={report.id}
-                  onClick={() => setSelectedReport(report)}
-                >
-                  <span className="reports-history-date">
-                    <strong>{report.date}</strong>
-                    <small>{report.type}</small>
-                  </span>
-                  <span className="reports-history-copy">
-                    <strong>{report.title}</strong>
-                    <small>{report.summary}</small>
-                  </span>
-                  <span className="reports-history-tag">{report.status}</span>
-                  <Icon name="chev" className="icon-sm" />
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <aside className="reports-side-column">
-          <section className="panel reports-types" aria-labelledby="reportTypesTitle">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title" id="reportTypesTitle">
-                  报告类型
-                </h2>
-                <p className="panel-sub">按当前记录可生成的内容。</p>
-              </div>
-            </div>
-            <div className="reports-type-list">
-              {TYPE_CARDS.map((card) => (
-                <button
-                  type="button"
-                  className="reports-type-row"
-                  key={card.title}
-                  onClick={() => openReportType(card.title)}
-                >
-                  <span className="reports-type-icon">
-                    <Icon name={card.icon} />
-                  </span>
-                  <span>
-                    <strong>{card.title}</strong>
-                    <small>{card.detail}</small>
-                    <em>{runtime.mode === 'demo' ? '部署前预生成' : card.tag}</em>
-                  </span>
-                  <Icon name="chev" className="icon-sm" />
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel reports-data" aria-labelledby="reportDataTitle">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title" id="reportDataTitle">
-                  本次数据摘要
-                </h2>
-                <p className="panel-sub">按当前窗口汇总，生成报告时可能引用的本地记录。</p>
-              </div>
-            </div>
-            <div className="reports-data-bars">
-              {dataRows.map((row) => (
-                <div className={row.enabled ? '' : 'muted'} key={row.label}>
-                  <span>{row.label}</span>
-                  <strong>{row.count}</strong>
-                  <i>
-                    <span
-                      style={{
-                        width: row.count
-                          ? `${Math.max(7, (row.count / maxDataCount) * 100)}%`
-                          : '0%',
-                      }}
-                    />
-                  </i>
-                  <em>{row.enabled ? '引用' : '本次不引用'}</em>
+              <section className="panel reports-data" aria-labelledby="reportDataTitle">
+                <div className="panel-head">
+                  <div>
+                    <h2 className="panel-title" id="reportDataTitle">
+                      本次数据摘要
+                    </h2>
+                    <p className="panel-sub">按当前窗口汇总，生成报告时可能引用的本地记录。</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-            <div className="reports-data-foot">
-              <span>
-                {rangeLabel}共 {localRecordTotal} 条 · 本次引用 {referencedRecordTotal} 条
-              </span>
-              <strong>
-                {sourceEnabled('profile')
-                  ? `档案摘要 ${profileFieldCount} / 14 项`
-                  : '档案摘要 本次不引用'}
-              </strong>
-            </div>
-          </section>
+                <div className="reports-data-bars">
+                  {dataRows.map((row) => (
+                    <div className={row.enabled ? '' : 'muted'} key={row.label}>
+                      <span>{row.label}</span>
+                      <strong>{row.count}</strong>
+                      <i>
+                        <span
+                          style={{
+                            width: row.count
+                              ? `${Math.max(7, (row.count / maxDataCount) * 100)}%`
+                              : '0%',
+                          }}
+                        />
+                      </i>
+                      <em>{row.enabled ? '引用' : '本次不引用'}</em>
+                    </div>
+                  ))}
+                </div>
+                <div className="reports-data-foot">
+                  <span>
+                    {rangeLabel}共 {localRecordTotal} 条 · 本次引用 {referencedRecordTotal} 条
+                  </span>
+                  <strong>
+                    {sourceEnabled('profile')
+                      ? `档案摘要 ${profileFieldCount} / 13 项`
+                      : '档案摘要 本次不引用'}
+                  </strong>
+                </div>
+              </section>
 
-          <section className="reports-service" aria-labelledby="reportServiceTitle">
-            <div className="reports-service-head">
-              <span>
-                <Icon name="spark" />
-              </span>
-              <div>
-                <small>DEEPSEEK SERVICE</small>
-                <h2 id="reportServiceTitle">
-                  {reportSource === 'ai'
-                    ? '服务端代理已连接'
-                    : reportSource === 'prebuilt'
-                      ? '部署前生成 · 当前只读'
-                      : '本地 Mock 模式'}
-                </h2>
-              </div>
-            </div>
-            <p>
-              {runtime.mode === 'demo'
-                ? '演示中的报告文字已经在部署前通过本站服务端调用 DeepSeek 生成，并随前端包一起发布；部署后只读取静态内容。'
-                : '生成报告时，浏览器只把你在设置中授权的摘要发给本站服务端，由服务端携带 API Key 调用 DeepSeek；浏览器接触不到 Key，也拿不到除了报告文字之外的模型输出。'}
-            </p>
-            <div className="reports-service-status">
-              <span className="dot" />
-              <strong>
-                {reportSource === 'probing'
-                  ? '状态：正在检测'
-                  : reportSource === 'ai'
-                    ? '状态：已连接 DeepSeek'
-                    : reportSource === 'prebuilt'
-                      ? '状态：读取部署前快照'
-                      : '状态：生成时使用本地 Mock'}
-              </strong>
-              <small>
-                {reportSource === 'ai'
-                  ? '请求经 /api/report 代理转发'
-                  : reportSource === 'prebuilt'
-                    ? '当前不请求 /api/health、/api/report 或 /api/chat'
-                    : '本地规则生成，不发送任何模型请求'}
-              </small>
-            </div>
-          </section>
-        </aside>
-      </div>
+              <section className="reports-service" aria-labelledby="reportServiceTitle">
+                <div className="reports-service-head">
+                  <span>
+                    <Icon name="spark" />
+                  </span>
+                  <div>
+                    <small>DEEPSEEK SERVICE</small>
+                    <h2 id="reportServiceTitle">
+                      {reportSource === 'ai'
+                        ? '服务端代理已连接'
+                        : reportSource === 'prebuilt'
+                          ? '部署前生成 · 当前只读'
+                          : '本地 Mock 模式'}
+                    </h2>
+                  </div>
+                </div>
+                <p>
+                  {runtime.mode === 'demo'
+                    ? '演示中的报告文字已经在部署前通过本站服务端调用 DeepSeek 生成，并随前端包一起发布；部署后只读取静态内容。'
+                    : '生成报告时，浏览器只把你在设置中授权的摘要发给本站服务端，由服务端携带 API Key 调用 DeepSeek；浏览器接触不到 Key，也拿不到除了报告文字之外的模型输出。'}
+                </p>
+                <div className="reports-service-status">
+                  <span className="dot" />
+                  <strong>
+                    {reportSource === 'probing'
+                      ? '状态：正在检测'
+                      : reportSource === 'ai'
+                        ? '状态：已连接 DeepSeek'
+                        : reportSource === 'prebuilt'
+                          ? '状态：读取部署前快照'
+                          : '状态：生成时使用本地 Mock'}
+                  </strong>
+                  <small>
+                    {reportSource === 'ai'
+                      ? '请求经 /api/report 代理转发'
+                      : reportSource === 'prebuilt'
+                        ? '当前不请求 /api/health、/api/report 或 /api/chat'
+                        : '本地规则生成，不发送任何模型请求'}
+                  </small>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </>
+      )}
 
       {selectedReport && (
         <ReportDetailSheet

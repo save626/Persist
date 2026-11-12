@@ -120,6 +120,7 @@ const PROFILE: ProfileData = {
 function buildContextValue(overrides: Partial<MockDataContextValue> = {}): MockDataContextValue {
   return {
     goals: [],
+    addGoal: vi.fn(),
     updateGoal: vi.fn(),
     planItems: [],
     setPlanItems: vi.fn(),

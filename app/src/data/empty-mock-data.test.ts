@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createEmptyMockData } from './empty-mock-data'
 
-describe('createEmptyMockData', () => {
+describe('createEmptyMockData (guest)', () => {
   it('starts without sample records, goals, reports, or profile fields', () => {
     const data = createEmptyMockData()
 
@@ -24,6 +24,7 @@ describe('createEmptyMockData', () => {
 
     expect(data.settings.reminders.every((reminder) => !reminder.enabled)).toBe(true)
     expect(Object.values(data.settings.sources).every((enabled) => !enabled)).toBe(true)
-    expect(data.settings.dailyBrief).toEqual({ enabled: false, at: '21:00' })
+    expect(data.settings.dailyBrief).toEqual({ enabled: false, at: '' })
+    expect(data.settings.reminders.every((reminder) => reminder.time === '')).toBe(true)
   })
 })

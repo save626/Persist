@@ -23,7 +23,7 @@ export interface RuntimeModeConfig {
   label: string
   /** 业务数据 IndexedDB 名；三种模式必须隔离，避免公开体验覆盖作者本机数据。 */
   storageDbName: string
-  /** 今日页饮水进度基线；guest 从 0 开始，不凭空展示预置饮水。 */
+  /** 今日页饮水进度基线；owner / guest 从 0 开始，只有 demo 使用预置基线。 */
   waterBaselineMilliliters: number
   ai: RuntimeAiCapabilities
   sync: boolean
@@ -42,7 +42,7 @@ const CONFIGS: Record<RuntimeMode, RuntimeModeConfig> = {
     mode: 'owner',
     label: '完整模式',
     storageDbName: 'persist-app',
-    waterBaselineMilliliters: 1_200,
+    waterBaselineMilliliters: 0,
     ai: { report: true, chat: true, morningBrief: true, serverAnalysis: true },
     sync: true,
     readOnly: false,

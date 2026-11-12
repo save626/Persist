@@ -75,7 +75,7 @@ export function createEmptyMeals(): Meal[] {
   return INITIAL_MEALS.map((meal) => ({
     id: meal.id,
     label: meal.label,
-    time: meal.time,
+    time: '',
     entries: [],
   }))
 }

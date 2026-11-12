@@ -48,6 +48,7 @@ function buildContextValue(
 ): MockDataContextValue {
   return {
     goals: [],
+    addGoal: vi.fn(),
     updateGoal: vi.fn(),
     planItems: [],
     setPlanItems: vi.fn(),
@@ -183,14 +184,15 @@ function briefTimeTrigger() {
 }
 
 describe('SettingsPage 每日简报', () => {
-  it('默认关闭，时间默认 21:00，并展示归属与留存说明', () => {
+  it('默认关闭且时间未设置，并展示归属与留存说明', () => {
     renderSettings()
 
     expect(screen.getByRole('heading', { name: '每日简报' })).toBeInTheDocument()
     expect(screen.getByText('05')).toBeInTheDocument()
     expect(briefToggle()).not.toBeChecked()
-    expect(briefTimeTrigger()).toHaveTextContent('21:00')
-    expect(screen.getByText('默认关闭')).toBeInTheDocument()
+    expect(briefTimeTrigger()).toHaveTextContent('请选择时间')
+    expect(briefTimeTrigger()).toBeDisabled()
+    expect(screen.getAllByText('未设置').length).toBeGreaterThan(0)
     expect(screen.getByText('每天自动生成服务端简报')).toBeInTheDocument()
     expect(screen.getByText(/365 天后自动删除/)).toBeInTheDocument()
     expect(screen.getByText(/关闭后不再生成，也不会删除已经生成的报告/)).toBeInTheDocument()
@@ -213,13 +215,14 @@ describe('SettingsPage 每日简报', () => {
     const user = userEvent.setup()
     const { updateSettings } = renderSettings()
 
+    await user.click(briefToggle())
     await user.click(briefTimeTrigger())
     await user.click(screen.getByRole('button', { name: '07 时' }))
     await user.click(screen.getByRole('button', { name: '30 分' }))
     await user.click(screen.getByRole('button', { name: '确定' }))
 
     expect(updateSettings).toHaveBeenCalledWith({
-      dailyBrief: { enabled: false, at: '07:30' },
+      dailyBrief: { enabled: true, at: '07:30' },
     })
     expect(briefTimeTrigger()).toHaveTextContent('07:30')
   })
@@ -228,6 +231,8 @@ describe('SettingsPage 每日简报', () => {
     const user = userEvent.setup()
     const { updateSettings } = renderSettings()
 
+    await user.click(briefToggle())
+    updateSettings.mockClear()
     await user.click(briefTimeTrigger())
     await user.click(screen.getByRole('button', { name: '07 时' }))
     await user.click(screen.getByRole('button', { name: '30 分' }))
@@ -244,8 +249,9 @@ describe('SettingsPage 每日简报', () => {
     })
 
     expect(briefToggle()).not.toBeChecked()
-    expect(briefTimeTrigger()).toHaveTextContent('21:00')
-    expect(screen.getByText('默认关闭')).toBeInTheDocument()
+    expect(briefTimeTrigger()).toHaveTextContent('请选择时间')
+    expect(briefTimeTrigger()).toBeDisabled()
+    expect(screen.getAllByText('未设置').length).toBeGreaterThan(0)
   })
 })
 

@@ -1,4 +1,4 @@
-﻿import type { ProfileData } from '../types'
+import type { ProfileData } from '../types'
 
 export const INITIAL_PROFILE: ProfileData = {
   age: 24,
@@ -32,14 +32,10 @@ export function countProfileFields(profile: ProfileData) {
     profile.bedtime,
     profile.sleepHours,
     profile.stress,
-    profile.aiConsent,
   ]
-  return values.filter((value) => {
-    if (typeof value === 'boolean') return true
-    return String(value ?? '').trim() !== '' && Number(value) !== 0
-  }).length
+  return values.filter((value) => String(value ?? '').trim() !== '' && Number(value) !== 0).length
 }
 
 export function calculateProfileCompleteness(profile: ProfileData) {
-  return Math.floor((countProfileFields(profile) / 14) * 100)
+  return Math.floor((countProfileFields(profile) / 13) * 100)
 }

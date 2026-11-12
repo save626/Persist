@@ -6,6 +6,7 @@ import { ConfirmDialog, PageSheet } from '../components/PageSheet'
 import { useMockData } from '../context/mock-data-context'
 import { useRuntimeMode } from '../context/runtime-mode-context'
 import { useUI } from '../context/ui-context'
+import { addDaysToDateKey } from '../lib/history'
 import { buildReportDigest } from '../lib/report-digest'
 import { useAiObservation } from '../lib/use-ai-observation'
 import { useNewRecordParam } from '../lib/use-new-record-param'
@@ -13,7 +14,7 @@ import type { StudyCategory, StudyRecord } from '../types'
 
 type Filter = 'all' | StudyCategory
 
-const DAILY_TARGET = 90
+const DEMO_DAILY_TARGET = 90
 
 function todayInputValue(date = new Date()) {
   const year = date.getFullYear()
@@ -21,16 +22,6 @@ function todayInputValue(date = new Date()) {
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
-
-const WEEK_TREND = [
-  { label: '二', english: 28, math: 20 },
-  { label: '三', english: 38, math: 28 },
-  { label: '四', english: 30, math: 22 },
-  { label: '五', english: 46, math: 34 },
-  { label: '六', english: 40, math: 34 },
-  { label: '一', english: 52, math: 36 },
-  { label: '今天', english: 35, math: 20 },
-]
 
 const STUDY_SOURCES: Record<StudyCategory, readonly string[]> = {
   english: ['百词斩', '不背单词', '英语真题', '听力精练'],
@@ -54,7 +45,7 @@ const EMPTY_RECORD: StudyRecord = {
   source: '',
   date: todayInputValue(),
   startTime: '',
-  duration: 30,
+  duration: 0,
   note: '',
   newWords: 0,
   reviewWords: 0,
@@ -212,8 +203,8 @@ function StudyEditor({
               type="number"
               min="1"
               inputMode="numeric"
-              value={draft.duration}
-              onChange={(event) => patch({ duration: Number(event.target.value) })}
+              value={draft.duration || ''}
+              onChange={(event) => patch({ duration: Number(event.target.value) || 0 })}
             />
           </label>
           <DatePickerField
@@ -374,6 +365,8 @@ export function StudyPage() {
     today,
   } = useMockData()
   const runtime = useRuntimeMode()
+  const isDemo = runtime.mode === 'demo'
+  const isBlankStart = !isDemo && records.length === 0
   const navigate = useNavigate()
   const newRecord = useNewRecordParam()
   const [filter, setFilter] = useState<Filter>('all')
@@ -409,16 +402,49 @@ export function StudyPage() {
   const mathCount = todayRecords.filter((record) => record.category === 'math').length
   const mathWrong = todayRecords.reduce((total, record) => total + (record.wrong ?? 0), 0)
   const totalMinutes = englishMinutes + mathMinutes
-  const targetProgress = Math.min(100, (totalMinutes / DAILY_TARGET) * 100)
+  const targetProgress = isDemo ? Math.min(100, (totalMinutes / DEMO_DAILY_TARGET) * 100) : 0
   const englishShare = totalMinutes ? Math.round((englishMinutes / totalMinutes) * 100) : 0
   const mathShare = totalMinutes ? 100 - englishShare : 0
   const recentRecords = records
     .filter((record) => record.date !== today)
     .sort((a, b) => `${b.date}${b.startTime}`.localeCompare(`${a.date}${a.startTime}`))
     .slice(0, 4)
-  const weekTrend = WEEK_TREND.map((day, index) =>
-    index === WEEK_TREND.length - 1 ? { ...day, english: englishMinutes, math: mathMinutes } : day,
+  const weekTrend = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const dateKey = addDaysToDateKey(today, index - 6)
+        const dayRecords = records.filter((record) => record.date === dateKey)
+        return {
+          label:
+            index === 6
+              ? '今天'
+              : new Intl.DateTimeFormat('zh-CN', { weekday: 'short' })
+                  .format(new Date(`${dateKey}T12:00:00`))
+                  .replace('周', ''),
+          english: dayRecords
+            .filter((record) => record.category === 'english')
+            .reduce((total, record) => total + record.duration, 0),
+          math: dayRecords
+            .filter((record) => record.category === 'math')
+            .reduce((total, record) => total + record.duration, 0),
+        }
+      }),
+    [records, today],
   )
+  const weekChartMax = Math.max(
+    ...weekTrend.map((day) => day.english + day.math),
+    isDemo ? DEMO_DAILY_TARGET : 1,
+  )
+  const studyStreak = useMemo(() => {
+    const recordedDates = new Set(records.map((record) => record.date))
+    let cursor = recordedDates.has(today) ? today : addDaysToDateKey(today, -1)
+    let count = 0
+    while (recordedDates.has(cursor)) {
+      count += 1
+      cursor = addDaysToDateKey(cursor, -1)
+    }
+    return count
+  }, [records, today])
 
   const observationRequest = useMemo(() => {
     if (
@@ -451,7 +477,11 @@ export function StudyPage() {
     request: observationRequest,
     dateKey: today,
   })
-  const localObservationTitle = '今天已经足够形成一次小复盘。'
+  const localObservationTitle = totalMinutes
+    ? isDemo
+      ? '今天已经足够形成一次小复盘。'
+      : '今日学习观察已更新。'
+    : '今天还没有学习记录。'
   const localObservationSummary = totalMinutes
     ? `今天已记录英语 ${englishMinutes} 分钟、高数 ${mathMinutes} 分钟。${mathWrong ? `高数错题共 ${mathWrong} 道，晚间复盘可以先整理错题，不必重做整套练习。` : '当前没有登记高数错题，可以按原计划结束学习。'}`
     : '今天还没有学习记录。先补一条真实投入，再让分析建立在可核对的数据上。'
@@ -493,315 +523,362 @@ export function StudyPage() {
             英语与高数统一记录。单词背诵继续在外部 App 完成，这里只留下结果和复盘线索。
           </p>
         </div>
-        <div className="head-actions study-head-actions">
-          <span className="study-status">
-            <span />
-            今日记录 {todayRecords.length} 条
-          </span>
-          <button className="btn primary" type="button" onClick={() => setEditing('new')}>
-            <Icon name="plus" className="icon-sm" />
-            新增记录
-          </button>
-        </div>
+        {!isBlankStart && (
+          <div className="head-actions study-head-actions">
+            <span className="study-status">
+              <span />
+              {'今日记录 ' + todayRecords.length + ' 条'}
+            </span>
+            <button className="btn primary" type="button" onClick={() => setEditing('new')}>
+              <Icon name="plus" className="icon-sm" />
+              新增记录
+            </button>
+          </div>
+        )}
       </header>
 
-      <section className="progress" aria-label="今日学习概览">
-        <div className="progress-head">
-          <span className="label">今日学习</span>
-          <span className="count-note">目标 {DAILY_TARGET} min · Mock 数据</span>
-        </div>
-        <div className="metrics study-metrics">
-          <div className="metric">
-            <div className="metric-title">
-              <Icon name="study" className="icon-sm" />
-              累计投入
-            </div>
-            <div className="metric-value">
-              <span className="metric-number">{totalMinutes}</span>
-              <span className="metric-denom">/ {DAILY_TARGET} min</span>
-            </div>
-            <div className="metric-bar">
-              <span style={{ width: `${targetProgress}%` }} />
+      {isBlankStart ? (
+        <section className="panel study-empty-state" aria-labelledby="studyEmptyTitle">
+          <div className="panel-head">
+            <div>
+              <h2 className="panel-title" id="studyEmptyTitle">
+                今天还没有学习记录
+              </h2>
+              <p className="panel-sub">不预填学习时长、单词数、题量或观察。</p>
             </div>
           </div>
-          <div className="metric">
-            <div className="metric-title">
-              <span className="study-dot english" />
-              英语
-            </div>
-            <div className="metric-value">
-              <span className="metric-number">{englishMinutes}</span>
-              <span className="metric-denom">min</span>
-            </div>
-            <div className="study-metric-note">占今日 {englishShare}%</div>
+          <div className="surface-note">
+            <Icon name="study" className="icon-sm" />
+            <span>完成一次真实学习后，再从来源、时长与结果开始登记。</span>
           </div>
-          <div className="metric">
-            <div className="metric-title">
-              <span className="study-dot math" />
-              高数
+          <div className="surface-form-actions">
+            <div className="surface-form-actions-right">
+              <button className="btn primary" type="button" onClick={() => setEditing('new')}>
+                <Icon name="plus" className="icon-sm" />
+                新增记录
+              </button>
             </div>
-            <div className="metric-value">
-              <span className="metric-number">{mathMinutes}</span>
-              <span className="metric-denom">min</span>
-            </div>
-            <div className="study-metric-note">错题 {mathWrong} 道</div>
           </div>
-          <div className="metric">
-            <div className="metric-title">
-              <Icon name="spark" className="icon-sm" />
-              连续记录
-            </div>
-            <div className="metric-value">
-              <span className="metric-number">7</span>
-              <span className="metric-denom">天</span>
-            </div>
-            <div className="study-metric-note">保持真实，不补造数据</div>
-          </div>
-        </div>
-      </section>
-
-      <div className="study-layout">
-        <div className="study-main-column">
-          <section className="panel study-records-panel" aria-labelledby="studyRecordsTitle">
-            <div className="panel-head study-panel-head">
-              <div>
-                <h2 className="panel-title" id="studyRecordsTitle">
-                  今日时间线
-                </h2>
-                <p className="panel-sub">按实际完成时间记录，可随时修改来源与结果。</p>
-              </div>
-              <div className="segmented" aria-label="学习分类筛选">
-                {(
-                  [
-                    ['all', '全部'],
-                    ['english', '英语'],
-                    ['math', '高数'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    className={filter === value ? 'active' : ''}
-                    type="button"
-                    key={value}
-                    onClick={() => setFilter(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {visibleRecords.length ? (
-              <div className="study-timeline">
-                {visibleRecords.map((record) => (
-                  <article className="study-timeline-row" key={record.id}>
-                    <time>{record.startTime}</time>
-                    <span className={`study-line-dot ${record.category}`} />
-                    <div className="study-record-main">
-                      <div className="study-record-title">
-                        <span className={`study-kind ${record.category}`}>
-                          {categoryName(record.category)}
-                        </span>
-                        <strong>{record.source}</strong>
-                        <span>{record.duration} min</span>
-                      </div>
-                      <p>{recordDetail(record)}</p>
-                      {record.note && <small>{record.note}</small>}
-                    </div>
-                    <button
-                      className="study-edit"
-                      type="button"
-                      aria-label={`编辑 ${record.source} 学习记录`}
-                      onClick={() => setEditing(record)}
-                    >
-                      <Icon name="edit" className="icon-sm" />
-                    </button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="surface-empty study-empty">
-                <Icon name="study" />
-                <strong>这个分类今天还没有记录</strong>
-                <p>切换分类查看其他记录，或补一条真实完成的学习投入。</p>
-                <button className="btn secondary" type="button" onClick={() => setFilter('all')}>
-                  查看全部记录
-                </button>
-              </div>
-            )}
-          </section>
-
-          <section className="panel study-trend-panel" aria-labelledby="studyTrendTitle">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title" id="studyTrendTitle">
-                  近 7 天趋势
-                </h2>
-                <p className="panel-sub">用投入变化观察节奏，不以单日高低评价状态。</p>
-              </div>
-              <span className="study-trend-total">
-                本周 {weekTrend.reduce((total, day) => total + day.english + day.math, 0)} min
+        </section>
+      ) : (
+        <>
+          <section className="progress" aria-label="今日学习概览">
+            <div className="progress-head">
+              <span className="label">今日学习</span>
+              <span className="count-note">
+                {isDemo ? `目标 ${DEMO_DAILY_TARGET} min · 演示数据` : '目标未设置'}
               </span>
             </div>
-            <div className="study-chart">
-              {weekTrend.map((day, index) => {
-                const total = day.english + day.math
-                return (
-                  <div
-                    className={
-                      index === weekTrend.length - 1 ? 'study-chart-day today' : 'study-chart-day'
-                    }
-                    key={day.label}
-                  >
-                    <span className="study-chart-value">{total}</span>
-                    <div className="study-chart-track">
-                      <span className="study-chart-math" style={{ height: `${day.math}%` }} />
-                      <span className="study-chart-english" style={{ height: `${day.english}%` }} />
-                    </div>
-                    <span>{day.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="study-chart-legend">
-              <span>
-                <i className="english" />
-                英语
-              </span>
-              <span>
-                <i className="math" />
-                高数
-              </span>
-            </div>
-          </section>
-        </div>
-
-        <aside className="study-side-column">
-          <section className="panel study-allocation" aria-labelledby="studyAllocationTitle">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title" id="studyAllocationTitle">
-                  投入结构
-                </h2>
-                <p className="panel-sub">今日英语与高数的相对占比。</p>
-              </div>
-            </div>
-            <div className="study-allocation-body">
-              <div
-                className="study-ring"
-                style={{
-                  background: `conic-gradient(var(--green) 0 ${englishShare}%, #b9c9d5 ${englishShare}% 100%)`,
-                }}
-              >
-                <div>
-                  <strong>{totalMinutes}</strong>
-                  <span>min</span>
+            <div className="metrics study-metrics">
+              <div className="metric">
+                <div className="metric-title">
+                  <Icon name="study" className="icon-sm" />
+                  累计投入
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">{totalMinutes}</span>
+                  <span className="metric-denom">
+                    {isDemo ? `/ ${DEMO_DAILY_TARGET} min` : '目标未设置'}
+                  </span>
+                </div>
+                <div className="metric-bar">
+                  <span style={{ width: `${targetProgress}%` }} />
                 </div>
               </div>
-              <div className="study-allocation-list">
-                <div>
+              <div className="metric">
+                <div className="metric-title">
+                  <span className="study-dot english" />
+                  英语
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">{englishMinutes}</span>
+                  <span className="metric-denom">min</span>
+                </div>
+                <div className="study-metric-note">占今日 {englishShare}%</div>
+              </div>
+              <div className="metric">
+                <div className="metric-title">
+                  <span className="study-dot math" />
+                  高数
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">{mathMinutes}</span>
+                  <span className="metric-denom">min</span>
+                </div>
+                <div className="study-metric-note">错题 {mathWrong} 道</div>
+              </div>
+              <div className="metric">
+                <div className="metric-title">
+                  <Icon name="spark" className="icon-sm" />
+                  连续记录
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">{studyStreak}</span>
+                  <span className="metric-denom">天</span>
+                </div>
+                <div className="study-metric-note">保持真实，不补造数据</div>
+              </div>
+            </div>
+          </section>
+
+          <div className="study-layout">
+            <div className="study-main-column">
+              <section className="panel study-records-panel" aria-labelledby="studyRecordsTitle">
+                <div className="panel-head study-panel-head">
+                  <div>
+                    <h2 className="panel-title" id="studyRecordsTitle">
+                      今日时间线
+                    </h2>
+                    <p className="panel-sub">按实际完成时间记录，可随时修改来源与结果。</p>
+                  </div>
+                  <div className="segmented" aria-label="学习分类筛选">
+                    {(
+                      [
+                        ['all', '全部'],
+                        ['english', '英语'],
+                        ['math', '高数'],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        className={filter === value ? 'active' : ''}
+                        type="button"
+                        key={value}
+                        onClick={() => setFilter(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {visibleRecords.length ? (
+                  <div className="study-timeline">
+                    {visibleRecords.map((record) => (
+                      <article className="study-timeline-row" key={record.id}>
+                        <time>{record.startTime}</time>
+                        <span className={`study-line-dot ${record.category}`} />
+                        <div className="study-record-main">
+                          <div className="study-record-title">
+                            <span className={`study-kind ${record.category}`}>
+                              {categoryName(record.category)}
+                            </span>
+                            <strong>{record.source}</strong>
+                            <span>{record.duration} min</span>
+                          </div>
+                          <p>{recordDetail(record)}</p>
+                          {record.note && <small>{record.note}</small>}
+                        </div>
+                        <button
+                          className="study-edit"
+                          type="button"
+                          aria-label={`编辑 ${record.source} 学习记录`}
+                          onClick={() => setEditing(record)}
+                        >
+                          <Icon name="edit" className="icon-sm" />
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="surface-empty study-empty">
+                    <Icon name="study" />
+                    <strong>这个分类今天还没有记录</strong>
+                    <p>切换分类查看其他记录，或补一条真实完成的学习投入。</p>
+                    <button
+                      className="btn secondary"
+                      type="button"
+                      onClick={() => setFilter('all')}
+                    >
+                      查看全部记录
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <section className="panel study-trend-panel" aria-labelledby="studyTrendTitle">
+                <div className="panel-head">
+                  <div>
+                    <h2 className="panel-title" id="studyTrendTitle">
+                      近 7 天趋势
+                    </h2>
+                    <p className="panel-sub">用投入变化观察节奏，不以单日高低评价状态。</p>
+                  </div>
+                  <span className="study-trend-total">
+                    本周 {weekTrend.reduce((total, day) => total + day.english + day.math, 0)} min
+                  </span>
+                </div>
+                <div className="study-chart">
+                  {weekTrend.map((day, index) => {
+                    const total = day.english + day.math
+                    return (
+                      <div
+                        className={
+                          index === weekTrend.length - 1
+                            ? 'study-chart-day today'
+                            : 'study-chart-day'
+                        }
+                        key={day.label}
+                      >
+                        <span className="study-chart-value">{total}</span>
+                        <div className="study-chart-track">
+                          <span
+                            className="study-chart-math"
+                            style={{ height: `${Math.max(3, (day.math / weekChartMax) * 100)}%` }}
+                          />
+                          <span
+                            className="study-chart-english"
+                            style={{
+                              height: `${Math.max(3, (day.english / weekChartMax) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <span>{day.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="study-chart-legend">
                   <span>
                     <i className="english" />
                     英语
                   </span>
-                  <strong>{englishShare}%</strong>
-                  <small>{englishMinutes} min</small>
-                </div>
-                <div>
                   <span>
                     <i className="math" />
                     高数
                   </span>
-                  <strong>{mathShare}%</strong>
-                  <small>{mathMinutes} min</small>
                 </div>
-              </div>
+              </section>
             </div>
-          </section>
-          <section className="study-ai" aria-labelledby="studyAiTitle">
-            <div className="study-ai-head">
-              <span className="study-ai-icon">
-                <Icon name="spark" />
-              </span>
-              <div>
-                <span>Persist AI · 学习观察</span>
-                <h2 id="studyAiTitle">{observationTitle}</h2>
-              </div>
-            </div>
-            <p>{observationSummary}</p>
-            <button
-              className="study-ai-toggle"
-              type="button"
-              onClick={() => setAiOpen((open) => !open)}
-            >
-              查看分析依据 <Icon name="chev" className={aiOpen ? 'icon-sm open' : 'icon-sm'} />
-            </button>
-            {aiOpen && (
-              <div className="study-ai-evidence">
-                <div>
-                  <span>时间范围</span>
-                  <strong>今天 00:00–现在</strong>
-                </div>
-                <div>
-                  <span>使用记录</span>
-                  <strong>
-                    英语 {englishCount} 条 · 高数 {mathCount} 条
-                  </strong>
-                </div>
-                <div>
-                  <span>数据状态</span>
-                  <strong>{observationStatus}</strong>
-                </div>
-                {aiObservation.mode === 'ai' && (
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={aiObservation.regenerate}
-                  >
-                    重新生成观察
-                  </button>
-                )}
-                <button
-                  className="btn secondary"
-                  type="button"
-                  onClick={() => navigate('/reports')}
-                >
-                  前往 AI 报告
-                </button>
-              </div>
-            )}
-          </section>
 
-          <section className="panel study-recent" aria-labelledby="studyRecentTitle">
-            <div className="panel-head">
-              <div>
-                <h2 className="panel-title" id="studyRecentTitle">
-                  最近记录
-                </h2>
-                <p className="panel-sub">跨天回看，保留来源差异。</p>
-              </div>
-            </div>
-            <div className="study-recent-list">
-              {recentRecords.map((record) => (
-                <button type="button" key={record.id} onClick={() => setEditing(record)}>
-                  <span className={`study-recent-mark ${record.category}`}>
-                    <Icon name="study" />
+            <aside className="study-side-column">
+              <section className="panel study-allocation" aria-labelledby="studyAllocationTitle">
+                <div className="panel-head">
+                  <div>
+                    <h2 className="panel-title" id="studyAllocationTitle">
+                      投入结构
+                    </h2>
+                    <p className="panel-sub">今日英语与高数的相对占比。</p>
+                  </div>
+                </div>
+                <div className="study-allocation-body">
+                  <div
+                    className="study-ring"
+                    style={{
+                      background: `conic-gradient(var(--green) 0 ${englishShare}%, #b9c9d5 ${englishShare}% 100%)`,
+                    }}
+                  >
+                    <div>
+                      <strong>{totalMinutes}</strong>
+                      <span>min</span>
+                    </div>
+                  </div>
+                  <div className="study-allocation-list">
+                    <div>
+                      <span>
+                        <i className="english" />
+                        英语
+                      </span>
+                      <strong>{englishShare}%</strong>
+                      <small>{englishMinutes} min</small>
+                    </div>
+                    <div>
+                      <span>
+                        <i className="math" />
+                        高数
+                      </span>
+                      <strong>{mathShare}%</strong>
+                      <small>{mathMinutes} min</small>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section className="study-ai" aria-labelledby="studyAiTitle">
+                <div className="study-ai-head">
+                  <span className="study-ai-icon">
+                    <Icon name="spark" />
                   </span>
-                  <span>
-                    <strong>{record.source}</strong>
-                    <small>
-                      {displayDate(record.date)} · {categoryName(record.category)}
-                    </small>
-                  </span>
-                  <span>
-                    {record.duration}
-                    <small> min</small>
-                  </span>
+                  <div>
+                    <span>Persist AI · 学习观察</span>
+                    <h2 id="studyAiTitle">{observationTitle}</h2>
+                  </div>
+                </div>
+                <p>{observationSummary}</p>
+                <button
+                  className="study-ai-toggle"
+                  type="button"
+                  onClick={() => setAiOpen((open) => !open)}
+                >
+                  查看分析依据 <Icon name="chev" className={aiOpen ? 'icon-sm open' : 'icon-sm'} />
                 </button>
-              ))}
-            </div>
-          </section>
-        </aside>
-      </div>
+                {aiOpen && (
+                  <div className="study-ai-evidence">
+                    <div>
+                      <span>时间范围</span>
+                      <strong>今天 00:00–现在</strong>
+                    </div>
+                    <div>
+                      <span>使用记录</span>
+                      <strong>
+                        英语 {englishCount} 条 · 高数 {mathCount} 条
+                      </strong>
+                    </div>
+                    <div>
+                      <span>数据状态</span>
+                      <strong>{observationStatus}</strong>
+                    </div>
+                    {aiObservation.mode === 'ai' && (
+                      <button
+                        className="btn secondary"
+                        type="button"
+                        onClick={aiObservation.regenerate}
+                      >
+                        重新生成观察
+                      </button>
+                    )}
+                    <button
+                      className="btn secondary"
+                      type="button"
+                      onClick={() => navigate('/reports')}
+                    >
+                      前往 AI 报告
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <section className="panel study-recent" aria-labelledby="studyRecentTitle">
+                <div className="panel-head">
+                  <div>
+                    <h2 className="panel-title" id="studyRecentTitle">
+                      最近记录
+                    </h2>
+                    <p className="panel-sub">跨天回看，保留来源差异。</p>
+                  </div>
+                </div>
+                <div className="study-recent-list">
+                  {recentRecords.map((record) => (
+                    <button type="button" key={record.id} onClick={() => setEditing(record)}>
+                      <span className={`study-recent-mark ${record.category}`}>
+                        <Icon name="study" />
+                      </span>
+                      <span>
+                        <strong>{record.source}</strong>
+                        <small>
+                          {displayDate(record.date)} · {categoryName(record.category)}
+                        </small>
+                      </span>
+                      <span>
+                        {record.duration}
+                        <small> min</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </aside>
+          </div>
+        </>
+      )}
 
       {sheetEditing && (
         <StudyEditor

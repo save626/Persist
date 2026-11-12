@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
 import { chooseTime } from './date-time'
+import { seedOwnerFixture } from './owner-fixture'
+
+test.beforeEach(async ({ page }) => {
+  await seedOwnerFixture(page)
+})
 
 /** 防抖写入是 200ms，留一倍余量等 IndexedDB 事务真正落盘。 */
 const PERSIST_FLUSH_MS = 450
@@ -19,17 +24,17 @@ test('刷新后保留本机记录的饮水量，且重复刷新不会累加', as
   const progress = page.getByRole('region', { name: '今日进度' })
   await expect(progress).toContainText('1.5')
 
-  // 目标 2 L、基线 1.2 L，再记录 250 ml 后缺口应为 550 ml。
+  // owner 不预设每日饮水目标；这里验证记录后真实水量仍会持久化。
   const brief = page.getByRole('dialog', { name: '晨间简报' })
   await page.getByRole('button', { name: '晨间简报' }).click()
   await expect(brief).toBeVisible()
-  await expect(brief.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('550 ml')
+  await expect(brief.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('未设置')
 
   await waitForPersistFlush(page)
   await page.reload()
   await expect(progress).toContainText('1.5')
   await page.getByRole('button', { name: '晨间简报' }).click()
-  await expect(brief.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('550 ml')
+  await expect(brief.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('未设置')
 
   await waitForPersistFlush(page)
   await page.reload()
@@ -74,7 +79,7 @@ test('刷新后保留设置里的提醒开关与时间', async ({ page }) => {
   await expect(page.getByLabel('饮水提醒时间')).toContainText('07:30')
 })
 
-test('清空本机数据后刷新回到初始示例数据', async ({ page }) => {
+test('清空本机数据后刷新回到空白状态', async ({ page }) => {
   await page.goto('/')
   const progress = page.getByRole('region', { name: '今日进度' })
 
@@ -98,15 +103,17 @@ test('清空本机数据后刷新回到初始示例数据', async ({ page }) => 
   await dialog.getByRole('button', { name: '确认清空' }).click()
   await expect(page.locator('.toast')).toContainText('本机数据已清空')
 
-  // 内存态立即回到基线：提醒重新开启、快照清空。
-  await expect(waterSwitch).toBeChecked()
+  // 内存态立即回到空白基线：提醒关闭且时间未设置、快照清空。
+  await expect(waterSwitch).not.toBeChecked()
+  await expect(page.getByLabel('饮水提醒时间')).toBeDisabled()
   await expect(page.getByText('尚未生成快照')).toBeVisible()
 
   await waitForPersistFlush(page)
   await page.reload()
   // 刷新后不能复现清空前的数据（若防抖把旧数据写回，这里会看到 1.5 / 提醒关闭）。
-  await expect(page.getByLabel('启用饮水提醒')).toBeChecked()
+  await expect(page.getByLabel('启用饮水提醒')).not.toBeChecked()
   await page.goto('/')
-  await expect(progress).toContainText('1.2')
-  await expect(progress).not.toContainText('1.5')
+  await expect(page.locator('.today-empty-state')).toContainText('今天还没有记录')
+  await expect(page.getByRole('region', { name: '今日进度' })).toHaveCount(0)
+  await expect(page.locator('.plan-item')).toHaveCount(0)
 })

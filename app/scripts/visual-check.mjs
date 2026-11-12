@@ -53,6 +53,30 @@ async function openManualDraft(page, { title, goal }, open = openBlankManualDraf
   return dialog
 }
 
+async function installAiOfflineMock(page) {
+  // 视觉检查必须可重复：在页面内截断 /api/*，避免本机 .env.mobile.local 指向真实服务端后
+  // 因跨源 CORS 或网络状态把布局检查误判为失败。页面仍会走既有的“AI 不可用”降级分支。
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch.bind(window)
+    window.fetch = async (input, init) => {
+      const rawUrl =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (new URL(rawUrl, window.location.href).pathname.startsWith('/api/')) {
+        return new Response(
+          JSON.stringify({
+            error: { code: 'ai_unavailable', message: 'visual check: external AI disabled' },
+          }),
+          {
+            status: 503,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      }
+      return originalFetch(input, init)
+    }
+  })
+}
+
 async function dismissToast(page) {
   const toast = page.locator('.toast.show')
   if ((await toast.count()) > 0) {
@@ -153,6 +177,7 @@ for (const pageDef of pages) {
       viewport: { width: viewport.width, height: viewport.height },
       deviceScaleFactor: 1,
     })
+    await installAiOfflineMock(page)
     const errors = []
     const expectedNoKeyReport503 = []
     page.on('response', (response) => {
@@ -226,6 +251,7 @@ for (const pageDef of pages) {
 }
 
 const interactionPage = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+await installAiOfflineMock(interactionPage)
 await interactionPage.goto(baseUrl, { waitUntil: 'networkidle' })
 await interactionPage.locator('.head-actions .btn.primary').click()
 const waterButton = interactionPage.locator('.quick.water')

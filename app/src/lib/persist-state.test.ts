@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { createCompleteMockData } from '../data/complete-mock-data'
+import { createEmptyMockData } from '../data/empty-mock-data'
+import { INITIAL_PROFILE } from '../data/profile'
+import { INITIAL_REPORTS } from '../data/reports'
+import { INITIAL_SETTINGS } from '../data/settings'
 import type { ImportableMockData, MockSnapshot } from '../types'
 import { todayDateKey } from './history'
 import { PERSIST_BACKUP_VERSION, serializeMockBackup } from './mock-data-transfer'
@@ -171,7 +175,7 @@ describe('v1 → v2 迁移（8d 数据历史化）', () => {
   it('升级到结构版本 2 与 0.3.0 备份，并补齐日期与历史切片', () => {
     const migrated = migratePersistedStateRecord(legacyV1Record())
 
-    expect(migrated?.schemaVersion).toBe(2)
+    expect(migrated?.schemaVersion).toBe(PERSIST_STATE_SCHEMA_VERSION)
     const backup = migrated?.backup as unknown as { version: string; data: ImportableMockData }
     expect(backup.version).toBe('0.3.0')
     expect(backup.data.planItems.every((item) => item.date === LOCAL_SAVE_DAY)).toBe(true)
@@ -226,7 +230,7 @@ describe('v1 → v2 迁移（8d 数据历史化）', () => {
 
     const migrated = migratePersistedStateRecord(current as unknown as PersistedStateRecord)
 
-    expect(migrated?.schemaVersion).toBe(2)
+    expect(migrated?.schemaVersion).toBe(PERSIST_STATE_SCHEMA_VERSION)
     expect(migrated?.backup).toEqual(before)
   })
 
@@ -244,5 +248,171 @@ describe('v1 → v2 迁移（8d 数据历史化）', () => {
     delete (broken.backup.data as unknown as Record<string, unknown>).studyRecords
 
     expect(readPersistedState(broken)).toBeNull()
+  })
+})
+
+describe('v2 → v3 迁移（移除旧版 owner 样例数据）', () => {
+  function legacySeedRecord() {
+    const legacy = createPersistedStateRecord(createEmptyMockData(), null, SAVED_AT)
+    legacy.schemaVersion = 2
+    const data = legacy.backup.data
+    data.goals = [
+      {
+        id: 'goal-1',
+        title: '高数阶段测验',
+        date: '2026-11-15',
+        time: '19:00',
+        enabled: true,
+        tone: 'primary',
+      },
+      {
+        id: 'goal-user',
+        title: '自己的目标',
+        date: '2026-12-01',
+        time: '10:00',
+        enabled: true,
+        tone: 'alt',
+      },
+    ]
+    data.planItems = [
+      {
+        id: 'morning',
+        date: '2026-11-12',
+        name: '早餐与晨间记录',
+        time: '08:20',
+        detail: '380 kcal · 睡眠 7 小时 10 分',
+        kind: 'default',
+        done: true,
+      },
+      {
+        id: 'plan-user',
+        date: '2026-11-12',
+        name: '自己的安排',
+        time: '20:00',
+        detail: '',
+        kind: 'default',
+        done: false,
+      },
+    ]
+    data.studyRecords = [
+      {
+        id: 'study-english-today',
+        category: 'english',
+        source: '百词斩',
+        date: '2026-11-12',
+        startTime: '09:10',
+        duration: 35,
+        note: '样例',
+      },
+      {
+        id: 'study-user',
+        category: 'math',
+        source: '自己的练习',
+        date: '2026-11-12',
+        startTime: '20:00',
+        duration: 30,
+        note: '真实记录',
+      },
+    ]
+    data.dietDays = [
+      {
+        date: '2026-11-12',
+        meals: [
+          {
+            id: 'breakfast',
+            label: '早餐',
+            time: '08:35',
+            entries: [
+              {
+                id: 'breakfast-oat',
+                name: '燕麦酸奶碗',
+                portion: '1 碗 · 280 g',
+                calories: 260,
+                protein: 12,
+                carbs: 38,
+                fat: 7,
+              },
+              {
+                id: 'food-user',
+                name: '自己的早餐',
+                portion: '1 份',
+                calories: 300,
+                protein: 20,
+                carbs: 30,
+                fat: 8,
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    data.profile = { ...INITIAL_PROFILE }
+    data.settings = structuredClone(INITIAL_SETTINGS)
+    data.reports = [
+      structuredClone(INITIAL_REPORTS[0]!),
+      {
+        ...structuredClone(INITIAL_REPORTS[1]!),
+        title: '自己改过的训练报告',
+      },
+      {
+        id: 'report-user',
+        type: '今日简报',
+        title: '自己的报告',
+        date: '11 月 12 日',
+        updatedAt: '11 月 12 日 10:00',
+        period: '今天',
+        summary: '真实记录',
+        status: '已生成',
+        metric: [],
+        conclusions: [],
+        actions: [],
+        evidence: [],
+      },
+    ]
+    return legacy
+  }
+
+  it('只移除可识别的样例，保留用户新增记录并清空快照', () => {
+    const legacy = legacySeedRecord()
+    legacy.snapshot = sampleSnapshot()
+
+    const state = readPersistedState(legacy)
+
+    expect(state?.data.goals.map((goal) => goal.id)).toEqual(['goal-user'])
+    expect(state?.data.planItems.map((item) => item.id)).toEqual(['plan-user'])
+    expect(state?.data.studyRecords.map((record) => record.id)).toEqual(['study-user'])
+    expect(state?.data.dietDays[0].meals[0].entries.map((entry) => entry.id)).toEqual(['food-user'])
+    expect(state?.data.dietDays[0].meals[0].time).toBe('')
+    expect(state?.data.profile.goal).toBe('')
+    expect(state?.data.profile.age).toBe(0)
+    expect(state?.data.settings.reminders.every((reminder) => !reminder.enabled)).toBe(true)
+    expect(state?.data.settings.dailyBrief).toEqual({ enabled: false, at: '' })
+    expect(state?.data.reports.map((report) => report.id)).toEqual([
+      'report-fitness-1024',
+      'report-user',
+    ])
+    expect(state?.snapshot).toBeNull()
+  })
+
+  it('没有旧版样例指纹的 v2 数据保持不变', () => {
+    const current = record()
+    current.schemaVersion = 2
+    const before = clone(current.backup)
+
+    const migrated = migratePersistedStateRecord(current, DATA_NOW)
+
+    expect(migrated?.schemaVersion).toBe(PERSIST_STATE_SCHEMA_VERSION)
+    expect(migrated?.backup).toEqual(before)
+    expect(migrated?.snapshot).toEqual(sampleSnapshot())
+  })
+
+  it('即使样例已被热更新写成 v3，读取时仍会再次清理', () => {
+    const current = legacySeedRecord()
+    current.schemaVersion = PERSIST_STATE_SCHEMA_VERSION
+
+    const state = readPersistedState(current)
+
+    expect(state?.data.goals.map((goal) => goal.id)).toEqual(['goal-user'])
+    expect(state?.data.settings.reminders.every((reminder) => !reminder.enabled)).toBe(true)
   })
 })

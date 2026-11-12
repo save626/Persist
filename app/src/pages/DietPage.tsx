@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { EvidenceSheet } from '../components/EvidenceSheet'
 import { Icon } from '../components/Icon'
 import { useMockData } from '../context/mock-data-context'
+import { addDaysToDateKey } from '../lib/history'
 import { useUI } from '../context/ui-context'
 import { useRuntimeMode } from '../context/runtime-mode-context'
 import { buildReportDigest } from '../lib/report-digest'
@@ -30,15 +31,13 @@ function defaultMealId(meals: Meal[]): MealId {
   return meals[0]?.id ?? 'dinner'
 }
 
-const TARGETS = {
+const DEMO_TARGETS = {
   calories: 2_100,
   protein: 140,
   carbs: 245,
   fat: 65,
   waterLiters: 2,
 }
-
-const WATER_TREND = [1.4, 1.8, 1.6, 2.2, 1.7, 1.9, 1.2]
 
 function todayLabel() {
   const date = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -496,13 +495,15 @@ export function DietPage() {
     lastWaterMilliliters,
     undoWater,
     waterLog,
+    waterHistory,
     aiConsent,
     settings,
     profile,
     today,
   } = useMockData()
   const runtime = useRuntimeMode()
-  const { showToast } = useUI()
+  const isDemo = runtime.mode === 'demo'
+  const { showToast, openQuickRecord } = useUI()
   const newRecord = useNewRecordParam()
   const [editingMealId, setEditingMealId] = useState<MealId | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
@@ -537,17 +538,43 @@ export function DietPage() {
   const mealCount = meals.filter((meal) => meal.entries.length > 0).length
   const editingMeal = meals.find((meal) => meal.id === editingMealId) ?? null
   const nextMeal = meals.find((meal) => meal.entries.length === 0) ?? meals[0]
+  const isBlankStart = !isDemo && mealCount === 0 && waterLog.length === 0
   const waterMilliliters = Math.round(waterLiters * 1000)
-  const waterProgress = Math.min(100, (waterLiters / TARGETS.waterLiters) * 100)
+  const waterProgress = isDemo ? Math.min(100, (waterLiters / DEMO_TARGETS.waterLiters) * 100) : 0
   const waterDisplayLiters = (Math.round(waterMilliliters / 10) / 100).toFixed(2)
   const macroCalories = totals.protein * 4 + totals.carbs * 4 + totals.fat * 9
   const proteinShare = macroCalories ? (totals.protein * 4 * 100) / macroCalories : 0
   const carbsShare = macroCalories ? (totals.carbs * 4 * 100) / macroCalories : 0
   const fatShare = macroCalories ? (totals.fat * 9 * 100) / macroCalories : 0
-  const remainingCalories = Math.max(0, TARGETS.calories - totals.calories)
-  const remainingProtein = Math.max(0, TARGETS.protein - totals.protein)
-  const chartValues = [...WATER_TREND.slice(0, -1), waterLiters]
-  const chartMax = Math.max(...chartValues, TARGETS.waterLiters)
+  const remainingCalories = isDemo ? Math.max(0, DEMO_TARGETS.calories - totals.calories) : 0
+  const remainingProtein = isDemo ? Math.max(0, DEMO_TARGETS.protein - totals.protein) : 0
+  const chartDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const dateKey = addDaysToDateKey(today, index - 6)
+        const value =
+          dateKey === today
+            ? waterLiters
+            : waterHistory
+                .filter((entry) => entry.date === dateKey)
+                .reduce((total, entry) => total + entry.milliliters, 0) / 1000
+        return {
+          dateKey,
+          label:
+            index === 6
+              ? '今'
+              : new Intl.DateTimeFormat('zh-CN', { weekday: 'short' })
+                  .format(new Date(`${dateKey}T12:00:00`))
+                  .replace('周', ''),
+          value,
+        }
+      }),
+    [today, waterHistory, waterLiters],
+  )
+  const chartMax = Math.max(
+    ...chartDays.map((day) => day.value),
+    isDemo ? DEMO_TARGETS.waterLiters : 1,
+  )
   const foodEntryCount = meals.reduce((total, meal) => total + meal.entries.length, 0)
   const observationRequest = useMemo(() => {
     if (
@@ -590,12 +617,21 @@ export function DietPage() {
     request: observationRequest,
     dateKey: today,
   })
-  const localObservationSummary = `目前蛋白质摄入约占目标的 ${Math.round((totals.protein / TARGETS.protein) * 100)}%。晚餐可以安排一份鱼、虾或豆制品，同时保留蔬菜和适量主食。`
-  const observationTitle = aiObservation.content?.title ?? '晚餐优先补齐蛋白质'
+  const localObservationTitle = isDemo
+    ? '晚餐优先补齐蛋白质'
+    : foodEntryCount === 0
+      ? '记录一餐后生成观察。'
+      : '今日饮食观察已更新。'
+  const localObservationSummary = isDemo
+    ? `目前蛋白质摄入约占目标的 ${Math.round((totals.protein / DEMO_TARGETS.protein) * 100)}%。晚餐可以安排一份鱼、虾或豆制品，同时保留蔬菜和适量主食。`
+    : foodEntryCount === 0
+      ? '今天尚无饮食记录。先记录真实餐次，再生成观察。'
+      : `今天已记录 ${mealCount} 餐、${foodEntryCount} 个食物条目；观察只基于这些记录，不预设热量或蛋白质目标。`
+  const observationTitle = aiObservation.content?.title ?? localObservationTitle
   const observationSummary = aiObservation.content?.summary ?? localObservationSummary
   const observationNote =
     runtime.mode !== 'owner'
-      ? '这是基于今日记录的 Mock 建议，接入个人档案后会考虑训练与恢复情况。'
+      ? '桌面体验模式只使用本机记录与 Mock，不发送任何数据。'
       : aiObservation.mode === 'loading'
         ? '正在请求 DeepSeek 生成今日饮食观察…'
         : aiObservation.mode === 'ai'
@@ -671,7 +707,7 @@ export function DietPage() {
         <div className="head-actions">
           <span className="status">
             <span className="dot" />
-            {mealCount} / 4 餐已记录
+            {isBlankStart ? '尚未记录餐次' : mealCount + ' / 4 餐已记录'}
           </span>
           <button className="btn primary" type="button" onClick={() => setAiOpen(true)}>
             <Icon name="spark" className="icon-sm" />
@@ -680,412 +716,478 @@ export function DietPage() {
         </div>
       </header>
 
-      <section className="progress" aria-label="今日营养进度">
-        <div className="progress-head">
-          <span className="label">今日营养进度</span>
-          <span className="count-note">根据 {mealCount} 条餐次记录自动汇总</span>
-        </div>
-        <div className="metrics">
-          <div className="metric">
-            <div className="metric-title">
-              <Icon name="food" className="icon-sm" />
-              热量摄入
-            </div>
-            <div className="metric-value">
-              <span className="metric-number">{totals.calories.toLocaleString('zh-CN')}</span>
-              <span className="metric-denom">
-                / {TARGETS.calories.toLocaleString('zh-CN')} kcal
-              </span>
-            </div>
-            <div className="track">
-              <span
-                style={{ width: `${Math.min(100, (totals.calories / TARGETS.calories) * 100)}%` }}
-              />
+      {isBlankStart ? (
+        <section className="panel diet-empty-state" aria-labelledby="dietEmptyTitle">
+          <div className="panel-head">
+            <div>
+              <h2 className="panel-title" id="dietEmptyTitle">
+                今天还没有饮食与饮水记录
+              </h2>
+              <p className="panel-sub">不预填餐次时间、热量目标或营养建议。</p>
             </div>
           </div>
-          <div className="metric">
-            <div className="metric-title">
-              <Icon name="spark" className="icon-sm" />
-              蛋白质
-            </div>
-            <div className="metric-value">
-              <span className="metric-number">{Math.round(totals.protein)}</span>
-              <span className="metric-denom">/ {TARGETS.protein} g</span>
-            </div>
-            <div className="track">
-              <span
-                style={{ width: `${Math.min(100, (totals.protein / TARGETS.protein) * 100)}%` }}
-              />
-            </div>
+          <div className="surface-note">
+            <Icon name="food" className="icon-sm" />
+            <span>从第一餐或一杯水开始，所有数值都由你主动登记。</span>
           </div>
-          <div className="metric">
-            <div className="metric-title">
-              <Icon name="water" className="icon-sm" />
-              饮水
-            </div>
-            <div className="metric-value">
-              <span className="metric-number">
-                {(Math.round(waterMilliliters / 100) / 10).toFixed(1)}
-              </span>
-              <span className="metric-denom">/ {TARGETS.waterLiters.toFixed(1)} L</span>
-            </div>
-            <div className="track">
-              <span style={{ width: `${waterProgress}%` }} />
-            </div>
-          </div>
-          <div className="metric">
-            <div className="metric-title">
-              <Icon name="check" className="icon-sm" />
-              饮食记录
-            </div>
-            <div className="metric-value">
-              <span className="metric-number">{mealCount}</span>
-              <span className="metric-denom">/ 4 餐</span>
-            </div>
-            <div className="track">
-              <span style={{ width: `${(mealCount / 4) * 100}%` }} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div className="diet-layout">
-        <div className="diet-main-column">
-          <section className="panel diet-meals" aria-labelledby="dietMealsTitle">
-            <div className="panel-head">
-              <div>
-                <div className="panel-title-row">
-                  <h2 className="panel-title" id="dietMealsTitle">
-                    今日餐次
-                  </h2>
-                  <span className="badge">{mealCount} / 4</span>
-                </div>
-                <p className="panel-sub">每餐可以添加多项食物，热量与营养按你的核对结果登记。</p>
-              </div>
+          <div className="surface-form-actions">
+            <div className="surface-form-actions-right">
+              <button className="btn secondary" type="button" onClick={openQuickRecord}>
+                <Icon name="water" className="icon-sm" />
+                记录饮水
+              </button>
               <button
-                className="btn quiet"
+                className="btn primary"
                 type="button"
-                onClick={() => {
-                  // 正常情况下今天一定有四个餐次（Provider 会补空骨架）；这里再兜一层，
-                  // 避免异常数据把点击变成一次静默的 TypeError。
-                  if (nextMeal) setEditingMealId(nextMeal.id)
-                }}
+                disabled={!nextMeal}
+                onClick={() => nextMeal && setEditingMealId(nextMeal.id)}
               >
-                记录下一餐
-                <Icon name="chev" className="icon-sm" />
+                <Icon name="plus" className="icon-sm" />
+                记录第一餐
               </button>
             </div>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="progress" aria-label="今日营养进度">
+            <div className="progress-head">
+              <span className="label">今日营养进度</span>
+              <span className="count-note">根据 {mealCount} 条餐次记录自动汇总</span>
+            </div>
+            <div className="metrics">
+              <div className="metric">
+                <div className="metric-title">
+                  <Icon name="food" className="icon-sm" />
+                  热量摄入
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">{totals.calories.toLocaleString('zh-CN')}</span>
+                  <span className="metric-denom">
+                    {isDemo
+                      ? `/ ${DEMO_TARGETS.calories.toLocaleString('zh-CN')} kcal`
+                      : '目标未设置'}
+                  </span>
+                </div>
+                <div className="track">
+                  <span
+                    style={{
+                      width: isDemo
+                        ? `${Math.min(100, (totals.calories / DEMO_TARGETS.calories) * 100)}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-title">
+                  <Icon name="spark" className="icon-sm" />
+                  蛋白质
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">{Math.round(totals.protein)}</span>
+                  <span className="metric-denom">
+                    {isDemo ? `/ ${DEMO_TARGETS.protein} g` : '目标未设置'}
+                  </span>
+                </div>
+                <div className="track">
+                  <span
+                    style={{
+                      width: isDemo
+                        ? `${Math.min(100, (totals.protein / DEMO_TARGETS.protein) * 100)}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-title">
+                  <Icon name="water" className="icon-sm" />
+                  饮水
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">
+                    {(Math.round(waterMilliliters / 100) / 10).toFixed(1)}
+                  </span>
+                  <span className="metric-denom">
+                    {isDemo ? `/ ${DEMO_TARGETS.waterLiters.toFixed(1)} L` : '目标未设置'}
+                  </span>
+                </div>
+                <div className="track">
+                  <span style={{ width: `${waterProgress}%` }} />
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-title">
+                  <Icon name="check" className="icon-sm" />
+                  饮食记录
+                </div>
+                <div className="metric-value">
+                  <span className="metric-number">{mealCount}</span>
+                  <span className="metric-denom">/ 4 餐</span>
+                </div>
+                <div className="track">
+                  <span style={{ width: `${(mealCount / 4) * 100}%` }} />
+                </div>
+              </div>
+            </div>
+          </section>
 
-            <div className="diet-meal-list">
-              {meals.map((meal) => {
-                const mealCalories = meal.entries.reduce(
-                  (total, entry) => total + entry.calories,
-                  0,
-                )
-                const mealProtein = meal.entries.reduce((total, entry) => total + entry.protein, 0)
-                const mealCarbs = meal.entries.reduce((total, entry) => total + entry.carbs, 0)
-                const mealFat = meal.entries.reduce((total, entry) => total + entry.fat, 0)
-                const empty = meal.entries.length === 0
-
-                return (
-                  <article
-                    className={empty ? 'diet-meal empty' : 'diet-meal'}
-                    key={meal.id}
-                    aria-labelledby={`meal-${meal.id}-title`}
-                  >
-                    <div className="diet-meal-head">
-                      <div className="diet-meal-title">
-                        <span className="diet-meal-icon">
-                          <Icon name="food" className="icon-sm" />
-                        </span>
-                        <span>
-                          <h3 id={`meal-${meal.id}-title`}>{meal.label}</h3>
-                          <small>
-                            {meal.time} · {empty ? '等待记录' : `${meal.entries.length} 项食物`}
-                          </small>
-                        </span>
-                      </div>
-                      <strong className="diet-meal-kcal">
-                        {mealCalories}
-                        <small> kcal</small>
-                      </strong>
+          <div className="diet-layout">
+            <div className="diet-main-column">
+              <section className="panel diet-meals" aria-labelledby="dietMealsTitle">
+                <div className="panel-head">
+                  <div>
+                    <div className="panel-title-row">
+                      <h2 className="panel-title" id="dietMealsTitle">
+                        今日餐次
+                      </h2>
+                      <span className="badge">{mealCount} / 4</span>
                     </div>
+                    <p className="panel-sub">
+                      每餐可以添加多项食物，热量与营养按你的核对结果登记。
+                    </p>
+                  </div>
+                  <button
+                    className="btn quiet"
+                    type="button"
+                    onClick={() => {
+                      // 正常情况下今天一定有四个餐次（Provider 会补空骨架）；这里再兜一层，
+                      // 避免异常数据把点击变成一次静默的 TypeError。
+                      if (nextMeal) setEditingMealId(nextMeal.id)
+                    }}
+                  >
+                    记录下一餐
+                    <Icon name="chev" className="icon-sm" />
+                  </button>
+                </div>
 
-                    {empty ? (
-                      <div className="diet-meal-empty">
-                        <span className="diet-empty-icon">
-                          <Icon name="plus" className="icon-sm" />
-                        </span>
-                        <span>
-                          <strong>{meal.label}还没有记录</strong>
-                          <small>可以直接登记食物，或用 AI 热量登记粘贴解析。</small>
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="diet-entry-list">
-                        {meal.entries.map((entry) => (
-                          <div className="diet-entry-row" key={entry.id}>
-                            <span className="diet-entry-dot" />
-                            <span className="diet-entry-copy">
-                              <strong>{entry.name}</strong>
+                <div className="diet-meal-list">
+                  {meals.map((meal) => {
+                    const mealCalories = meal.entries.reduce(
+                      (total, entry) => total + entry.calories,
+                      0,
+                    )
+                    const mealProtein = meal.entries.reduce(
+                      (total, entry) => total + entry.protein,
+                      0,
+                    )
+                    const mealCarbs = meal.entries.reduce((total, entry) => total + entry.carbs, 0)
+                    const mealFat = meal.entries.reduce((total, entry) => total + entry.fat, 0)
+                    const empty = meal.entries.length === 0
+
+                    return (
+                      <article
+                        className={empty ? 'diet-meal empty' : 'diet-meal'}
+                        key={meal.id}
+                        aria-labelledby={`meal-${meal.id}-title`}
+                      >
+                        <div className="diet-meal-head">
+                          <div className="diet-meal-title">
+                            <span className="diet-meal-icon">
+                              <Icon name="food" className="icon-sm" />
+                            </span>
+                            <span>
+                              <h3 id={`meal-${meal.id}-title`}>{meal.label}</h3>
                               <small>
-                                {entry.portion} · 蛋白质 {entry.protein} g · 碳水 {entry.carbs} g ·
-                                脂肪 {entry.fat} g
+                                {meal.time ? `${meal.time} · ` : ''}
+                                {empty ? '等待记录' : `${meal.entries.length} 项食物`}
                               </small>
                             </span>
-                            <span className="diet-entry-kcal">
-                              {entry.calories}
-                              <small> kcal</small>
+                          </div>
+                          <strong className="diet-meal-kcal">
+                            {mealCalories}
+                            <small> kcal</small>
+                          </strong>
+                        </div>
+
+                        {empty ? (
+                          <div className="diet-meal-empty">
+                            <span className="diet-empty-icon">
+                              <Icon name="plus" className="icon-sm" />
+                            </span>
+                            <span>
+                              <strong>{meal.label}还没有记录</strong>
+                              <small>可以直接登记食物，或用 AI 热量登记粘贴解析。</small>
                             </span>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        ) : (
+                          <div className="diet-entry-list">
+                            {meal.entries.map((entry) => (
+                              <div className="diet-entry-row" key={entry.id}>
+                                <span className="diet-entry-dot" />
+                                <span className="diet-entry-copy">
+                                  <strong>{entry.name}</strong>
+                                  <small>
+                                    {entry.portion} · 蛋白质 {entry.protein} g · 碳水 {entry.carbs}{' '}
+                                    g · 脂肪 {entry.fat} g
+                                  </small>
+                                </span>
+                                <span className="diet-entry-kcal">
+                                  {entry.calories}
+                                  <small> kcal</small>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-                    <div className="diet-meal-foot">
-                      <span className="diet-meal-macros">
-                        蛋白质 {Math.round(mealProtein)} g · 碳水 {Math.round(mealCarbs)} g · 脂肪{' '}
-                        {Math.round(mealFat)} g
+                        <div className="diet-meal-foot">
+                          <span className="diet-meal-macros">
+                            蛋白质 {Math.round(mealProtein)} g · 碳水 {Math.round(mealCarbs)} g ·
+                            脂肪 {Math.round(mealFat)} g
+                          </span>
+                          <button
+                            className="diet-edit-meal"
+                            type="button"
+                            aria-label={`编辑${meal.label}`}
+                            onClick={() => setEditingMealId(meal.id)}
+                          >
+                            <Icon name="edit" className="icon-sm" />
+                            {empty ? '添加' : '编辑'}
+                          </button>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              </section>
+            </div>
+
+            <aside className="diet-side-column">
+              {' '}
+              <section className="panel diet-water" aria-labelledby="dietWaterTitle">
+                <div className="panel-head diet-side-head">
+                  <div>
+                    <div className="panel-title-row">
+                      <h2 className="panel-title" id="dietWaterTitle">
+                        饮水记录
+                      </h2>
+                      <span className="badge">{Math.round(waterProgress)}%</span>
+                    </div>
+                    <p className="panel-sub">每次记录都会即刻汇总到今日进度。</p>
+                  </div>
+                </div>
+
+                <div className="diet-water-body">
+                  <div className="diet-water-summary">
+                    <span className="diet-water-icon">
+                      <Icon name="water" />
+                    </span>
+                    <div className="diet-water-copy">
+                      <strong>
+                        {waterDisplayLiters}
+                        <small> L</small>
+                      </strong>
+                      <span>
+                        今日已喝 {waterMilliliters.toLocaleString('zh-CN')} ml ·{' '}
+                        {isDemo ? `目标 ${DEMO_TARGETS.waterLiters.toFixed(1)} L` : '目标未设置'}
                       </span>
-                      <button
-                        className="diet-edit-meal"
-                        type="button"
-                        aria-label={`编辑${meal.label}`}
-                        onClick={() => setEditingMealId(meal.id)}
-                      >
-                        <Icon name="edit" className="icon-sm" />
-                        {empty ? '添加' : '编辑'}
-                      </button>
                     </div>
-                  </article>
-                )
-              })}
-            </div>
-          </section>
-        </div>
+                  </div>
 
-        <aside className="diet-side-column">
-          {' '}
-          <section className="panel diet-water" aria-labelledby="dietWaterTitle">
-            <div className="panel-head diet-side-head">
-              <div>
-                <div className="panel-title-row">
-                  <h2 className="panel-title" id="dietWaterTitle">
-                    饮水记录
-                  </h2>
-                  <span className="badge">{Math.round(waterProgress)}%</span>
-                </div>
-                <p className="panel-sub">每次记录都会即刻汇总到今日进度。</p>
-              </div>
-            </div>
+                  <div
+                    className="diet-water-track"
+                    role="progressbar"
+                    aria-label="今日饮水进度"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(waterProgress)}
+                  >
+                    <span style={{ width: `${waterProgress}%` }} />
+                  </div>
 
-            <div className="diet-water-body">
-              <div className="diet-water-summary">
-                <span className="diet-water-icon">
-                  <Icon name="water" />
-                </span>
-                <div className="diet-water-copy">
-                  <strong>
-                    {waterDisplayLiters}
-                    <small> L</small>
-                  </strong>
-                  <span>
-                    今日已喝 {waterMilliliters.toLocaleString('zh-CN')} ml · 目标{' '}
-                    {TARGETS.waterLiters.toFixed(1)} L
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="diet-water-track"
-                role="progressbar"
-                aria-label="今日饮水进度"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(waterProgress)}
-              >
-                <span style={{ width: `${waterProgress}%` }} />
-              </div>
-
-              <div className="diet-water-actions">
-                <button className="diet-water-add" type="button" onClick={() => recordWater(125)}>
-                  + 125 ml
-                </button>
-                <button className="diet-water-add" type="button" onClick={() => recordWater(250)}>
-                  + 250 ml
-                </button>
-                <button
-                  className="diet-water-undo"
-                  type="button"
-                  aria-label="撤销上一条饮水"
-                  disabled={lastWaterMilliliters === null}
-                  onClick={handleUndoWater}
-                >
-                  <Icon name="undo" className="icon-sm" />
-                  撤销
-                </button>
-              </div>
-
-              <form className="diet-water-custom" onSubmit={handleCustomWater}>
-                <input
-                  className="form-input"
-                  type="number"
-                  min="1"
-                  max="3000"
-                  inputMode="numeric"
-                  aria-label="自定义饮水量"
-                  placeholder="自定义 ml"
-                  value={customWater}
-                  onChange={(event) => setCustomWater(event.target.value)}
-                />
-                <button className="btn secondary" type="submit">
-                  记录
-                </button>
-              </form>
-
-              <div className="diet-water-chart" aria-label="近 7 天饮水趋势">
-                <div className="diet-water-bars">
-                  {chartValues.map((value, index) => (
-                    <div
-                      className={
-                        index === chartValues.length - 1 ? 'diet-water-day today' : 'diet-water-day'
-                      }
-                      key={`${index}-${value}`}
+                  <div className="diet-water-actions">
+                    <button
+                      className="diet-water-add"
+                      type="button"
+                      onClick={() => recordWater(125)}
                     >
-                      <span
-                        title={`${value.toFixed(1)} L`}
-                        style={{ height: `${Math.max(10, (value / chartMax) * 100)}%` }}
-                      />
-                      <small>{['一', '二', '三', '四', '五', '六', '今'][index]}</small>
+                      + 125 ml
+                    </button>
+                    <button
+                      className="diet-water-add"
+                      type="button"
+                      onClick={() => recordWater(250)}
+                    >
+                      + 250 ml
+                    </button>
+                    <button
+                      className="diet-water-undo"
+                      type="button"
+                      aria-label="撤销上一条饮水"
+                      disabled={lastWaterMilliliters === null}
+                      onClick={handleUndoWater}
+                    >
+                      <Icon name="undo" className="icon-sm" />
+                      撤销
+                    </button>
+                  </div>
+
+                  <form className="diet-water-custom" onSubmit={handleCustomWater}>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="1"
+                      max="3000"
+                      inputMode="numeric"
+                      aria-label="自定义饮水量"
+                      placeholder="自定义 ml"
+                      value={customWater}
+                      onChange={(event) => setCustomWater(event.target.value)}
+                    />
+                    <button className="btn secondary" type="submit">
+                      记录
+                    </button>
+                  </form>
+
+                  <div className="diet-water-chart" aria-label="近 7 天饮水趋势">
+                    <div className="diet-water-bars">
+                      {chartDays.map((day, index) => (
+                        <div
+                          className={
+                            index === chartDays.length - 1
+                              ? 'diet-water-day today'
+                              : 'diet-water-day'
+                          }
+                          key={day.dateKey}
+                        >
+                          <span
+                            title={`${day.value.toFixed(1)} L`}
+                            style={{ height: `${Math.max(10, (day.value / chartMax) * 100)}%` }}
+                          />
+                          <small>{day.label}</small>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                    <div className="diet-water-chart-foot">
+                      <span>近 7 天</span>
+                      <span>今日仍在记录中</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="diet-water-chart-foot">
-                  <span>近 7 天</span>
-                  <span>今日仍在记录中</span>
+              </section>
+              <section className="panel diet-macro-panel" aria-labelledby="dietMacroTitle">
+                <div className="panel-head diet-side-head">
+                  <div>
+                    <div className="panel-title-row">
+                      <h2 className="panel-title" id="dietMacroTitle">
+                        营养结构
+                      </h2>
+                      <span className="badge">{Math.round(macroCalories)} kcal</span>
+                    </div>
+                    <p className="panel-sub">按蛋白质、碳水与脂肪的实际供能占比计算。</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </section>
-          <section className="panel diet-macro-panel" aria-labelledby="dietMacroTitle">
-            <div className="panel-head diet-side-head">
-              <div>
-                <div className="panel-title-row">
-                  <h2 className="panel-title" id="dietMacroTitle">
-                    营养结构
-                  </h2>
-                  <span className="badge">{Math.round(macroCalories)} kcal</span>
-                </div>
-                <p className="panel-sub">按蛋白质、碳水与脂肪的实际供能占比计算。</p>
-              </div>
-            </div>
 
-            <div className="diet-macro-body">
-              <div className="diet-macro-stack" aria-hidden="true">
-                <span className="protein" style={{ width: `${proteinShare}%` }} />
-                <span className="carbs" style={{ width: `${carbsShare}%` }} />
-                <span className="fat" style={{ width: `${fatShare}%` }} />
-              </div>
+                <div className="diet-macro-body">
+                  <div className="diet-macro-stack" aria-hidden="true">
+                    <span className="protein" style={{ width: `${proteinShare}%` }} />
+                    <span className="carbs" style={{ width: `${carbsShare}%` }} />
+                    <span className="fat" style={{ width: `${fatShare}%` }} />
+                  </div>
 
-              <div className="diet-macro-list">
-                <div className="diet-macro-row">
-                  <span className="diet-macro-name">
-                    <span className="diet-macro-dot protein" />
-                    蛋白质
-                  </span>
-                  <span className="diet-macro-amount">{Math.round(totals.protein)} g</span>
-                  <strong>{Math.round(proteinShare)}%</strong>
-                </div>
-                <div className="diet-macro-row">
-                  <span className="diet-macro-name">
-                    <span className="diet-macro-dot carbs" />
-                    碳水
-                  </span>
-                  <span className="diet-macro-amount">{Math.round(totals.carbs)} g</span>
-                  <strong>{Math.round(carbsShare)}%</strong>
-                </div>
-                <div className="diet-macro-row">
-                  <span className="diet-macro-name">
-                    <span className="diet-macro-dot fat" />
-                    脂肪
-                  </span>
-                  <span className="diet-macro-amount">{Math.round(totals.fat)} g</span>
-                  <strong>{Math.round(fatShare)}%</strong>
-                </div>
-              </div>
+                  <div className="diet-macro-list">
+                    <div className="diet-macro-row">
+                      <span className="diet-macro-name">
+                        <span className="diet-macro-dot protein" />
+                        蛋白质
+                      </span>
+                      <span className="diet-macro-amount">{Math.round(totals.protein)} g</span>
+                      <strong>{Math.round(proteinShare)}%</strong>
+                    </div>
+                    <div className="diet-macro-row">
+                      <span className="diet-macro-name">
+                        <span className="diet-macro-dot carbs" />
+                        碳水
+                      </span>
+                      <span className="diet-macro-amount">{Math.round(totals.carbs)} g</span>
+                      <strong>{Math.round(carbsShare)}%</strong>
+                    </div>
+                    <div className="diet-macro-row">
+                      <span className="diet-macro-name">
+                        <span className="diet-macro-dot fat" />
+                        脂肪
+                      </span>
+                      <span className="diet-macro-amount">{Math.round(totals.fat)} g</span>
+                      <strong>{Math.round(fatShare)}%</strong>
+                    </div>
+                  </div>
 
-              <div className="diet-macro-remaining">
-                <div>
-                  <span>剩余热量</span>
-                  <strong>{remainingCalories} kcal</strong>
+                  <div className="diet-macro-remaining">
+                    <div>
+                      <span>剩余热量</span>
+                      <strong>{isDemo ? `${remainingCalories} kcal` : '目标未设置'}</strong>
+                    </div>
+                    <div>
+                      <span>剩余蛋白质</span>
+                      <strong>{isDemo ? `${Math.round(remainingProtein)} g` : '目标未设置'}</strong>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span>剩余蛋白质</span>
-                  <strong>{Math.round(remainingProtein)} g</strong>
+              </section>
+              <section className="panel diet-ai-observation" aria-labelledby="dietObservationTitle">
+                <div className="diet-observation-head">
+                  <span className="diet-observation-icon">
+                    <Icon name="spark" />
+                  </span>
+                  <div>
+                    <span className="diet-observation-kicker">Persist AI · 今日观察</span>
+                    <h2 id="dietObservationTitle">{observationTitle}</h2>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </section>
-          <section className="panel diet-ai-observation" aria-labelledby="dietObservationTitle">
-            <div className="diet-observation-head">
-              <span className="diet-observation-icon">
-                <Icon name="spark" />
-              </span>
-              <div>
-                <span className="diet-observation-kicker">Persist AI · 今日观察</span>
-                <h2 id="dietObservationTitle">{observationTitle}</h2>
-              </div>
-            </div>
-            <p>{observationSummary}</p>
-            <div className="diet-observation-note">
-              <span className="dot" />
-              {observationNote}
-            </div>
-            {aiObservation.mode === 'ai' && (
-              <button
-                className="diet-observation-link"
-                type="button"
-                onClick={aiObservation.regenerate}
-              >
-                重新生成
-                <Icon name="chev" className="icon-sm" />
-              </button>
-            )}
-            <button
-              className="diet-observation-link"
-              type="button"
-              onClick={() => setEvidenceOpen(true)}
-            >
-              查看分析依据
-              <Icon name="chev" className="icon-sm" />
-            </button>
-          </section>
-          <section className="panel diet-guidance" aria-labelledby="dietGuidanceTitle">
-            <div className="panel-head diet-side-head">
-              <div>
-                <h2 className="panel-title" id="dietGuidanceTitle">
-                  记录原则
-                </h2>
-                <p className="panel-sub">先准确，再连续；不为估算制造额外压力。</p>
-              </div>
-            </div>
-            <div className="diet-guidance-list">
-              <div>
-                <span>01</span>
-                <p>餐食只登记文字与营养数据，热量以你的核对结果为准。</p>
-              </div>
-              <div>
-                <span>02</span>
-                <p>外部 AI 的结果先解析，再由你核对后写入餐次。</p>
-              </div>
-              <div>
-                <span>03</span>
-                <p>漏记一餐不必补造数据，保持真实比保持完美更重要。</p>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
+                <p>{observationSummary}</p>
+                <div className="diet-observation-note">
+                  <span className="dot" />
+                  {observationNote}
+                </div>
+                {aiObservation.mode === 'ai' && (
+                  <button
+                    className="diet-observation-link"
+                    type="button"
+                    onClick={aiObservation.regenerate}
+                  >
+                    重新生成
+                    <Icon name="chev" className="icon-sm" />
+                  </button>
+                )}
+                <button
+                  className="diet-observation-link"
+                  type="button"
+                  onClick={() => setEvidenceOpen(true)}
+                >
+                  查看分析依据
+                  <Icon name="chev" className="icon-sm" />
+                </button>
+              </section>
+              <section className="panel diet-guidance" aria-labelledby="dietGuidanceTitle">
+                <div className="panel-head diet-side-head">
+                  <div>
+                    <h2 className="panel-title" id="dietGuidanceTitle">
+                      记录原则
+                    </h2>
+                    <p className="panel-sub">先准确，再连续；不为估算制造额外压力。</p>
+                  </div>
+                </div>
+                <div className="diet-guidance-list">
+                  <div>
+                    <span>01</span>
+                    <p>餐食只登记文字与营养数据，热量以你的核对结果为准。</p>
+                  </div>
+                  <div>
+                    <span>02</span>
+                    <p>外部 AI 的结果先解析，再由你核对后写入餐次。</p>
+                  </div>
+                  <div>
+                    <span>03</span>
+                    <p>漏记一餐不必补造数据，保持真实比保持完美更重要。</p>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </>
+      )}
 
       {editingMeal && (
         <MealEditor
@@ -1109,12 +1211,14 @@ export function DietPage() {
             {
               label: '今日热量',
               value: `${totals.calories.toLocaleString('zh-CN')} kcal`,
-              detail: `目标 ${TARGETS.calories.toLocaleString('zh-CN')} kcal`,
+              detail: isDemo
+                ? `目标 ${DEMO_TARGETS.calories.toLocaleString('zh-CN')} kcal`
+                : '未设置目标',
             },
             {
               label: '蛋白质',
               value: `${Math.round(totals.protein)} g`,
-              detail: `目标 ${TARGETS.protein} g`,
+              detail: isDemo ? `目标 ${DEMO_TARGETS.protein} g` : '未设置目标',
             },
             {
               label: '碳水 / 脂肪',
@@ -1124,7 +1228,7 @@ export function DietPage() {
             {
               label: '饮水量',
               value: `${waterDisplayLiters} L`,
-              detail: `目标 ${TARGETS.waterLiters.toFixed(1)} L`,
+              detail: isDemo ? `目标 ${DEMO_TARGETS.waterLiters.toFixed(1)} L` : '未设置目标',
             },
             {
               label: '已记录餐次',
@@ -1135,8 +1239,13 @@ export function DietPage() {
           items={[
             {
               title: '热量与宏量营养',
-              detail: `今日共登记 ${foodEntryCount} 个食物条目，建议使用各餐次的蛋白质缺口安排晚餐。`,
-              value: `${Math.round(remainingProtein)} g 待补`,
+              detail:
+                foodEntryCount === 0
+                  ? '今天还没有饮食记录，无法生成食物建议。'
+                  : isDemo
+                    ? `今日共登记 ${foodEntryCount} 个食物条目，建议使用各餐次的蛋白质缺口安排晚餐。`
+                    : `今日共登记 ${foodEntryCount} 个食物条目，仅汇总真实记录，不判断目标缺口。`,
+              value: isDemo ? `${Math.round(remainingProtein)} g 待补` : '仅汇总记录',
             },
             {
               title: '外部 AI 文本登记',

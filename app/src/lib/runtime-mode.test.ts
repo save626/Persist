@@ -73,6 +73,7 @@ describe('runtime mode', () => {
       morningBrief: false,
       serverAnalysis: false,
     })
+    expect(owner.waterBaselineMilliliters).toBe(0)
     expect(guest.waterBaselineMilliliters).toBe(0)
     expect(owner.sync).toBe(true)
     expect(demo.sync).toBe(false)

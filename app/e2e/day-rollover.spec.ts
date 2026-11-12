@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+﻿import { expect, test } from '@playwright/test'
 
 /**
  * 跨日回归：本地只留着「昨天」的饮食台账时，今天仍要能继续登记。
@@ -56,6 +56,16 @@ test('跨日后饮食页仍有四个餐次，记录与 AI 登记都能落库', a
   page.on('pageerror', (error) => pageErrors.push(error.message))
 
   await page.goto('/diet')
+  await expect(page.locator('.diet-empty-state')).toContainText('今天还没有饮食与饮水记录')
+
+  // owner 首启没有空餐次卡；先真实登记一餐，下面的跨日场景才有台账可迁移。
+  await page.getByRole('button', { name: '记录第一餐' }).click()
+  const breakfast = page.getByRole('dialog', { name: '编辑早餐' })
+  await breakfast.getByLabel('食物名称').fill('跨日测试早餐')
+  await breakfast.getByLabel('热量 / kcal').fill('120')
+  await breakfast.getByRole('button', { name: '添加到早餐' }).click()
+  await page.getByRole('button', { name: '关闭餐次编辑' }).click()
+
   const nextMealButton = page.getByRole('button', { name: '记录下一餐' })
   await expect(nextMealButton).toBeVisible()
   await expect(page.locator('.diet-meal')).toHaveCount(4)
@@ -64,11 +74,11 @@ test('跨日后饮食页仍有四个餐次，记录与 AI 登记都能落库', a
   await expect.poll(() => moveDietDaysTo(page, localDateKey(-1)), { timeout: 10_000 }).toBe('ok')
 
   await page.reload()
-  await expect(nextMealButton).toBeVisible()
-  await expect(page.locator('.diet-meal')).toHaveCount(4)
-
-  // ① 记录下一餐：跨日后仍能打开餐次编辑（修复前这里抛 TypeError、什么都不发生）。
-  await nextMealButton.click()
+  // 新一天仍是已验收的空白首启视觉；点击「记录第一餐」必须能打开空餐次编辑器。
+  await expect(page.locator('.diet-empty-state')).toContainText('今天还没有饮食与饮水记录')
+  const firstMealButton = page.getByRole('button', { name: '记录第一餐' })
+  await expect(firstMealButton).toBeVisible()
+  await firstMealButton.click()
   await expect(page.getByRole('dialog', { name: '编辑早餐' })).toBeVisible()
   await page.getByRole('button', { name: '关闭餐次编辑' }).click()
 

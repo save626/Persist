@@ -1,4 +1,9 @@
-import { expect, test, type Page } from '@playwright/test'
+﻿import { expect, test, type Page } from '@playwright/test'
+import { seedOwnerFixture } from './owner-fixture'
+
+test.beforeEach(async ({ page }) => {
+  await seedOwnerFixture(page)
+})
 
 /**
  * 服务端综合分析的 E2E：真实浏览器里验证四种关键状态。
@@ -115,6 +120,8 @@ async function enableSync(page: Page) {
   const syncCard = page.locator('.settings-sync-card')
   await syncCard.getByRole('checkbox', { name: '跨设备同步' }).click()
   await expect(syncCard.locator('.settings-sync-code code')).toBeVisible()
+  const studySource = page.getByRole('checkbox', { name: '学习记录' })
+  if (!(await studySource.isChecked())) await studySource.check()
 }
 
 test('server analysis shows AI report with paragraphs and metrics', async ({ page }) => {

@@ -208,23 +208,6 @@ const EXERCISE_LIBRARY: ExerciseTemplate[] = [
   },
 ]
 
-const WEEK_VOLUME = [
-  { day: '一', value: 62, label: '6,240 kg' },
-  { day: '二', value: 0, label: '休息' },
-  { day: '三', value: 74, label: '7,380 kg' },
-  { day: '四', value: 46, label: '4,800 kg' },
-  { day: '五', value: 82, label: '8,120 kg' },
-  { day: '六', value: 0, label: '休息' },
-  { day: '日', value: 58, label: '今日进行中' },
-]
-
-const MUSCLE_GROUPS = [
-  { label: '胸部', value: 42 },
-  { label: '肩部', value: 26 },
-  { label: '三头', value: 20 },
-  { label: '背部', value: 12 },
-]
-
 const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   {
     id: 'upper-a',
@@ -1266,10 +1249,7 @@ export function FitnessPage() {
     today,
   } = useMockData()
   const newRecord = useNewRecordParam()
-  const initialSession = useMemo(
-    () => (isGuest ? createEmptyFitnessSession() : createFitnessSession()),
-    [isGuest],
-  )
+  const initialSession = useMemo(() => createEmptyFitnessSession(), [])
   const session = fitnessSession ?? initialSession
   const activeTemplate =
     session.activeTemplateId === FREE_WORKOUT_TEMPLATE.id
@@ -1295,7 +1275,7 @@ export function FitnessPage() {
     [fitnessHistory],
   )
 
-  const guestTrainingSummary = useMemo(() => {
+  const trainingSummary = useMemo(() => {
     const todayKey = todayDateKey()
     const days = Array.from({ length: 7 }, (_, index) => {
       const dateKey = addDaysToDateKey(todayKey, index - 6)
@@ -1350,7 +1330,7 @@ export function FitnessPage() {
         .slice(0, 4),
     }
   }, [fitnessHistory])
-  const muscleGroups = isGuest ? guestTrainingSummary.muscles : MUSCLE_GROUPS
+  const muscleGroups = trainingSummary.muscles
 
   // 地址栏的 ?new=1 直接派生出「记录运动」弹层，不再用 effect 复制状态。
   const recordSheetOpen = recordOpen || newRecord.active
@@ -1949,12 +1929,10 @@ export function FitnessPage() {
                 <h2 id="weeklyTrainingTitle">近 7 天训练</h2>
                 <p>观察节奏，不为中断制造压力。</p>
               </div>
-              <span className="week-total">
-                {isGuest ? `${guestTrainingSummary.sessions} 次` : '3 次'}
-              </span>
+              <span className="week-total">{trainingSummary.sessions} 次</span>
             </div>
             <div className="fit-volume-chart" aria-label="近七天力量训练容量">
-              {(isGuest ? guestTrainingSummary.points : WEEK_VOLUME).map((day, index) => (
+              {trainingSummary.points.map((day, index) => (
                 <div
                   className={index === 6 ? 'fit-chart-day today' : 'fit-chart-day'}
                   key={day.day}
@@ -1972,13 +1950,11 @@ export function FitnessPage() {
             <div className="fit-week-foot">
               <span>本周力量容量</span>
               <strong>
-                {isGuest
-                  ? guestTrainingSummary.volume > 0
-                    ? `${guestTrainingSummary.volume.toLocaleString('zh-CN')} kg`
-                    : '暂无'
-                  : '18,420 kg'}
+                {trainingSummary.volume > 0
+                  ? `${trainingSummary.volume.toLocaleString('zh-CN')} kg`
+                  : '暂无'}
               </strong>
-              <span>{isGuest ? '完成训练后自动汇总' : '比上周 +8%'}</span>
+              <span>完成训练后自动汇总</span>
             </div>
           </section>
 
@@ -1988,12 +1964,10 @@ export function FitnessPage() {
                 <h2 id="muscleTitle">训练分布</h2>
                 <p>按本周已完成组数估算。</p>
               </div>
-              <span className="fit-muscle-total">
-                {isGuest ? `${guestTrainingSummary.sets} 组` : '42 组'}
-              </span>
+              <span className="fit-muscle-total">{trainingSummary.sets} 组</span>
             </div>
             <div className="fit-muscle-list">
-              {isGuest && muscleGroups.length === 0 && (
+              {muscleGroups.length === 0 && (
                 <div className="surface-note">
                   <Icon name="fitness" className="icon-sm" />
                   <span>完成训练后显示肌群分布。</span>

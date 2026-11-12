@@ -30,6 +30,7 @@ import type {
  */
 export interface MockDataContextValue {
   goals: Goal[]
+  addGoal: (goal: Goal) => void
   updateGoal: (id: string, patch: Partial<Goal>) => void
   /** 「今天」的计划项。 */
   planItems: PlanItem[]

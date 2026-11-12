@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import { chooseDate, chooseTime } from './date-time'
+import { seedOwnerFixture } from './owner-fixture'
+
+test.beforeEach(async ({ page }) => {
+  await seedOwnerFixture(page)
+})
 
 test('today page renders and primary navigation works', async ({ page }) => {
   await page.goto('/')
@@ -168,7 +173,7 @@ test('diet water shortcuts, custom amount and undo update progress', async ({ pa
 
   const waterProgress = page.getByRole('progressbar', { name: '今日饮水进度' })
   const waterValue = page.locator('.diet-water-copy strong')
-  await expect(waterProgress).toHaveAttribute('aria-valuenow', '60')
+  await expect(waterProgress).toHaveAttribute('aria-valuenow', '0')
 
   await page.getByRole('button', { name: '+ 125 ml' }).click()
   await page.getByRole('button', { name: '+ 250 ml' }).click()

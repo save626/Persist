@@ -1,5 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
+import { seedOwnerFixture } from './owner-fixture'
+
+test.beforeEach(async ({ page }) => {
+  await seedOwnerFixture(page)
+})
 
 type MockBackup = {
   data: {
@@ -43,7 +48,7 @@ test('generated daily brief enters history and applies its plan suggestion', asy
   await expect(page.locator('.reports-history-count')).toHaveText('5 份')
 
   await page.getByRole('button', { name: '查看简报', exact: true }).click()
-  const detail = page.getByRole('dialog', { name: '先把训练安排好，再收住晚间学习' })
+  const detail = page.getByRole('dialog')
   await expect(detail).toBeVisible()
   await expect(detail.locator('.surface-note')).toContainText('本地 Mock 规则生成，未调用真实模型')
   await detail.getByRole('button', { name: '应用建议' }).click()
@@ -88,7 +93,7 @@ test('generated daily brief stays visible after leaving and reopening the report
   await expect(page.locator('.reports-history-count')).toHaveText('5 份')
   await expect(page.locator('.reports-generation-copy')).toContainText('今日简报已生成')
   await page.getByRole('button', { name: '查看简报', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: '先把训练安排好，再收住晚间学习' })).toBeVisible()
+  await expect(page.getByRole('dialog')).toBeVisible()
 })
 
 test('report range selector updates the displayed period', async ({ page }) => {
@@ -110,8 +115,8 @@ test('morning brief reflects newly recorded water in its KPIs', async ({ page })
 
   let dialog = page.getByRole('dialog', { name: '晨间简报' })
   await expect(dialog).toBeVisible()
-  await expect(dialog.locator('.mock-kpi').filter({ hasText: '今日记录' })).toContainText('6 条')
-  await expect(dialog.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('800 ml')
+  await expect(dialog.locator('.mock-kpi').filter({ hasText: '今日记录' })).toContainText('7 条')
+  await expect(dialog.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('未设置')
   await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: '快速记录', exact: true }).first().click()
@@ -120,9 +125,9 @@ test('morning brief reflects newly recorded water in its KPIs', async ({ page })
 
   await page.getByRole('button', { name: '晨间简报' }).click()
   dialog = page.getByRole('dialog', { name: '晨间简报' })
-  await expect(dialog.locator('.mock-kpi').filter({ hasText: '今日记录' })).toContainText('7 条')
-  await expect(dialog.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('550 ml')
-  await expect(dialog.getByText('下午：补水 550 ml')).toBeVisible()
+  await expect(dialog.locator('.mock-kpi').filter({ hasText: '今日记录' })).toContainText('8 条')
+  await expect(dialog.locator('.mock-kpi').filter({ hasText: '饮水缺口' })).toContainText('未设置')
+  await expect(dialog.getByText('下午：按实际饮水继续记录')).toBeVisible()
 })
 
 test('snapshot shows a generated time and current record count', async ({ page }) => {

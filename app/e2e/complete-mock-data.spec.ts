@@ -37,7 +37,7 @@ test('complete demo data populates every primary module', async ({ page }) => {
   await expect(page.locator('.countdowns')).toContainText('高数阶段测验')
   await expect(page.locator('.countdowns')).toContainText('英语六级考试')
   await expect(page.locator('.plan-panel .badge')).toHaveText('3 / 7')
-  await expect(page.getByRole('region', { name: '今日进度' })).toContainText('2.0')
+  await expect(page.getByRole('region', { name: '今日进度' })).toContainText('0.8')
   await expect(page.getByText(/精力 4 \/ 5 · 专注度不错/)).toBeVisible()
 
   await mainNav(page, '健身')
@@ -47,7 +47,7 @@ test('complete demo data populates every primary module', async ({ page }) => {
 
   await mainNav(page, '饮食')
   await expect(page.getByText('4 / 4 餐已记录')).toBeVisible()
-  await expect(page.locator('.metric').filter({ hasText: '饮水' })).toContainText('2.0')
+  await expect(page.locator('.metric').filter({ hasText: '饮水' })).toContainText('0.8')
   await expect(page.getByRole('heading', { name: '晚餐', exact: true })).toBeVisible()
   await expect(page.getByText('三文鱼糙米饭')).toBeVisible()
 
@@ -83,7 +83,7 @@ test('complete demo data feeds reports and respects AI source toggles', async ({
     '学习记录：近 7 天共 12 条，英语 6 条、高数 6 条，累计 446 分钟',
   )
   await expect(evidence).toContainText('饮水记录：近 7 天累计 0.80 L（3 次记录，日均 0.11 L）')
-  await expect(evidence).toContainText('个人档案：已填写 14 / 14 项，完整度 100%')
+  await expect(evidence).toContainText('个人档案：已填写 13 / 13 项，完整度 100%')
 
   await openShellLink(page, '打开设置')
   await page.getByRole('checkbox', { name: /^学习记录/ }).uncheck()

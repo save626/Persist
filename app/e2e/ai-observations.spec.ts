@@ -1,4 +1,9 @@
-﻿import { expect, test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { seedOwnerFixture } from './owner-fixture'
+
+test.beforeEach(async ({ page }) => {
+  await seedOwnerFixture(page)
+})
 
 type ObservationType = '训练建议' | '饮食观察' | '学习观察'
 

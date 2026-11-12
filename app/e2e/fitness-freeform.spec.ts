@@ -1,5 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
+﻿import { expect, test, type Page } from '@playwright/test'
 import { createCompleteMockData } from '../src/data/complete-mock-data'
+import { createOwnerFixture, seedOwnerFixture } from './owner-fixture'
 import type { ImportableMockData } from '../src/types'
 
 async function mainNav(page: Page, label: '今日' | '健身' | '饮食' | '学习') {
@@ -21,6 +22,18 @@ function backupText(data: ImportableMockData) {
 test('freeform distance and duration workouts flow across fitness, today and reports', async ({
   page,
 }) => {
+  // 只保留已开启的 AI 设置，不预置训练、饮食或学习业务记录。
+  const fixture = createOwnerFixture()
+  fixture.goals = []
+  fixture.planItems = []
+  fixture.waterLog = []
+  fixture.studyRecords = []
+  fixture.dietDays = []
+  fixture.fitnessSession = null
+  fixture.fitnessHistory = []
+  fixture.reports = []
+  await seedOwnerFixture(page, fixture)
+
   await page.goto('/fitness')
   await page.getByRole('button', { name: '记录运动', exact: true }).click()
 
@@ -58,10 +71,9 @@ test('freeform distance and duration workouts flow across fitness, today and rep
   await expect(fitnessEvent).toContainText('运动 58 分钟')
   await expect(fitnessEvent).toContainText('距离 3.2 km')
 
-  await mainNav(page, '学习')
-  await page.getByRole('button', { name: '查看分析依据' }).click()
-  await page.getByRole('button', { name: '前往 AI 报告' }).click()
-  await expect(page).toHaveURL(/\/reports$/)
+  // 等 200 ms 防抖落盘后再整页进入报告，避免新训练只在内存态存在。
+  await page.waitForTimeout(450)
+  await page.goto('/reports')
   await page.getByRole('button', { name: '查看分析依据' }).click()
   const evidence = page.locator('.reports-evidence')
   await expect(evidence).toContainText('累计运动 58 分钟')

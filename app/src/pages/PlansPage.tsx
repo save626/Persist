@@ -371,40 +371,44 @@ export function PlansPage() {
             </p>
           </section>
 
-          <section className="panel plans-list" aria-labelledby="plansArchivedTitle">
-            <div className="plans-list-head">
-              <h2 id="plansArchivedTitle">已归档</h2>
-              <span className="plans-count">{archived.length}</span>
-            </div>
-            {archived.length === 0 ? (
-              <p className="plans-hint">还没有归档的计划。</p>
-            ) : (
-              <ul>
-                {archived.map((plan) => (
-                  <li className="plans-row" key={plan.id}>
-                    <div className="plans-row-main">
-                      <span className="plans-row-title">{plan.title}</span>
-                      <span className="plans-row-meta">
-                        {cadenceLabel(plan.cadence)} · {plan.startDate}
-                        {plan.endDate ? ` → ${plan.endDate}` : ''}
+          {archived.length > 0 && (
+            <section className="panel plans-list" aria-labelledby="plansArchivedTitle">
+              <div className="plans-list-head">
+                <h2 id="plansArchivedTitle">已归档</h2>
+                <span className="plans-count">{archived.length}</span>
+              </div>
+              {archived.length === 0 ? (
+                <p className="plans-hint">还没有归档的计划。</p>
+              ) : (
+                <ul>
+                  {archived.map((plan) => (
+                    <li className="plans-row" key={plan.id}>
+                      <div className="plans-row-main">
+                        <span className="plans-row-title">{plan.title}</span>
+                        <span className="plans-row-meta">
+                          {cadenceLabel(plan.cadence)} · {plan.startDate}
+                          {plan.endDate ? ` → ${plan.endDate}` : ''}
+                        </span>
+                      </div>
+                      <span className="plans-status is-archived">
+                        {planStatusLabel(plan.status)}
                       </span>
-                    </div>
-                    <span className="plans-status is-archived">{planStatusLabel(plan.status)}</span>
-                    <div className="plans-row-actions">
-                      <button
-                        className="btn secondary"
-                        type="button"
-                        disabled={runtime.readOnly}
-                        onClick={() => requestActivate(plan)}
-                      >
-                        重新启用
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+                      <div className="plans-row-actions">
+                        <button
+                          className="btn secondary"
+                          type="button"
+                          disabled={runtime.readOnly}
+                          onClick={() => requestActivate(plan)}
+                        >
+                          重新启用
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
         </aside>
       </div>
 
