@@ -622,6 +622,92 @@
   margin-top: -4px;
 }
 
+.fit-exercise-combobox {
+  position: relative;
+}
+
+.fit-exercise-combobox .fit-exercise-input {
+  padding-right: 42px;
+}
+
+.fit-exercise-trigger {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  transform: translateY(-50%);
+  transition:
+    color 0.16s,
+    background 0.16s;
+}
+
+.fit-exercise-trigger:hover,
+.fit-exercise-trigger:focus-visible,
+.fit-exercise-trigger[aria-expanded='true'] {
+  color: var(--deep);
+  background: var(--gs);
+}
+
+.fit-exercise-trigger .icon-sm {
+  transform: rotate(90deg);
+  transition: transform 0.16s;
+}
+
+.fit-exercise-trigger[aria-expanded='true'] .icon-sm {
+  transform: rotate(-90deg);
+}
+
+.fit-exercise-options {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 216px;
+  gap: 2px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--strong);
+  box-shadow: 0 16px 36px rgba(36, 52, 63, 0.16);
+}
+
+.fit-exercise-options button {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  background: transparent;
+}
+
+.fit-exercise-options button:hover,
+.fit-exercise-options button:focus-visible,
+.fit-exercise-options button[aria-selected='true'] {
+  color: var(--deep);
+  background: var(--gs);
+}
+
+.fit-exercise-empty {
+  margin: 0;
+  padding: 10px;
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .fit-quick-picks > span {
   margin-right: 2px;
   color: var(--faint);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { EvidenceSheet } from '../components/EvidenceSheet'
 import { Icon } from '../components/Icon'
 import { PageSheet } from '../components/PageSheet'
@@ -475,6 +475,12 @@ const QUICK_MOVEMENTS: Array<{
   { name: '爬山', kind: 'duration', durationMinutes: 90 },
 ]
 
+type QuickMovement = (typeof QUICK_MOVEMENTS)[number]
+
+type ExerciseSuggestion =
+  | { type: 'exercise'; name: string; exercise: Exercise }
+  | { type: 'movement'; name: string; movement: QuickMovement }
+
 function RecordSetSheet({
   exercises,
   initialExerciseId,
@@ -505,14 +511,45 @@ function RecordSetSheet({
   )
   const [rpe, setRpe] = useState('')
   const [error, setError] = useState('')
+  const [exerciseOptionsOpen, setExerciseOptionsOpen] = useState(false)
+  const exerciseComboboxRef = useRef<HTMLDivElement>(null)
+  const exerciseSuggestions = useMemo<ExerciseSuggestion[]>(() => {
+    const suggestions: ExerciseSuggestion[] = exercises.map((exercise) => ({
+      type: 'exercise',
+      name: exercise.name,
+      exercise,
+    }))
+    const names = new Set(suggestions.map((suggestion) => suggestion.name))
+    for (const movement of QUICK_MOVEMENTS) {
+      if (names.has(movement.name)) continue
+      suggestions.push({ type: 'movement', name: movement.name, movement })
+    }
+    return suggestions
+  }, [exercises])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      if (exerciseOptionsOpen) {
+        setExerciseOptionsOpen(false)
+        return
+      }
+      onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  }, [exerciseOptionsOpen, onClose])
+
+  useEffect(() => {
+    if (!exerciseOptionsOpen) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (!exerciseComboboxRef.current?.contains(event.target as Node)) {
+        setExerciseOptionsOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [exerciseOptionsOpen])
 
   const prefillExercise = (exercise: Exercise) => {
     const previous = exercise.sets.at(-1)
@@ -526,12 +563,21 @@ function RecordSetSheet({
     setError('')
   }
 
+  const chooseExercise = (exercise: Exercise) => {
+    setExerciseName(exercise.name)
+    prefillExercise(exercise)
+    setExerciseOptionsOpen(false)
+  }
+
   const handleNameChange = (value: string) => {
     setExerciseName(value)
     const matched = exercises.find(
       (exercise) => exercise.name.trim().toLowerCase() === value.trim().toLowerCase(),
     )
-    if (matched) prefillExercise(matched)
+    if (matched) {
+      prefillExercise(matched)
+      setExerciseOptionsOpen(false)
+    }
   }
 
   const applyQuickMovement = (movement: (typeof QUICK_MOVEMENTS)[number]) => {
@@ -644,22 +690,70 @@ function RecordSetSheet({
         </div>
 
         <div className="fit-record-form">
-          <label className="form-field">
-            <span>动作名称</span>
-            <input
-              className="form-input"
-              list="fitness-record-exercise-options"
-              placeholder="例如：周末爬山、夜跑、足球"
-              value={exerciseName}
-              onChange={(event) => handleNameChange(event.target.value)}
-              autoFocus
-            />
-            <datalist id="fitness-record-exercise-options">
-              {exercises.map((exercise) => (
-                <option key={exercise.id} value={exercise.name} />
-              ))}
-            </datalist>
-          </label>
+          <div className="form-field">
+            <span id="fitness-record-exercise-label">动作名称</span>
+            <div className="fit-exercise-combobox" ref={exerciseComboboxRef}>
+              <input
+                id="fitness-record-exercise-name"
+                className="form-input fit-exercise-input"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={exerciseOptionsOpen}
+                aria-controls="fitness-record-exercise-options"
+                aria-labelledby="fitness-record-exercise-label"
+                autoComplete="off"
+                placeholder="例如：周末爬山、夜跑、足球"
+                value={exerciseName}
+                onChange={(event) => handleNameChange(event.target.value)}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="fit-exercise-trigger"
+                aria-label={exerciseOptionsOpen ? '收起动作建议' : '展开动作建议'}
+                aria-expanded={exerciseOptionsOpen}
+                aria-controls="fitness-record-exercise-options"
+                onClick={() => setExerciseOptionsOpen((open) => !open)}
+              >
+                <Icon name="chev" className="icon-sm" />
+              </button>
+              {exerciseOptionsOpen && (
+                <div
+                  id="fitness-record-exercise-options"
+                  className="fit-exercise-options"
+                  role="listbox"
+                  aria-labelledby="fitness-record-exercise-label"
+                >
+                  {exerciseSuggestions.length ? (
+                    exerciseSuggestions.map((suggestion) => (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={exerciseName === suggestion.name}
+                        key={
+                          suggestion.type === 'exercise'
+                            ? suggestion.exercise.id
+                            : suggestion.movement.name
+                        }
+                        onClick={() => {
+                          if (suggestion.type === 'exercise') {
+                            chooseExercise(suggestion.exercise)
+                            return
+                          }
+                          applyQuickMovement(suggestion.movement)
+                          setExerciseOptionsOpen(false)
+                        }}
+                      >
+                        {suggestion.name}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="fit-exercise-empty">当前训练没有可选动作，可直接输入动作名称。</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="fit-quick-picks" aria-label="运动快捷填入">
             <span>快捷填入</span>
