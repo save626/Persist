@@ -32,6 +32,7 @@
   "dependencies": {
     "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
+    "@capacitor/network": "^8.0.1",
     "@persist/shared": "file:../shared",
     "clsx": "^2.1.1",
     "react": "^19.3.1",

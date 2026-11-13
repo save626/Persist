@@ -12,6 +12,7 @@ import {
   serializeMockBackup,
 } from '../lib/mock-data-transfer'
 import { createCompleteMockData } from '../data/complete-mock-data'
+import { useNetworkOnline } from '../lib/network-status'
 import {
   DEFAULT_DAILY_BRIEF_AT,
   normalizeDailyBriefSettings,
@@ -102,6 +103,7 @@ export function SettingsPage() {
     syncNow,
   } = useMockData()
   const runtime = useRuntimeMode()
+  const networkOnline = useNetworkOnline()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { reminders, summaryOnly, sources } = settings
   const [aiState, setAiState] = useState<AiState>('idle')
@@ -1017,7 +1019,7 @@ export function SettingsPage() {
               <button
                 className="settings-danger-button"
                 type="button"
-                disabled={syncBusy !== null || !syncStatus.online}
+                disabled={syncBusy !== null || !syncStatus.online || !networkOnline}
                 onClick={() => setConfirmDeleteAccount(true)}
               >
                 {syncBusy === 'delete' ? '删除中…' : '删除账号与数据'}
