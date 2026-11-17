@@ -369,7 +369,17 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 | mobile 产物内联凭据 | 已验证：注入探针 `psa_probe_*` 后 `dist-mobile` 命中 1 处；重建干净产物后为 0 |
 | 误放凭据的 web 构建 | 已被 vite 配置拦截，退出码 1，提示指明只允许 `.env.mobile.local` |
 
-尚未验证（因为需要真机与生产环境，属部署阶段）：真机带凭据调用、`warn` → `enforce` 切换、`curl` 无凭据 401。
+#### Step 1 生产部署记录（2026-11-17，已切 `enforce`）
+
+部署过程与 `off → warn → enforce` 的实际执行：
+
+1. 本机构建 `server/dist`（47 个 js，新增 `ai/ai-guard.js`），打包上传后在服务器解到 `dist.new`，再 `mv` 原子替换；旧版备份 `/root/backend-backup-20261117-110001/`，并留 `dist.old`。
+2. `/etc/persist/server.env` 追加 `PERSIST_AI_GATE=warn` 与 `PERSIST_AI_KEYS=k1:<sha256>`，重启后启动日志确认为 `"aiGate":"warn/1"` —— 这一步只证明「代码上线 + 凭据解析成功」，**不拦截**。
+3. `enforce` 的拒绝行为先在**独立端口 3999 的临时实例**上验证（同一份 dist、同一份生产 env、独立 `DB_PATH`），避免为了测试重启生产：无凭据 / 错凭据 / 设备令牌 `pst_` 三种请求均返回 `401 ai_unauthorized`，响应体完全一致。
+4. 用户决定**先切 `enforce`**（手机暂无新包），改 env 后重启，启动日志 `"aiGate":"enforce/1"`，health `ok / schema 2`。
+5. 公网入口复验：`/api/chat` 与 `/api/report` 无凭据均 `401 ai_unauthorized`；带 `pst_` 设备令牌同样 401；`/api/health` 与 `/app/?mode=demo` 仍 200。日志出现 3 条 `ai credential check did not pass`（即上述测试请求），证明 `warn`/`enforce` 的观测点可用。
+
+**真机待补**：手机上的 APK 仍是 2026-11-13 版本，不含凭据，真实 AI 现降级为本地 Mock（界面明确标注）。本机此刻缺 Android SDK 且无 USB 设备，故 `cap sync` 之后的 `gradlew installDebug` 未执行。补好 SDK 后重装即可恢复，**服务端无需再改**。
 
 ### Step 2：审计 + 按请求次数配额
 
