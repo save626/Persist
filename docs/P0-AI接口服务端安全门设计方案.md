@@ -379,7 +379,18 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 4. 用户决定**先切 `enforce`**（手机暂无新包），改 env 后重启，启动日志 `"aiGate":"enforce/1"`，health `ok / schema 2`。
 5. 公网入口复验：`/api/chat` 与 `/api/report` 无凭据均 `401 ai_unauthorized`；带 `pst_` 设备令牌同样 401；`/api/health` 与 `/app/?mode=demo` 仍 200。日志出现 3 条 `ai credential check did not pass`（即上述测试请求），证明 `warn`/`enforce` 的观测点可用。
 
-**真机待补**：手机上的 APK 仍是 2026-11-13 版本，不含凭据，真实 AI 现降级为本地 Mock（界面明确标注）。本机此刻缺 Android SDK 且无 USB 设备，故 `cap sync` 之后的 `gradlew installDebug` 未执行。补好 SDK 后重装即可恢复，**服务端无需再改**。
+**真机闭环（2026-11-17 11:15–11:22，已完成）**
+
+6. 本机补装 Android SDK（cmdline-tools latest / platform-tools 37.0.1 / platforms android-36 / build-tools 36.0.0，装到 `local.properties` 已指向但缺失的路径，工程配置未改），`build:mobile` → `cap sync android` → `gradlew assembleDebug` 通过，产物 4,625,698 B。
+7. 装机前校验包内凭据：从 APK `assets/public/assets/*` 取出内联值，**命中 1 个文件**，其 sha256 与生产 `PERSIST_AI_KEYS` 的 `k1` 逐字符相等 —— 先证明「包带对了 key」，再谈真机行为。
+8. `adb install -r`（设备 RMX3800，`lastUpdateTime=2026-11-17 11:15:15`，覆盖安装保留应用数据与 IndexedDB）。
+9. 真机真实使用后核对生产日志（11:15 至 11:22）：
+   - `ai credential check did not pass` **0 条**（对比装机前 11:06 的 4 条旧包/测试请求）
+   - 状态码分布 `200×24 / 201×1 / 204×12`，**无任何 4xx**
+   - `POST /api/report` 11 次全部 200，耗时 2.1–5.6 s，符合真实上游生成时延
+10. 同期用户开启同步：`users=1`、`devices=1`，`sync/push` 一批 `serverRev=31`，`profiles / fitness_sessions / diet_entries / water_logs / study_records / plan_items` 均有真实记录落库。
+
+结论：`enforce` 在真机上不阻断正常调用，P0 的「公网不可匿名调用 + 真机可用」两端同时成立。
 
 ### Step 2：审计 + 按请求次数配额
 
