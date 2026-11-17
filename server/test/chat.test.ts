@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import { buildApp } from '../src/app.js'
 import { AiError, type AiClient } from '../src/ai/deepseek.js'
@@ -192,5 +193,113 @@ describe('POST /api/chat', () => {
       expect(response.status).toBe(404)
       expect(await response.json()).toMatchObject({ error: { code: 'not_found' } })
     })
+  })
+})
+
+describe('AI 凭据门（/api/chat）', () => {
+  const key = 'psa_chat-route-test-0000000000000000000000'
+  const keysEnv = `k1:${createHash('sha256').update(key, 'utf8').digest('hex')}`
+
+  function postWithKey(baseUrl: string, body: unknown, value?: string) {
+    return fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(value === undefined ? {} : { authorization: `Bearer ${value}` }),
+      },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('enforce 下无凭据返回 401，且不调用上游', async () => {
+    let called = 0
+    const ai = fakeAi({
+      async *streamChat() {
+        called += 1
+        yield '不该出现'
+      },
+    })
+    await withServer(
+      ai,
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const response = await postWithKey(baseUrl, request)
+        expect(response.status).toBe(401)
+        expect(response.headers.get('cache-control')).toBe('no-store')
+        expect(await response.json()).toEqual({
+          error: { code: 'ai_unauthorized', message: 'AI 接口需要有效凭据。' },
+        })
+        expect(called).toBe(0)
+      },
+    )
+  })
+
+  it('enforce 下有效凭据正常返回事件流', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const response = await postWithKey(baseUrl, request, key)
+        expect(response.status).toBe(200)
+        const events = parseEvents(await response.text()) as { type: string; text?: string }[]
+        expect(events.some((event) => event.type === 'delta')).toBe(true)
+        expect(events.at(-1)?.type).toBe('done')
+      },
+    )
+  })
+
+  it('错误凭据与无凭据的响应完全一致，不泄露失败细节', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const missing = await postWithKey(baseUrl, request)
+        const missingBody = await missing.text()
+        const wrong = await postWithKey(baseUrl, request, 'psa_wrong-key')
+        const wrongBody = await wrong.text()
+        // 设备令牌前缀也不被接受
+        const deviceLike = await postWithKey(baseUrl, request, 'pst_something')
+        const deviceBody = await deviceLike.text()
+
+        expect(wrong.status).toBe(401)
+        expect(deviceLike.status).toBe(401)
+        expect(wrongBody).toBe(missingBody)
+        expect(deviceBody).toBe(missingBody)
+      },
+    )
+  })
+
+  it('warn 放行错误凭据，但请求照常完成', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'warn', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const response = await postWithKey(baseUrl, request, 'psa_wrong-key')
+        expect(response.status).toBe(200)
+        const events = parseEvents(await response.text()) as { type: string }[]
+        expect(events.at(-1)?.type).toBe('done')
+      },
+    )
+  })
+
+  it('off 是默认值，行为与改动前一致', async () => {
+    await withServer(fakeAi(), {}, async (baseUrl) => {
+      const response = await postWithKey(baseUrl, request)
+      expect(response.status).toBe(200)
+    })
+  })
+
+  it('凭据门在限流之前：无凭据的请求不消耗 IP 额度', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv, RATE_LIMIT_MAX: '1' },
+      async (baseUrl) => {
+        const first = await postWithKey(baseUrl, request)
+        const second = await postWithKey(baseUrl, request)
+        // 若限流在前，第二次会是 429。
+        expect(first.status).toBe(401)
+        expect(second.status).toBe(401)
+      },
+    )
   })
 })

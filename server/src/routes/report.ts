@@ -4,6 +4,7 @@ import { sanitizeReportContent } from '../ai/report.js'
 import type { ServerConfig } from '../config.js'
 import { errorBody, parseReportRequest, type ReportResponse } from '../contract.js'
 import type { RateLimiter } from '../rate-limit.js'
+import { enforceAiGate } from './guards.js'
 import type { FastifyInstance } from 'fastify'
 
 /**
@@ -42,6 +43,9 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
         .code(503)
         .send(errorBody('ai_not_configured', '服务端尚未配置模型密钥，请使用本地 Mock 报告。'))
     }
+
+    // 调用者凭据门（P0）。与 /api/chat 同序：Key 检查之后、限流之前。
+    if (!enforceAiGate(options.config, request, reply)) return reply
 
     const decision = options.limiter.take(request.ip)
     if (!decision.allowed) {

@@ -364,3 +364,74 @@ describe('createAppChatClient', () => {
     expect(client.status().fallback).toBe(false)
   })
 })
+
+describe('AI 凭据（P0）', () => {
+  const credential = 'psa_test-credential-000000000000000000000'
+
+  it('传了凭据时带 authorization 头', async () => {
+    const { fetchImpl, calls } = stubFetch(() =>
+      streamResponse([sseText(['{"type":"stage","stage":"collect"}', '{"type":"done"}'])]),
+    )
+    await collect(createHttpChatClient({ fetchImpl, credential }))
+
+    const headers = calls[0]?.init?.headers as Record<string, string>
+    expect(headers.authorization).toBe(`Bearer ${credential}`)
+  })
+
+  it('显式传 null 时不带 authorization 头', async () => {
+    const { fetchImpl, calls } = stubFetch(() =>
+      streamResponse([sseText(['{"type":"stage","stage":"collect"}', '{"type":"done"}'])]),
+    )
+    await collect(createHttpChatClient({ fetchImpl, credential: null }))
+
+    const headers = calls[0]?.init?.headers as Record<string, string>
+    expect('authorization' in headers).toBe(false)
+  })
+
+  it('默认（未注入凭据的 web 构建）不带 authorization 头', async () => {
+    const { fetchImpl, calls } = stubFetch(() =>
+      streamResponse([sseText(['{"type":"stage","stage":"collect"}', '{"type":"done"}'])]),
+    )
+    await collect(createHttpChatClient({ fetchImpl }))
+
+    const headers = calls[0]?.init?.headers as Record<string, string>
+    expect('authorization' in headers).toBe(false)
+  })
+
+  it('凭据可以经 createAppChatClient 透传下去', async () => {
+    const { fetchImpl, calls } = stubFetch((url) => {
+      if (url === '/api/health') {
+        return jsonResponse({ status: 'ok', service: 'persist-server', ai: 'deepseek' })
+      }
+      return streamResponse([
+        sseText(['{"type":"stage","stage":"collect"}', '{"type":"delta","text":"好的"}', '{"type":"done"}']),
+      ])
+    })
+    await collect(
+      createAppChatClient({ consent: true, fetchImpl, credential, mockOptions: { chunkDelayMs: 0 } }),
+    )
+
+    const chatCall = calls.find((call) => call.url === '/api/chat')
+    expect(chatCall?.init?.headers).toMatchObject({ authorization: `Bearer ${credential}` })
+  })
+
+  it('401 抛 ChatUnavailableError 并带状态码，文案指向凭据而不是「不可用」', async () => {
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse({ error: { code: 'ai_unauthorized', message: 'AI 接口需要有效凭据。' } }, 401),
+    )
+    const client = createHttpChatClient({ fetchImpl, credential })
+
+    const error = await collect(client).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ChatUnavailableError)
+    expect((error as ChatUnavailableError).status).toBe(401)
+    expect((error as ChatUnavailableError).message).toBe('AI 接口需要有效凭据。')
+  })
+
+  it('401 且响应不是 JSON 时给出凭据相关文案，而不是笼统的「不可用」', async () => {
+    const { fetchImpl } = stubFetch(() => new Response('<html>401</html>', { status: 401 }))
+    const client = createHttpChatClient({ fetchImpl, credential })
+
+    const error = await collect(client).catch((e: unknown) => e)
+    expect((error as ChatUnavailableError).message).toBe('AI 接口凭据无效，请更新到最新版本后重试。')
+  })
+})

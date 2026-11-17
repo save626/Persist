@@ -4,6 +4,7 @@ import { buildChatMessages, buildExtractionMessages } from '../ai/prompts.js'
 import type { ServerConfig } from '../config.js'
 import { errorBody, parseChatRequest, type ChatStreamEvent } from '../contract.js'
 import type { RateLimiter } from '../rate-limit.js'
+import { enforceAiGate } from './guards.js'
 import type { FastifyInstance } from 'fastify'
 
 /**
@@ -47,6 +48,11 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
         .code(503)
         .send(errorBody('ai_not_configured', '服务端尚未配置模型密钥，请使用本地 Mock 对话。'))
     }
+
+    // 调用者凭据门（P0）。位置刻意在 Key 检查之后：没配 Key 的部署不应该对任何人返回
+    // 401，否则会把「服务端没配好」误报成「凭据错」。放在限流之前：没有凭据的请求
+    // 不该消耗 IP 额度。
+    if (!enforceAiGate(options.config, request, reply)) return reply
 
     const decision = options.limiter.take(request.ip)
     if (!decision.allowed) {

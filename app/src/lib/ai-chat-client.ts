@@ -1,4 +1,5 @@
 import { MOCK_CHAT_LABEL, createMockChatClient, type MockChatOptions } from './mock-chat-client'
+import { aiCredential } from './ai-credential'
 import type {
   ChatClient,
   ChatEvent,
@@ -212,6 +213,7 @@ async function describeFailure(response: Response): Promise<string> {
     // 非 JSON 响应（例如 Nginx 的 HTML 错误页），退回到通用文案。
   }
   if (response.status === 429) return '请求过于频繁，请稍后再试。'
+  if (response.status === 401) return 'AI 接口凭据无效，请更新到最新版本后重试。'
   if (response.status === 503) return '服务端尚未配置模型密钥，或模型服务暂时不可用。'
   return `模型服务返回了 ${response.status}。`
 }
@@ -219,12 +221,19 @@ async function describeFailure(response: Response): Promise<string> {
 export interface HttpChatOptions {
   endpoint?: string
   fetchImpl?: FetchLike
+  /**
+   * 覆盖服务端 AI 凭据。不传时读构建期注入值（见 `ai-credential.ts`，web 恒为 null）；
+   * 显式传 `null` 表示强制不带凭据（单测用来断言「没有这个头」）。
+   */
+  credential?: string | null
 }
 
 /** 直连 `/api/chat` 的 ChatClient 实现；不负责回退，失败一律抛出。 */
 export function createHttpChatClient(options: HttpChatOptions = {}): ChatClient {
   const endpoint = options.endpoint ?? AI_CHAT_ENDPOINT
   const doFetch: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init))
+  // 只有显式传了 credential 才用它（包括 null）；否则回落构建期注入值。
+  const credential = 'credential' in options ? options.credential : aiCredential()
 
   return {
     label: AI_CHAT_LABEL,
@@ -236,6 +245,7 @@ export function createHttpChatClient(options: HttpChatOptions = {}): ChatClient 
           headers: {
             'Content-Type': 'application/json',
             Accept: 'text/event-stream',
+            ...(credential ? { authorization: `Bearer ${credential}` } : {}),
           },
           body: JSON.stringify({
             turns: request.turns,
@@ -308,6 +318,8 @@ export interface AppChatOptions {
   endpoint?: string
   healthEndpoint?: string
   fetchImpl?: FetchLike
+  /** 透传给 HTTP 客户端；不传则用构建期注入值。 */
+  credential?: string | null
   mockOptions?: MockChatOptions
 }
 
@@ -323,6 +335,7 @@ export function createAppChatClient(options: AppChatOptions): AppChatClient {
   const http = createHttpChatClient({
     endpoint: options.endpoint,
     fetchImpl: options.fetchImpl,
+    ...('credential' in options ? { credential: options.credential } : {}),
   })
   let status: ChatStatus =
     options.consent && realAiEnabled

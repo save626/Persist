@@ -1,4 +1,5 @@
 import type { ReportContent, ReportRequest } from './report-types'
+import { aiCredential } from './ai-credential'
 
 /**
  * 真实 AI 报告客户端（经本站服务端代理）。
@@ -104,6 +105,7 @@ async function describeFailure(response: Response): Promise<string> {
     // 非 JSON 响应（例如 Nginx 的 HTML 错误页），退回到通用文案。
   }
   if (response.status === 429) return '请求过于频繁，请稍后再试。'
+  if (response.status === 401) return 'AI 接口凭据无效，请更新到最新版本后重试。'
   if (response.status === 503) return '服务端尚未配置模型密钥，或模型服务暂时不可用。'
   return `模型服务返回了 ${response.status}。`
 }
@@ -133,6 +135,11 @@ export async function probeAiReport(options: ProbeReportOptions = {}): Promise<b
 export interface RequestReportOptions extends ProbeReportOptions {
   endpoint?: string
   signal?: AbortSignal
+  /**
+   * 覆盖服务端 AI 凭据。不传时读构建期注入值（见 `ai-credential.ts`，web 恒为 null）；
+   * 显式传 `null` 表示强制不带凭据（单测用来断言「没有这个头」）。
+   */
+  credential?: string | null
 }
 
 /**
@@ -147,12 +154,17 @@ export async function requestAiReport(
 ): Promise<ReportContent> {
   const endpoint = options.endpoint ?? AI_REPORT_ENDPOINT
   const doFetch: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init))
+  const credential = 'credential' in options ? options.credential : aiCredential()
 
   let response: Response
   try {
     response = await doFetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(credential ? { authorization: `Bearer ${credential}` } : {}),
+      },
       body: JSON.stringify(request),
       signal: options.signal,
     })

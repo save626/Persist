@@ -8,6 +8,7 @@
 
 import { dirname, join } from 'node:path'
 import { DEFAULT_DAILY_BRIEF_AT, parseDailyBriefAt } from '@persist/shared/contract/analysis'
+import { parseAiGateMode, parseAiKeys, type AiGateMode, type AiKey } from './ai/ai-guard.js'
 
 export interface ServerConfig {
   host: string
@@ -21,6 +22,17 @@ export interface ServerConfig {
   deepseekModel: string
   aiTimeoutMs: number
   aiMaxRetries: number
+  /**
+   * AI 接口的服务端凭据门（P0）。
+   * `off` = 不校验（默认，等同改动前行为）；`warn` = 只记日志不拒绝；`enforce` = 401。
+   */
+  aiGate: AiGateMode
+  /**
+   * 允许调用 `/api/chat` 与 `/api/report` 的凭据哈希。
+   * 空数组配合 `enforce` 会拒绝一切请求（fail-closed），这是刻意选择：
+   * 宁可自己用不了，也不放行匿名调用。
+   */
+  aiKeys: AiKey[]
   rateLimitMax: number
   rateLimitWindowMs: number
   /** 同步 / 账号接口单独计数：客户端每 60 s 轮询一次，不能吃掉 AI 接口的额度。 */
@@ -109,6 +121,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     deepseekModel: env.DEEPSEEK_MODEL?.trim() || DEFAULT_DEEPSEEK_MODEL,
     aiTimeoutMs: readInt(env, 'AI_TIMEOUT_MS', 25_000, 1_000, 120_000),
     aiMaxRetries: readInt(env, 'AI_MAX_RETRIES', 1, 0, 3),
+    aiGate: parseAiGateMode(env.PERSIST_AI_GATE),
+    aiKeys: parseAiKeys(env.PERSIST_AI_KEYS),
     rateLimitMax: readInt(env, 'RATE_LIMIT_MAX', 20, 1, 1_000),
     rateLimitWindowMs: readInt(env, 'RATE_LIMIT_WINDOW_MS', 5 * 60_000, 1_000, 3_600_000),
     syncRateLimitMax: readInt(env, 'SYNC_RATE_LIMIT_MAX', 240, 1, 10_000),
@@ -140,6 +154,8 @@ export function describeConfig(config: ServerConfig) {
     port: config.port,
     ai: config.deepseekApiKey ? 'deepseek' : 'disabled',
     model: config.deepseekModel,
+    // 只报「模式/凭据条数」，不报 keyId，更不报哈希：启动日志会被到处贴。
+    aiGate: `${config.aiGate}/${config.aiKeys.length}`,
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,

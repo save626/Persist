@@ -1,6 +1,8 @@
 import type { AuthContext } from '../db/repositories/devices.js'
 import type { Db } from '../db/driver.js'
 import type { RateLimiter } from '../rate-limit.js'
+import type { ServerConfig } from '../config.js'
+import { aiUnauthorizedBody, evaluateAiGate } from '../ai/ai-guard.js'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { errorBody } from '../contract.js'
 import { authenticateRequest } from '../sync/service.js'
@@ -41,4 +43,30 @@ export function requireDevice(
     .code(401)
     .send(errorBody('unauthorized', '缺少或无效的设备令牌。'))
   return null
+}
+
+/**
+ * `/api/chat` 与 `/api/report` 的调用者凭据门（P0）。
+ *
+ * 返回 `true` 表示可以继续处理；`false` 表示已经写好 401，调用方直接 `return reply`。
+ *
+ * `warn` 模式下放行，但仍把失败结果写进日志——这是「切换 enforce 之前，先确认新 APK
+ * 到底有没有带对凭据」的唯一观测手段。`off` 模式正常通过，不产生日志噪音。
+ */
+export function enforceAiGate(
+  config: ServerConfig,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): boolean {
+  const decision = evaluateAiGate(config.aiGate, config.aiKeys, request.headers.authorization)
+  if (decision.result !== 'ok' && decision.result !== 'gate_off') {
+    request.log.warn(
+      { aiGate: decision.result, route: request.url, allowed: decision.allowed },
+      'ai credential check did not pass',
+    )
+  }
+  if (decision.allowed) return true
+  // 401 不缓存：同一条连接上的后续请求不应该复用这个结论。
+  reply.header('cache-control', 'no-store').code(401).send(aiUnauthorizedBody())
+  return false
 }

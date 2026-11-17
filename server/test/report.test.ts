@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import { AiError, type AiClient } from '../src/ai/deepseek.js'
 import { sanitizeReportContent } from '../src/ai/report.js'
@@ -284,6 +285,89 @@ describe('POST /api/report', () => {
       expect(second.status).toBe(429)
       expect(second.headers.get('retry-after')).toBeTruthy()
       expect(await second.json()).toMatchObject({ error: { code: 'rate_limited' } })
+    })
+  })
+})
+
+describe('AI 凭据门（/api/report）', () => {
+  const key = 'psa_report-route-test-00000000000000000000'
+  const keysEnv = `k1:${createHash('sha256').update(key, 'utf8').digest('hex')}`
+
+  function postWithKey(baseUrl: string, body: unknown, value?: string) {
+    return fetch(`${baseUrl}/api/report`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(value === undefined ? {} : { authorization: `Bearer ${value}` }),
+      },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('enforce 下无凭据返回 401，且不调用上游', async () => {
+    let called = 0
+    const ai = fakeAi({
+      async completeJson() {
+        called += 1
+        return goodReport
+      },
+    })
+    await withServer(
+      ai,
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const response = await postWithKey(baseUrl, request)
+        expect(response.status).toBe(401)
+        expect(response.headers.get('cache-control')).toBe('no-store')
+        expect(await response.json()).toEqual({
+          error: { code: 'ai_unauthorized', message: 'AI 接口需要有效凭据。' },
+        })
+        expect(called).toBe(0)
+      },
+    )
+  })
+
+  it('enforce 下有效凭据正常返回报告', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const response = await postWithKey(baseUrl, request, key)
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { report: { title: string } }
+        expect(body.report.title).toBe(goodReport.title)
+      },
+    )
+  })
+
+  it('错误凭据与无凭据的响应完全一致', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const missingBody = await (await postWithKey(baseUrl, request)).text()
+        const wrong = await postWithKey(baseUrl, request, 'psa_wrong-key')
+        expect(wrong.status).toBe(401)
+        expect(await wrong.text()).toBe(missingBody)
+      },
+    )
+  })
+
+  it('warn 放行错误凭据', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'warn', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const response = await postWithKey(baseUrl, request, 'psa_wrong-key')
+        expect(response.status).toBe(200)
+      },
+    )
+  })
+
+  it('off 是默认值，行为与改动前一致', async () => {
+    await withServer(fakeAi(), {}, async (baseUrl) => {
+      const response = await postWithKey(baseUrl, request)
+      expect(response.status).toBe(200)
     })
   })
 })

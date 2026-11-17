@@ -175,6 +175,58 @@ describe('requestAiReport', () => {
   })
 })
 
+describe('AI 凭据（P0）', () => {
+  const credential = 'psa_report-test-credential-00000000000000'
+
+  it('传了凭据时带 authorization 头', async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ report: content }))
+    await requestAiReport(request, { fetchImpl, credential })
+
+    const headers = calls[0]?.init?.headers as Record<string, string>
+    expect(headers.authorization).toBe(`Bearer ${credential}`)
+  })
+
+  it('显式传 null 时不带 authorization 头', async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ report: content }))
+    await requestAiReport(request, { fetchImpl, credential: null })
+
+    const headers = calls[0]?.init?.headers as Record<string, string>
+    expect('authorization' in headers).toBe(false)
+  })
+
+  it('默认（未注入凭据的 web 构建）不带 authorization 头', async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ report: content }))
+    await requestAiReport(request, { fetchImpl })
+
+    const headers = calls[0]?.init?.headers as Record<string, string>
+    expect('authorization' in headers).toBe(false)
+  })
+
+  it('401 抛 ReportUnavailableError 并带状态码，透出服务端文案', async () => {
+    const unauthorized = stubFetch(() =>
+      jsonResponse({ error: { code: 'ai_unauthorized', message: 'AI 接口需要有效凭据。' } }, 401),
+    )
+    const error = await requestAiReport(request, {
+      fetchImpl: unauthorized.fetchImpl,
+      credential,
+    }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ReportUnavailableError)
+    expect((error as ReportUnavailableError).status).toBe(401)
+    expect((error as ReportUnavailableError).message).toBe('AI 接口需要有效凭据。')
+  })
+
+  it('401 且响应不是 JSON 时给出凭据相关文案', async () => {
+    const html = stubFetch(() => new Response('<html>401</html>', { status: 401 }))
+    const error = await requestAiReport(request, { fetchImpl: html.fetchImpl }).catch(
+      (e: unknown) => e,
+    )
+    expect((error as ReportUnavailableError).message).toBe(
+      'AI 接口凭据无效，请更新到最新版本后重试。',
+    )
+  })
+})
+
 describe('parseReportContent', () => {
   it('忽略未知字段并补全 warnings', () => {
     expect(parseReportContent({ ...content, warnings: undefined, metric: [] })).toMatchObject({

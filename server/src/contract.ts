@@ -270,6 +270,15 @@ export function errorBody(code: string, message: string) {
   return { error: { code, message } }
 }
 
+/**
+ * AI 接口鉴权失败（P0 §4.8）。
+ *
+ * `/api/chat`、`/api/report` 的凭据门返回这个码。响应不区分「没带凭据 / 前缀不对 /
+ * 哈希不匹配 / 凭据已轮换」，避免把接口变成可探测的账号名。
+ * 前端不得把它当成「服务端暂时不可用」笼统处理：凭据失效和上游故障是不同问题。
+ */
+export const AI_UNAUTHORIZED_CODE = 'ai_unauthorized'
+
 // ---------------------------------------------------------------------------
 // AI 报告（8c）：类型与请求/响应契约统一放在 shared/contract/report.ts
 // ---------------------------------------------------------------------------
