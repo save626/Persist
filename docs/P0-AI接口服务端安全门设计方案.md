@@ -1,7 +1,7 @@
 # P0 AI 接口服务端安全门设计方案
 
-> 版本：v1.2（2026-11-17 更新 Step 2 实施记录）
-> 状态：**Step 1（凭据门）与 Step 2（日配额 + 审计）已实施并通过门禁，Step 1 已部署生产且完成真机闭环；Step 3（token 配额）未实施**。§10 中第 1、2、4 项已随 Step 2 落地（100 次 / 服务器本地日界 / analysis 不纳入），第 3、5 项仍待定。
+> 版本：v1.3（2026-11-17 更新 Step 3 实施记录）
+> 状态：**Step 1（凭据门）、Step 2（次数配额 + 审计）、Step 3（token 配额）均已实施并通过门禁**，Step 1/2 已部署生产并完成真机闭环，Step 3 已于 15:59 部署生产（§7）。§10 中第 1、2、4 项已落地（100 次 + 200000 token / 服务器本地日界 / analysis 不纳入），第 3、5 项仍待定。
 > 决策来源：2026-11-17 会话中用户选定**「PSK 一步到位」**路线（构建期预置凭据 + 配额 + 审计），并要求先出设计文档再动代码。
 > 关系：本文是 `docs/项目交接-2026-11-16.md §10.1（P0）` 的展开与落地设计；与 `docs/工程约定.md` 冲突时以工程约定为准，与源码冲突时以源码为准。
 > 读者：下一位接手 P0 的开发者。读完应能直接拆任务，不需要再做架构决策（§10 的少数待确认项除外）。
@@ -191,6 +191,21 @@ Fastify
 **Step 3（token 配额）**：需要上游 usage，分两处改动：
 - `server/src/ai/deepseek.ts` 的流式请求增加 `stream_options: { include_usage: true }`，并在流末尾读取 usage 帧；`AiClient.streamChat` 增加**可选**回调 `onUsage?: (usage) => void`——不改现有签名，不影响 `analysis` 与每日简报的调用点。
 - 结束时按实际 `prompt_tokens + completion_tokens` 累加到当日记录；超限只影响**后续**请求。
+
+**Step 3 的实际口径（与初稿的差别，已按实现改文）**：
+
+token 与次数**不能同一种口径**。次数可以在进门时预占（+1 再放行，失败不退），token 不行——生成前根本不知道会长多少。所以实际实现是**进门判余 + 出门记账**：
+
+1. 进门：读当日 `prompt_tokens + completion_tokens`，`>= PERSIST_AI_DAILY_TOKENS` 就 429，不打上游；
+2. 出门：把这次实际用量**累加**进当日行（`addAiTokens`），无论成败都记——上游已经计费了。
+
+由此带来三个必须写明的性质：
+
+- **当天最后一次请求可以把总量顶过上限一截**，最多一次请求的量（输入受 `maxPromptChars = 12000` 约束、输出受 `max_tokens` 约束）。这是"少算不少拦"的取舍：宁可放过最后一口，也不要因为估算预留把正常使用挡在门外。
+- **被 abort 的流拿不到 usage**（上游只在流末尾的 usage 帧里给），这次调用记 0 ——**少算，绝不多算**。
+- 一次 `/api/chat` 会打两次模型（流式回复 + 结构化抽取），两次 usage **累加**成一条账。
+
+两维可独立关闭：`PERSIST_AI_DAILY_LIMIT=0` 只关次数、`PERSIST_AI_DAILY_TOKENS=0` 只关 token，两个都为 0 时既不拦截也不写 `ai_usage`（回滚路径不留空行）。只关一维时仍然写行，"今天用了几次、花了多少 token" 本身是有用的观测数据。
 
 并发说明：当前检查与扣减在同一事务内，但两个并发请求仍可能同时通过边界检查，形成轻微超额。这是**已知且接受**的取舍——单用户场景下不值得为严格配额引入锁或排队。文档不把它写成「已精确」。
 
@@ -446,6 +461,42 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 
 验收：一次对话后 `ai_usage` 的 token 数与上游 usage 一致（允许误差 0）；`analysis` 与每日简报**不触发** `onUsage` 也能正常工作（可选回调的可空性回归）。
 
+#### Step 3 实施记录（2026-11-17）
+
+已实现，`PERSIST_AI_DAILY_TOKENS` 默认 **200000**（`0` 关闭这一维，上界 1e8）。
+
+**模块**
+- `deepseek.ts`：新增 `AiTokenUsage`、`readTokenUsage`（取不到就返回 `null`，**绝不猜**一个数字）、`AiStreamOptions`；`streamChat` / `completeJson` 都接受可选 `onUsage`。流式请求体加 `stream_options: { include_usage: true }`；SSE 解析改成 `{content} | {usage} | 'done'` 三态——usage 帧的 `choices` 是**空数组**，原来"没有 content 就丢弃"的逻辑会把它整帧吞掉，所以必须先判文本、再判 usage。
+- `ai-usage.ts`：`reserveAiQuota` 增加 `tokenLimit` 维度与 `reason`（`requests` / `tokens`，次数先判）；新增 `addAiTokens`（累加、两项为 0 跳过、**永不抛错**）与 `isAiQuotaEnabled`。`limit` 参数改名为 `requestLimit`，避免两维都叫 limit。
+- `ai-audit.ts`：`ai_calls` 的 `prompt_tokens` / `completion_tokens` 开始写入；缺 usage 时留 `NULL`，不用 0 冒充"上游说这次是 0"。
+- `config.ts`：`PERSIST_AI_DAILY_TOKENS`（默认 200000，范围 0–100 000 000）；启动日志 `aiQuota` 从 `100/day` 变成 `100/day, 200k tokens/day`。
+- `contract.ts`：新增 `aiTokenQuotaExceededBody` 与 `formatTokenLimit`（`200000` → `200,000`）。**共用 `ai_quota_exceeded` 码**：前端两种都回退本地 Mock，区别只在文案，多造一个码只会让前端多一条无用分支。
+
+**路由**
+- `chat.ts` / `report.ts`：`finally` 里先 `addAiTokens` 再 `recordAiCall`（审计行读的是本地变量，顺序不影响结果），并把两次数值同时写进审计。两维都关掉时跳过记账。
+
+**验收（服务端 31 文件 / 313 测试，新增 20 条）**
+- 真实上游（本机 `server/.env` 的真 Key 直连 DeepSeek，各打一次最小请求）：`streamChat` 回调 `{"promptTokens":10,"completionTokens":1}`，`completeJson` 回调 `{"promptTokens":44,"completionTokens":5}` —— 证明 `stream_options.include_usage` 被 DeepSeek 接受、usage 帧解析正确。这一步是必要的：单测只能证明"我按文档解析"，不能证明"上游真的这么发"。
+- 路由级（`ai-quota-route.test.ts`）：上限 1000、每次 600 时，第 1、2 次 200（账面 0 → 600 → 1200），第 3 次 `429 ai_quota_exceeded`，文案含 `1,000` 与「明天」，`retry-after` 11 小时；`ai_usage` 记为 `requests=2 / prompt=1000 / completion=200`（被拒那次不预占、不调上游）。
+- chat 两次模型调用累加：`usage_ai(300,50)` → `ai_usage` 600/100，审计行同时为 600/100。
+- 只关 token 维度时仍按次数拦，文案必须说「次」而不提 token；两维都关时不写 `ai_usage`。
+- 无 usage 帧 / usage 形状不对时不回调；正文不是合法 JSON 时**也先回调**（钱已经花了）。
+
+**未做**
+- `analysis` 路由仍未纳入配额与 token 账（它没有 `keyId`，只有设备令牌；纳入要先把"设备→计量归属"定下来，属另一项设计）。
+- `ai_calls` 保留期清理（§10 第 3 项）。
+- 前端零改动：两个客户端本来就优先展示服务端 `error.message`，token 文案直接透出，不触发视觉基线。
+
+#### Step 3 生产部署（2026-11-17 15:59，已上线）
+
+1. 备份：`server-dist.tgz` + `server.env` → `/root/backend-backup-20261117-155928/`；库快照 `persist-20261117-155932-manual.sqlite`（`integrity: ok`，258048 B）。
+2. `dist` 原子替换（49 js 不变，7 个文件内容更新），`server.env` 追加 `PERSIST_AI_DAILY_TOKENS=200000`（28 键，`600`）；重启后 PID 44617、`NRestarts=0`，health `version=3`，启动日志 `"aiQuota":"100/day, 200k tokens/day"`。
+3. 验证（临时实例 + 真实凭据 + 真实上游，**不碰生产库**）：预置 `prompt 1100 / completion 120` + 上限 1000 → `429`（文案「（1,000）」，`retry-after: 28756`），`ai_usage` 不变、`ai_calls` 落 `quota_exceeded`；清空后发一次真实 `/api/chat` → 200 / 2.9 s，`ai_usage` 记 `requests=1 / 975 / 77`，`ai_calls` 同值。
+4. 公网复核：`/api/health` 200，无凭据 `/api/report` 401（门未受影响）。
+5. 回滚：`PERSIST_AI_DAILY_TOKENS=0` 只关 token 维度；整版回退用备份 tgz，migration 无变更（v3 已含 token 列，不需要新 migration）。
+
+**一个值得记的细节**：备份 CLI 需要环境变量（`DB_PATH`），直接 `node dist/db/backup-cli.js` 会报「数据库文件不存在：data/persist.sqlite」。正确做法是先 `set -a; . /etc/persist/server.env; set +a`，再执行——否则你会以为备份成功了，其实只有 tar 那部分成功。
+
 ---
 
 ## 8. 测试计划
@@ -456,6 +507,8 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 | `server/src/routes/chat.test.ts` | 401 短路（不调上游、不耗限流）；`off` 回归；`warn` 放行且审计正确 |
 | `server/src/routes/report.test.ts` | 同上 |
 | `server/src/ai/ai-usage.test.ts`（Step 2） | 边界值（恰好等于上限 / 超 1）；并发两次都通过（记录为已知行为，不作精确断言） |
+| `server/test/ai-usage.test.ts`（Step 3） | token 用满按 `tokens` 拒；token 未满放行；只开 token 维度仍按次计数；累加不覆盖次数；两项为 0 / 负数 / 小数 / 跨日 / `anonymous` |
+| `server/test/deepseek.test.ts`（Step 3） | 流末尾 usage 帧回调且不进正文；请求体带 `stream_options.include_usage`；无 usage 不回调；正文不合规也先回调 |
 | `app/src/lib/ai-credential.test.ts`（新增） | web mode 返回 null；mobile + 合法值返回；mobile + 非法前缀返回 null |
 | `app/src/lib/ai-chat-client.test.ts` | 有 credential 时 header 存在；无 credential 时 header **不存在**（不能是空字符串） |
 | `app/src/lib/ai-report-client.test.ts` | 同上 + 401 分类为「凭据失效」而非「不可用」 |
@@ -487,7 +540,7 @@ E2E：现有 E2E 用不可达端口隔离真实后端（工程约定 §1），�
 
 实施前需用户拍板，**未定项不阻塞实施**：
 
-1. ~~**日配额数值**~~ **已定（2026-11-17）：100 次/天**，不含 token 配额；`PERSIST_AI_DAILY_LIMIT=0` 可关闭。
+1. ~~**日配额数值**~~ **已定（2026-11-17）：100 次/天 + 200000 token/天**。两维可独立关闭（`PERSIST_AI_DAILY_LIMIT=0` / `PERSIST_AI_DAILY_TOKENS=0`）。选 200000 的依据：正常一天约十几轮对话 + 两三份报告 ≈ 2–5 万 token，留 4–10 倍余量；按 deepseek-chat 价格跑满一天也只是几毛到一两块钱。
 2. ~~**日界时区**~~ **已定：服务器本地日期（CST）**，与备份 timer 的 03:00 CST 口径一致。
 3. **审计保留期**：`ai_calls` 目前无限增长。是否设 90 天清理任务？（若设，需新增 job，属额外工作量；当前**未做**）
 4. ~~**`analysis` 是否纳入同一套配额**~~ **已定：不纳入**——它已有设备令牌门 + 6 次/5 分钟限流。
@@ -516,7 +569,7 @@ Step 1 与 Step 2 都已验收并部署，文档按下表实际落地（与上�
 | `docs/项目交接-2026-11-17.md` | **新建，作为当前入口**：§0.3 生产实况、§0.5 本轮工作、§4.4–4.6 链路/凭据/失败语义、§9 鉴权表、§10 任务看板 |
 | `docs/项目交接-2026-11-16.md` | 顶部加「已被 11-17 文稿取代」横幅；不再逐节改旧数字，避免两份文稿各说一套 |
 | `docs/工程约定.md` | §1 AI 行改为「已具备 AI 调用边界」，服务端行补 11-17 部署与 PID |
-| `docs/部署与服务器现状.md` | 顶部两条 11-17 部署记录（凭据门 / Step 2）；§6.1 生产现状更新为 schema 3 / dist 49 / PID 43171 / 27 键 env |
+| `docs/部署与服务器现状.md` | 顶部三条 11-17 部署记录（凭据门 / Step 2 / Step 3）；§6.1 生产现状更新为 schema 3 / dist 49 js / PID 44617 / 28 键 env |
 | `README.md` | 规模数字、当前阶段标题、AI 边界段落、P0 变量说明、文档地图入口 |
 | `HANDOFF.md` | 顶部加 11-17 入口记录，并把 11-16 段落标注为历史 |
-| `server/.env.example` | Step 1 已加 3 个变量（空值 + 注释），未含真实值 |
+| `server/.env.example` | Step 1/2/3 共加 4 个变量（空值或安全默认 + 注释），未含真实值 |

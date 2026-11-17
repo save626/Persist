@@ -4,9 +4,9 @@
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
 - 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成；服务端 2026-11-06、前端产物 2026-11-07 均已部署，同步默认关闭）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
-- 规模：八页面可完整点击验收；当前本机为 app 单测 383（32 文件）、server 单测 293（31 文件）、E2E 132 次执行（11 文件，2.6 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
+- 规模：八页面可完整点击验收；当前本机为 app 单测 383（32 文件）、server 单测 313（31 文件）、E2E 132 次执行（11 文件，2.6 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
 
-## 当前阶段（2026-11-17：P0 的 AI 凭据门与服务端日配额已上线——`/api/chat`、`/api/report` 需凭据、每日 100 次、schema 3；步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
+## 当前阶段（2026-11-17：P0 的 AI 凭据门与双配额已上线——`/api/chat`、`/api/report` 需凭据、每日 100 次 / 20 万 token、schema 3；步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
 
 前端产品原型**已完成并通过双端视觉验收，视觉范围冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI，`9f9cc71`）：AI 引导建档 → 长期计划草案确认 → 启用/归档闭环已通；AI 建档对话（`POST /api/chat`）、AI 报告文字与今日页晨间简报文字（`POST /api/report`）在「档案页开启 AI 数据授权 + 服务端健康」时走真实 DeepSeek，失败或未授权时回退本地规则/Mock 并如实标注；**报告的指标数字、依据条目与简报 KPI 始终由前端按本地记录确定性生成，模型只写文字**。业务数据全部写入本机 IndexedDB（刷新/重开不丢，有「清空本机数据」入口，导出导入为 0.3.0 备份格式并兼容旧版）：步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（本地 `schemaVersion` 当前为 3；步骤 11 初始为 2），报告页可按近 7 / 30 / 90 天窗口汇总真实历史。
 
@@ -78,7 +78,7 @@ npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；�
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
-npm run typecheck && npm test && npm run build   # 293 条 / 31 个文件
+npm run typecheck && npm test && npm run build   # 313 条 / 31 个文件
 Copy-Item .env.example .env    # 本机联调才填 DEEPSEEK_API_KEY；.env 不入库、用完即删
 node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动读 .env，带 Key 必须加 --env-file，否则 /api/chat、/api/report 返回 503
 ```
@@ -87,7 +87,7 @@ node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动�
 >
 > 步骤 13 新增 5 个分析与简报相关变量：`ANALYSIS_RATE_LIMIT_MAX`（默认 6 次 / 5 分钟，独立于 chat/report 的限流器）、`ANALYSIS_TIMEOUT_MS`（45000）、`ANALYSIS_MAX_TOKENS`（2600）、`DAILY_BRIEF_ENABLED`（false）、`DAILY_BRIEF_AT`（21:00）；默认值与注释见 [`server/.env.example`](server/.env.example)，行为说明见 [`server/README.md`](server/README.md)。
 >
-> 2026-11-17 新增 3 个 P0 变量：`PERSIST_AI_GATE`（`off` / `warn` / `enforce`，默认 `off`）、`PERSIST_AI_KEYS`（`k1:<sha256hex>[,k2:<sha256hex>]`，空 = fail-closed）、`PERSIST_AI_DAILY_LIMIT`（默认 `100`，`0` 关闭）；客户端侧对应 `VITE_PERSIST_AI_KEY`，**只允许写在 `app/.env.mobile.local`**，写进 `.env` / `.env.local` / `.env.production*` 会被 web 构建硬拦截。
+> 2026-11-17 新增 4 个 P0 变量：`PERSIST_AI_GATE`（`off` / `warn` / `enforce`，默认 `off`）、`PERSIST_AI_KEYS`（`k1:<sha256hex>[,k2:<sha256hex>]`，空 = fail-closed）、`PERSIST_AI_DAILY_LIMIT`（默认 `100` 次/天，`0` 关闭这一维）、`PERSIST_AI_DAILY_TOKENS`（默认 `200000` token/天，`0` 关闭这一维）；客户端侧对应 `VITE_PERSIST_AI_KEY`，**只允许写在 `app/.env.mobile.local`**，写进 `.env` / `.env.local` / `.env.production*` 会被 web 构建硬拦截。
 
 ## 视觉与交互基线
 
