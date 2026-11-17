@@ -1,7 +1,7 @@
 # P0 AI 接口服务端安全门设计方案
 
-> 版本：v1.3（2026-11-17 更新 Step 3 实施记录）
-> 状态：**Step 1（凭据门）、Step 2（次数配额 + 审计）、Step 3（token 配额）均已实施并通过门禁**，Step 1/2 已部署生产并完成真机闭环，Step 3 已于 15:59 部署生产（§7）。§10 中第 1、2、4 项已落地（100 次 + 200000 token / 服务器本地日界 / analysis 不纳入），第 3、5 项仍待定。
+> 版本：v1.4（2026-11-17 补 Step 4 审计保留期）
+> 状态：**Step 1（凭据门）、Step 2（次数配额 + 审计）、Step 3（token 配额）、Step 4（审计保留期）均已实施并通过门禁，全部已部署生产**（Step 1 完成真机闭环；Step 2 于 11:35、Step 3 于 15:59、Step 4 于 16:13 部署，见 §7）。§10 第 1、2、3、4 项已落地，仅第 5 项（设置页暴露凭据状态）按建议不做。
 > 决策来源：2026-11-17 会话中用户选定**「PSK 一步到位」**路线（构建期预置凭据 + 配额 + 审计），并要求先出设计文档再动代码。
 > 关系：本文是 `docs/项目交接-2026-11-16.md §10.1（P0）` 的展开与落地设计；与 `docs/工程约定.md` 冲突时以工程约定为准，与源码冲突时以源码为准。
 > 读者：下一位接手 P0 的开发者。读完应能直接拆任务，不需要再做架构决策（§10 的少数待确认项除外）。
@@ -484,7 +484,7 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 
 **未做**
 - `analysis` 路由仍未纳入配额与 token 账（它没有 `keyId`，只有设备令牌；纳入要先把"设备→计量归属"定下来，属另一项设计）。
-- `ai_calls` 保留期清理（§10 第 3 项）。
+- ~~`ai_calls` 保留期清理~~ → 见 Step 4。
 - 前端零改动：两个客户端本来就优先展示服务端 `error.message`，token 文案直接透出，不触发视觉基线。
 
 #### Step 3 生产部署（2026-11-17 15:59，已上线）
@@ -496,6 +496,39 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 5. 回滚：`PERSIST_AI_DAILY_TOKENS=0` 只关 token 维度；整版回退用备份 tgz，migration 无变更（v3 已含 token 列，不需要新 migration）。
 
 **一个值得记的细节**：备份 CLI 需要环境变量（`DB_PATH`），直接 `node dist/db/backup-cli.js` 会报「数据库文件不存在：data/persist.sqlite」。正确做法是先 `set -a; . /etc/persist/server.env; set +a`，再执行——否则你会以为备份成功了，其实只有 tar 那部分成功。
+
+### Step 4：审计保留期清理（`ai_calls` 30 天）
+
+**为什么值得单独一步**：`ai_calls` 是这张库里唯一**只增不减**的表——配额管的是「每天多少次」，不是「总共多少行」。不清就一直长，而它的价值随时间衰减：30 天前的调用记录对「额度被谁吃掉」「这个 key 是不是泄露了」已经没有信息量，剩下的是隐私负担（`ip_hash` + 调用节奏 + 路由分布）。同时隐私说明也没法写「审计保留 30 天」——`DATA_RETENTION.auditLogDays = 30` 这个常量从 P4 就在，只是一直没有任务去执行它。
+
+**与 §10 第 3 项初稿的差异**：初稿问的是「要不要设 90 天」，实施取 **30 天**，理由是「与既有 `DATA_RETENTION.auditLogDays` 同源」——两处数字不一致会在隐私文案与代码之间制造新的漂移。想更长只改 `PERSIST_AI_AUDIT_KEEP_DAYS`，不动代码。
+
+**模块**
+- `ai-audit.ts`：新增 `pruneAiCalls(db, cutoff, batchSize = 500)`。用 `DELETE ... WHERE id IN (SELECT id ... WHERE created_at < ? ORDER BY id LIMIT ?)` 分批删，循环到删空——单条 `DELETE` 在攒了几万行后会长时间持写锁，把并发 AI 请求卡在 `SQLITE_BUSY`。不用 `DELETE ... LIMIT`（需要 `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` 编译选项，Node 自带的那份不保证开）。循环上限 1000 轮（50 万行/次）只为防御「cutoff 传错扫空全表」，剩下的下次继续。
+- `jobs/ai-audit-prune.ts`：`runAiAuditPrune` + `startAiAuditPruneScheduler`。每天 **04:00 之后**跑一次（错开 03:00 的 `VACUUM INTO` 快照，避免同时抢写锁）；用 `job_runs` 的 `(name, run_key)` 去重，`run_key` 是本地日期——**重启不会当天重复删**，也留下一行可查的执行记录；删除失败记 `failed`，`claimJobRun` 允许 failed 当天重跑一次。删 0 行也写 `ok`：「今天跑过了」与「任务没启动」必须能区分。
+- `config.ts`：`PERSIST_AI_AUDIT_KEEP_DAYS` 默认 `DATA_RETENTION.auditLogDays`（30），范围 0–3650；启动日志新增 `"aiAudit":"30d"`，关掉时是 `"off"`。
+- `index.ts`：与每日简报**并列独立启动**（简报默认关闭，审计清理不能跟着它一起停），`shutdown` 先停定时器再关库。
+
+**语义坑（写在代码注释里，这里再记一次）**：这个 `0` 与配额的两个 `0` **意思相反**。配额 `= 0` 是「关掉限制」（放行），保留期 `= 0` 是「关掉清理」（不删）。保留期是删数据的动作，默认必须保守，所以「关」绝不能等于「全删」。
+
+**验收（`server/test/ai-audit-prune.test.ts` 12 条 + `config.test.ts` 1 条；服务端 32 文件 / 326 测试）**
+- 只删 `created_at < cutoff`：40 天前删、30 天前**恰好等于 cutoff 不删**（严格小于）、1 天前留。
+- 1200 行旧数据 + 批大小 100 → 返回 1200（验证「循环删空」而不是删一批就收工）。
+- 不碰 `ai_usage`：按天汇总是历史成本曲线，不属于审计明细。
+- `keepDays = 0` 跳过且**不写 `job_runs`**（不留「跑过了但什么都没做」的噪声行）；04:00 之前 `not-due`。
+- 同日第二次 `already-ran`；隔天再跑一次，`job_runs` 两行。
+- 删表（模拟表缺失）→ `failed` 且 `job_runs.error` 有值，进程不抛。
+- 本机真实进程（临时库 `:memory:` 之外的 `DB_PATH`）：启动日志 `"aiAudit":"30d"` + `{"deleted":0,"keepDays":30,"msg":"ai audit pruned"}`，`job_runs` 落 `ai_audit_prune / 2026-11-17 / ok`。
+
+#### Step 4 生产部署（2026-11-17 16:13，已上线）
+
+1. 备份：`server-dist.tgz` + `server.env` → `/root/backend-backup-20261117-161330/`；库快照 `persist-20261117-161334-manual.sqlite`（`integrity: ok`，258048 B，sha256 `6979cb29…`）。
+2. `dist` 原子替换（49 → **50** js，新增 `jobs/ai-audit-prune.js`），`server.env` 追加 `PERSIST_AI_AUDIT_KEEP_DAYS=30`（**29 键**，`600`）；重启后 PID **45265**、`NRestarts=0`，health `version=3`，启动日志 `"aiAudit":"30d"` + `ai audit pruned deleted:0`（生产 `ai_calls` 本来为空）。
+3. **在生产库上验证真的会删**（不是只看代码）：插入一条 40 天前、一条 3 天前的标记行 → 用生产 `dist` 里的 `pruneAiCalls` 跑一次 → `deleted=1`，留下的是 3 天前那条 → 再删掉标记行，`ai_calls` 回到 0。`job_runs` 有 `ai_audit_prune / 2026-11-17 / ok`。
+4. 公网复核：`/api/health` 200；无凭据 `POST /api/report`、`/api/chat`（完整合法请求体）均 `401 ai_unauthorized`——清理任务没有碰到门。
+5. 回滚：`PERSIST_AI_AUDIT_KEEP_DAYS=0` → 重启即停止清理（历史行原样保留，不删）；整版回退用备份 tgz，无 migration 变更（没加索引，见下）。
+
+**刻意没加索引**：`ai_calls(created_at)` 的索引在单用户量级（100 次/天上限 → 30 天 ≈ 3000 行）收益为零，却要多一次 migration（schema 4）。真要长到十万行再加，那时才有意义。
 
 ---
 
@@ -509,6 +542,7 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 | `server/src/ai/ai-usage.test.ts`（Step 2） | 边界值（恰好等于上限 / 超 1）；并发两次都通过（记录为已知行为，不作精确断言） |
 | `server/test/ai-usage.test.ts`（Step 3） | token 用满按 `tokens` 拒；token 未满放行；只开 token 维度仍按次计数；累加不覆盖次数；两项为 0 / 负数 / 小数 / 跨日 / `anonymous` |
 | `server/test/deepseek.test.ts`（Step 3） | 流末尾 usage 帧回调且不进正文；请求体带 `stream_options.include_usage`；无 usage 不回调；正文不合规也先回调 |
+| `server/test/ai-audit-prune.test.ts`（Step 4） | 只删 `created_at < cutoff`（等于不删）；1200 行 + 批 100 循环删空；不碰 `ai_usage`；`keepDays=0` 跳过且不写 `job_runs`；04:00 前 `not-due`；同日 `already-ran` / 隔天再跑；删表记 `failed` 不抛 |
 | `app/src/lib/ai-credential.test.ts`（新增） | web mode 返回 null；mobile + 合法值返回；mobile + 非法前缀返回 null |
 | `app/src/lib/ai-chat-client.test.ts` | 有 credential 时 header 存在；无 credential 时 header **不存在**（不能是空字符串） |
 | `app/src/lib/ai-report-client.test.ts` | 同上 + 401 分类为「凭据失效」而非「不可用」 |
@@ -532,7 +566,9 @@ E2E：现有 E2E 用不可达端口隔离真实后端（工程约定 §1），�
 回滚：
 
 - **首选**：`PERSIST_AI_GATE=off` + 重启 → 立刻回到当前行为，**无需回滚代码、无需回滚 APK**。
-- 回滚代码时注意 migration v3 已执行：新增表不影响旧代码（旧代码不读这两张表），因此不必回滚数据库。
+- 配额按维关：`PERSIST_AI_DAILY_LIMIT=0`（只关次数）/ `PERSIST_AI_DAILY_TOKENS=0`（只关 token）。
+- 保留期清理：`PERSIST_AI_AUDIT_KEEP_DAYS=0` + 重启 → 停止清理（**历史行原样保留**，这个 0 是「不删」不是「全删」）。
+- 回滚代码时注意 migration v3 已执行：新增表不影响旧代码（旧代码不读这两张表），因此不必回滚数据库；Step 4 没有 migration。
 
 ---
 
@@ -542,7 +578,7 @@ E2E：现有 E2E 用不可达端口隔离真实后端（工程约定 §1），�
 
 1. ~~**日配额数值**~~ **已定（2026-11-17）：100 次/天 + 200000 token/天**。两维可独立关闭（`PERSIST_AI_DAILY_LIMIT=0` / `PERSIST_AI_DAILY_TOKENS=0`）。选 200000 的依据：正常一天约十几轮对话 + 两三份报告 ≈ 2–5 万 token，留 4–10 倍余量；按 deepseek-chat 价格跑满一天也只是几毛到一两块钱。
 2. ~~**日界时区**~~ **已定：服务器本地日期（CST）**，与备份 timer 的 03:00 CST 口径一致。
-3. **审计保留期**：`ai_calls` 目前无限增长。是否设 90 天清理任务？（若设，需新增 job，属额外工作量；当前**未做**）
+3. ~~**审计保留期**~~ **已定（2026-11-17）：30 天**，`PERSIST_AI_AUDIT_KEEP_DAYS` 可调（`0` = 不清理）。取 30 而非初稿的 90，是为了与 `DATA_RETENTION.auditLogDays` 同源，隐私文案与代码不打架。实现与生产验证见 §7 Step 4。
 4. ~~**`analysis` 是否纳入同一套配额**~~ **已定：不纳入**——它已有设备令牌门 + 6 次/5 分钟限流。
 5. **是否在设置页暴露「AI 凭据状态」**：本文建议**不做**。暴露状态等于告诉使用者「这里有个密钥」，而凭据失效时前端已有明确降级提示。
 
@@ -572,4 +608,4 @@ Step 1 与 Step 2 都已验收并部署，文档按下表实际落地（与上�
 | `docs/部署与服务器现状.md` | 顶部三条 11-17 部署记录（凭据门 / Step 2 / Step 3）；§6.1 生产现状更新为 schema 3 / dist 49 js / PID 44617 / 28 键 env |
 | `README.md` | 规模数字、当前阶段标题、AI 边界段落、P0 变量说明、文档地图入口 |
 | `HANDOFF.md` | 顶部加 11-17 入口记录，并把 11-16 段落标注为历史 |
-| `server/.env.example` | Step 1/2/3 共加 4 个变量（空值或安全默认 + 注释），未含真实值 |
+| `server/.env.example` | Step 1–4 共加 5 个变量（空值或安全默认 + 注释），未含真实值 |
