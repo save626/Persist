@@ -404,7 +404,7 @@ POST /api/v1/sync/bootstrap
 
 补充规则：
 
-- **墓碑保留 30 天**后物理删除（定时任务），删除时清空 `payload_json` 但保留 `deleted_at/rev` 供游标推进；已删除用户的墓碑直接清。
+- **墓碑保留 30 天**后整行物理删除（**已实现，2026-11-17**：`sync_retention` job，见 `server/src/sync/tombstones.ts`）。设计稿原写「删时清空 `payload_json` 但保留 `deleted_at/rev`」，实施时改为**整行删除**——只留半条墓碑既不能减少行数，又会让 `pull` 继续返回一条没有任何信息的删除记录。`sync_ops` 幂等记录用同一个保留期；额外加了一道**设备水位**：墓碑还要比「最久未联系的活跃设备」更老才删，避免长期离线设备拉不到删除而在本地留幽灵行。
 - **时钟漂移**：`updatedAt` 用客户端时钟，服务端只做比较不做校正；若客户端时钟倒退，可能被 stale 丢弃，客户端在 push 收到 `skipped` 后用 pull 结果回填（服务端是这一冲突下的胜者）。
 - **游标**：客户端存 `lastPulledRev`，服务端 `rev` 单调，因此 pull 可以断点续传；删除的实体也会以 `deleted: true` 出现在 pull 里。
 - **频率**：启动、回到前台、写操作后 5 s 防抖、每 60 s 兜底；`navigator.onLine === false` 直接跳过。同步失败指数退避（5 s → 5 min 封顶），UI 只显示三态：「已同步 / 待同步 N / 离线」。

@@ -4,7 +4,7 @@
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
 - 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成；服务端 2026-11-06、前端产物 2026-11-07 均已部署，同步默认关闭）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
-- 规模：八页面可完整点击验收；当前本机为 app 单测 383（32 文件）、server 单测 326（32 文件）、E2E 132 次执行（11 文件，2.6 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
+- 规模：八页面可完整点击验收；当前本机为 app 单测 383（32 文件）、server 单测 343（33 文件）、E2E 132 次执行（11 文件，1.4 m），Lint 0 错 0 警告；视觉脚本 120 张页面截图 + 1 张快速记录（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
 
 ## 当前阶段（2026-11-17：P0 的 AI 凭据门、双配额与审计保留期已上线——`/api/chat`、`/api/report` 需凭据、每日 100 次 / 20 万 token、`ai_calls` 只留 30 天、schema 3；步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
 
@@ -78,7 +78,7 @@ npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；�
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
-npm run typecheck && npm test && npm run build   # 326 条 / 32 个文件
+npm run typecheck && npm test && npm run build   # 343 条 / 33 个文件
 Copy-Item .env.example .env    # 本机联调才填 DEEPSEEK_API_KEY；.env 不入库、用完即删
 node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动读 .env，带 Key 必须加 --env-file，否则 /api/chat、/api/report 返回 503
 ```
@@ -99,4 +99,4 @@ node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动�
 
 跨设备同步的代码已在步骤 12 完成（服务端 SQLite 副本 + 设备令牌 + 增量同步 + 设置页开关，**默认关闭**），且**服务端已于 2026-11-06 部署、前端「数据同步」卡片 2026-11-07 已上传**——但**同步默认关闭**，不开开关服务端不会收到任何业务数据；开启后本机数据副本才会分批上传到自己的服务器，且同步副本不是备份。
 
-步骤 13 的服务端综合分析报告同样**只存在服务端归档**（`analysis_reports`，保留 365 天，每次生成时清理过期项），不进本机 IndexedDB、不进 0.3.0 导出包；归档里只存模型文字与指标快照，墓碑 30 天 / 审计日志 30 天的清理尚未实现。步骤 14c 的 `GET /api/v1/export` 只导出当前账号的业务实体，**不会把服务端分析归档伪装成本地报告**；步骤 14d 的 `DELETE /api/v1/account` 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产并完成专项测试，14d 前端「先删服务端、成功后清本机」入口已在本机接线，待双端验收。
+步骤 13 的服务端综合分析报告同样**只存在服务端归档**（`analysis_reports`，保留 365 天，每次生成时清理过期项），不进本机 IndexedDB、不进 0.3.0 导出包；归档里只存模型文字与指标快照；墓碑与 `sync_ops` 30 天、`ai_calls` 30 天的清理均已实现（`sync_retention` / `ai_audit_prune`，每日 04:00 后跑一次）。步骤 14c 的 `GET /api/v1/export` 只导出当前账号的业务实体，**不会把服务端分析归档伪装成本地报告**；步骤 14d 的 `DELETE /api/v1/account` 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产并完成专项测试，14d 前端「先删服务端、成功后清本机」入口已在本机接线，待双端验收。
