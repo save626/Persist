@@ -56,6 +56,15 @@ export interface ServerConfig {
    * 默认 30 天，与 `DATA_RETENTION.auditLogDays` 同源，隐私说明可以照这个数字写。
    */
   aiAuditKeepDays: number
+  /**
+   * 同步留痕保留天数（P5-1）：墓碑行 + `sync_ops` 幂等记录。`0` = 不清理。
+   *
+   * 默认 30 天，与 `DATA_RETENTION.tombstoneDays` 同源——这个常量从 P4 就在，
+   * 一直没有任务去执行它。墓碑的作用是「把删除带给其他设备」，设备都知道了以后
+   * 就只是行数负担；但删早了会让长期离线的设备留下幽灵行，所以 `tombstones.ts`
+   * 里还有一道「必须比最久未联系的活跃设备更老」的判断。
+   */
+  syncRetentionDays: number
   rateLimitMax: number
   rateLimitWindowMs: number
   /** 同步 / 账号接口单独计数：客户端每 60 s 轮询一次，不能吃掉 AI 接口的额度。 */
@@ -155,6 +164,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       0,
       3_650,
     ),
+    syncRetentionDays: readInt(
+      env,
+      'PERSIST_SYNC_RETENTION_DAYS',
+      DATA_RETENTION.tombstoneDays,
+      0,
+      3_650,
+    ),
     rateLimitMax: readInt(env, 'RATE_LIMIT_MAX', 20, 1, 1_000),
     rateLimitWindowMs: readInt(env, 'RATE_LIMIT_WINDOW_MS', 5 * 60_000, 1_000, 3_600_000),
     syncRateLimitMax: readInt(env, 'SYNC_RATE_LIMIT_MAX', 240, 1, 10_000),
@@ -208,6 +224,8 @@ export function describeConfig(config: ServerConfig) {
     aiQuota: describeAiQuota(config),
     // 审计保留期：`off` 表示不清理（不是「不记录」），避免看日志的人误解。
     aiAudit: config.aiAuditKeepDays > 0 ? `${config.aiAuditKeepDays}d` : 'off',
+    // 同步留痕保留期：同样 `off` = 不清理。
+    syncRetention: config.syncRetentionDays > 0 ? `${config.syncRetentionDays}d` : 'off',
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,

@@ -4,6 +4,7 @@ import { describeConfig, loadConfig } from './config.js'
 import { openPersistDatabase, type PersistDatabase } from './db/index.js'
 import { startDailyBriefScheduler, type DailyBriefScheduler } from './jobs/daily-brief.js'
 import { startAiAuditPruneScheduler, type AiAuditPruneScheduler } from './jobs/ai-audit-prune.js'
+import { startSyncRetentionScheduler, type SyncRetentionScheduler } from './jobs/sync-retention.js'
 
 /**
  * 生产入口：只监听回环地址（默认 127.0.0.1:3000），由 Nginx 反代 /api/*。
@@ -34,6 +35,7 @@ const ai = createDeepSeekClient(config)
 const app = buildApp({ config, db: database, ai })
 let scheduler: DailyBriefScheduler | null = null
 let auditPruner: AiAuditPruneScheduler | null = null
+let syncRetention: SyncRetentionScheduler | null = null
 
 try {
   await app.listen({ host: config.host, port: config.port })
@@ -63,6 +65,13 @@ try {
     now: () => Date.now(),
     logger: app.log,
   })
+  // 同步留痕清理同样独立：它只碰墓碑与 sync_ops，和 AI 侧没有任何耦合。
+  syncRetention = startSyncRetentionScheduler({
+    db: database.db,
+    config,
+    now: () => Date.now(),
+    logger: app.log,
+  })
 } catch (error) {
   app.log.error({ err: error }, 'failed to start persist-server')
   database.db.close()
@@ -73,6 +82,7 @@ function shutdown(signal: string): void {
   app.log.info({ signal }, 'shutting down persist-server')
   scheduler?.stop()
   auditPruner?.stop()
+  syncRetention?.stop()
   app
     .close()
     .then(() => {

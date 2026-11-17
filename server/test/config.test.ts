@@ -102,6 +102,17 @@ describe('loadConfig', () => {
     expect(loadConfig(env({ DB_BACKUP_DIR: '/srv/backups' })).backupDir).toBe('/srv/backups')
   })
 
+  it('同步留痕保留期默认 30 天，0 = 不清理，越界收敛', () => {
+    expect(loadConfig(env({})).syncRetentionDays).toBe(30)
+    const view = (raw: string) =>
+      loadConfig(env({ PERSIST_SYNC_RETENTION_DAYS: raw })).syncRetentionDays
+    expect(view('0')).toBe(0)
+    expect(view('7')).toBe(7)
+    expect(view('abc')).toBe(30)
+    expect(view('-5')).toBe(0)
+    expect(view('99999')).toBe(3_650)
+  })
+
   it('审计保留期默认 30 天，0 = 不清理，越界收敛', () => {
     expect(loadConfig(env({})).aiAuditKeepDays).toBe(30)
     const view = (raw: string) =>
