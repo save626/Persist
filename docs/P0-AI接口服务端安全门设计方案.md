@@ -1,7 +1,7 @@
 # P0 AI 接口服务端安全门设计方案
 
-> 版本：v1.1（2026-11-17 更新 Step 1 实施记录）
-> 状态：**Step 1（凭据门）已在本机实施并通过门禁；Step 2 / Step 3 未实施；生产未部署**。§10 待确认项仍未拍板，不阻塞 Step 1。本文其余「将 / 应 / 计划」仍为待办，不代表已实现。
+> 版本：v1.2（2026-11-17 更新 Step 2 实施记录）
+> 状态：**Step 1（凭据门）与 Step 2（日配额 + 审计）已实施并通过门禁，Step 1 已部署生产且完成真机闭环；Step 3（token 配额）未实施**。§10 中第 1、2、4 项已随 Step 2 落地（100 次 / 服务器本地日界 / analysis 不纳入），第 3、5 项仍待定。
 > 决策来源：2026-11-17 会话中用户选定**「PSK 一步到位」**路线（构建期预置凭据 + 配额 + 审计），并要求先出设计文档再动代码。
 > 关系：本文是 `docs/项目交接-2026-11-16.md §10.1（P0）` 的展开与落地设计；与 `docs/工程约定.md` 冲突时以工程约定为准，与源码冲突时以源码为准。
 > 读者：下一位接手 P0 的开发者。读完应能直接拆任务，不需要再做架构决策（§10 的少数待确认项除外）。
@@ -186,7 +186,7 @@ Fastify
 
 ### 4.5 配额
 
-**Step 2（按请求次数，不依赖 usage）**：进入时读 `ai_usage(key_id, 今天)` 的 `requests`，`>= PERSIST_AI_DAILY_REQUESTS` 则 429；通过则计数器 +1（在事务内）。
+**Step 2（按请求次数，不依赖 usage）**：进入时读 `ai_usage(key_id, 今天)` 的 `requests`，`>= PERSIST_AI_DAILY_LIMIT` 则 429；通过则计数器 +1（在事务内）。实际默认值 100，`0` 表示关闭配额。
 
 **Step 3（token 配额）**：需要上游 usage，分两处改动：
 - `server/src/ai/deepseek.ts` 的流式请求增加 `stream_options: { include_usage: true }`，并在流末尾读取 usage 帧；`AiClient.streamChat` 增加**可选**回调 `onUsage?: (usage) => void`——不改现有签名，不影响 `analysis` 与每日简报的调用点。
@@ -202,7 +202,7 @@ Fastify
 
 每条调用写一行 `ai_calls`：`key_id`、`route`（`chat` / `report`）、`model`、`result`、`http_status`、`prompt_tokens`、`completion_tokens`、`latency_ms`、`ip_hash`、`created_at`。
 
-- `ip_hash` = `sha256(ip + 当日盐)`，用于「同一来源是否在刷」的判断，但不存明文 IP。
+- `ip_hash` = `sha256(ip)` 前 16 位十六进制，用于「同一来源是否在刷」的判断，不存明文 IP。**不加盐**（原设计写的「当日盐」未实现）：加盐需要轮换与存储策略，而它的收益只是抬高穷举成本——IPv4 空间本来就小，这里如实写成「用于聚类，不承诺匿名」更诚实。
 - `result` 取值：`ok` / `upstream_failed` / `timeout` / `client_closed` / `quota_exceeded` / `unauthorized` / `missing_credential` / `bad_credential`。
 - `client_closed` 必须记录：SSE 客户端提前断开是当前代码路径之一（`chat.ts:63-66`），漏记会让审计与账单对不上。
 
@@ -402,6 +402,42 @@ node -e "const c=require('crypto');const k='psa_'+c.randomBytes(32).toString('ba
 
 验收：日配额耗尽后 429 且**后续正常请求不受影响**（次日恢复需可测：注入 `now`）；审计中 `client_closed` 与 `ok` 可区分；请求体不出现在任何日志与表中。
 
+#### Step 2 实施记录（2026-11-17）
+
+已实现，`PERSIST_AI_DAILY_LIMIT` 默认 **100**。
+
+**模块**
+- `ai-usage.ts`：`localDayKey` / `nextLocalMidnight` / `reserveAiQuota` / `readAiUsage`。日界按服务器本地日期；「读→判→加一」在一个事务内，避免并发都把 99 读成可放行。`limit === 0` 直接放行且**不写库**。
+- `ai-audit.ts`：`recordAiCall` / `hashIp` / `listRecentAiCalls`。写失败只回调 `onError`，绝不把一次正常调用变成 500；表里没有任何正文列。
+
+**路由**
+- 顺序固定为 `请求体 → Key 检查 → 凭据门 → IP 限流 → 日配额 → 上游`。配额放在 IP 限流之后，避免一个脚本先把当天额度刷光。
+- `enforceAiGate` 返回值从 `boolean` 改为 `AiGateDecision | null`：配额与审计都要 `keyId`，原来只回放行与否拿不到归属。
+- 新增 `enforceAiQuota`（`routes/guards.ts`），与被拒时写 `quota_exceeded` 审计放在一起——只看 `ai_usage` 计数分不清「自己在用」和「被盗刷」。
+
+**两处与初稿不同，已改文档而非代码**
+1. **`/api/chat` 与 `/api/report` 共用同一份额度**。初稿按路由各记一份，但两条路由花的是同一个 Key 的钱，分开计数会让人误以为各有 100 次。
+2. **门设为 `off` 时仍然计数**（归到 `anonymous`）。初稿没写这条，实际实现成「配额独立于门开关」，否则回滚到 `off` 等于把止损一起关掉。
+
+**验收（`server/test/ai-usage.test.ts` / `ai-audit.test.ts` / `ai-quota-route.test.ts`）**
+- 第 100 次 200、第 101 次 `429 ai_quota_exceeded`，`retry-after` 指向次日零点（13:00 时为 39600 秒），文案含上限与「明天」。
+- 跨日恢复用注入时钟验证，不需要真的等到 00:00。
+- 超限不影响 `/api/health`；凭据不合法的 401 不消耗额度；`PERSIST_AI_DAILY_LIMIT=0` 时连续 5 次全放行。
+- 审计区分 `ok` / `quota_exceeded` / `client_closed`（客户端提前断开，`http_status=499`）/ `ai_failed`，并断言表内不含请求正文（搜不到档案与动作名）。
+
+**未做**
+- token 配额（仍是 Step 3）；`ai_calls` 保留期清理（§10 待定，暂不删）；`analysis` 路由未纳入配额（它已有设备令牌门 + 6 次/5 分钟限流）。
+- 前端**零改动**：两个客户端本来就优先展示服务端 `error.message`，新文案直接透出，不需要动 UI，也不触发视觉基线。
+
+#### Step 2 生产部署（2026-11-17 11:35，已上线）
+
+1. 先备份：`backup-cli.js --reason manual` 生成 `persist-20261117-113500-manual.sqlite`（`integrity: ok`），并归档旧 `dist` 与 `server.env` 到 `/root/backend-backup-20261117-113500/`。
+2. `dist` 原子替换（47 → 49 个 js），`server.env` 追加 `PERSIST_AI_DAILY_LIMIT=100`，重启后 migration v3 自动执行：health `version=3`，启动日志 `"aiGate":"enforce/1"` / `"aiQuota":"100/day"`。
+3. **验证时刻意不烧额度**：临时实例（3999 端口、同一份 dist 与 env、独立 `DB_PATH`）里预置「当日已用 1 次」+ 上限 1，请求得到 `429 ai_quota_exceeded`（文案含「1 次」「明天 00:00」，`retry-after: 44592`）；无凭据仍 `401`；日志 `{"aiQuota":{"used":1,"limit":1}}`；`ai_calls` 落两条 `quota_exceeded`。全程没有触发一次真实上游调用。
+4. 生产库此刻 `ai_usage` 空、`ai_calls` 0 行——配额上线前的历史调用不会补记，属预期。
+
+**踩到的坑（值得记）**：上一轮 `enforce` 验证时用 `kill %1` 停临时实例，在非交互 ssh 里作业控制不可用，进程实际没死，一直占着 3999 端口 35 分钟。这次新起的实例绑不上端口直接退出，`curl` 打到旧进程上，于是「明明配了正确凭据却返回 401」。**以后一律 `P=$!` 取 PID 再 `kill $P`，并在收尾时用 `ss -ltnp` 确认端口已释放**。
+
 ### Step 3：token 配额
 
 - `deepseek.ts` 加 `stream_options.include_usage` + 可选 `onUsage`
@@ -449,12 +485,12 @@ E2E：现有 E2E 用不可达端口隔离真实后端（工程约定 §1），�
 
 ## 10. 待确认问题
 
-实施前需用户拍板，**未定项不阻塞 Step 1**：
+实施前需用户拍板，**未定项不阻塞实施**：
 
-1. **日配额数值**：默认 300 次 / 20 万 tokens 是否合适？按你的实际用量调整。
-2. **日界时区**：本文取服务器本地日期（CST）。是否认可？
-3. **审计保留期**：`ai_calls` 目前无限增长。是否设 90 天清理任务？（若设，需新增 job，属额外工作量）
-4. **`analysis` 是否纳入同一套配额**：它现在有独立 `analysisRateLimitMax` 且走设备令牌。本方案**不纳入**，理由是它已有门。确认是否同意。
+1. ~~**日配额数值**~~ **已定（2026-11-17）：100 次/天**，不含 token 配额；`PERSIST_AI_DAILY_LIMIT=0` 可关闭。
+2. ~~**日界时区**~~ **已定：服务器本地日期（CST）**，与备份 timer 的 03:00 CST 口径一致。
+3. **审计保留期**：`ai_calls` 目前无限增长。是否设 90 天清理任务？（若设，需新增 job，属额外工作量；当前**未做**）
+4. ~~**`analysis` 是否纳入同一套配额**~~ **已定：不纳入**——它已有设备令牌门 + 6 次/5 分钟限流。
 5. **是否在设置页暴露「AI 凭据状态」**：本文建议**不做**。暴露状态等于告诉使用者「这里有个密钥」，而凭据失效时前端已有明确降级提示。
 
 ---
