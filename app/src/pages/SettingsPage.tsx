@@ -444,7 +444,7 @@ export function SettingsPage() {
           </span>
           <div>
             <span className="settings-kicker">LOCAL-FIRST RECORD</span>
-            <h2>记录保存在设备端，敏感密钥不进入浏览器。</h2>
+            <h2>记录默认保存在设备端，敏感密钥不进入浏览器。</h2>
             <p>
               记录默认保存在本机浏览器（IndexedDB），AI 请求仍由你的小型服务器代理
               DeepSeek；只有手动开启数据同步后，增量副本才会写入你的自建服务器。
@@ -812,7 +812,8 @@ export function SettingsPage() {
                   <p className="settings-inline-note">
                     <Icon name="lock" className="icon-sm" />
                     服务器只保存增量副本：记录内容、更新时间与删除标记；不保存恢复码明文，也不保存
-                    AI 对话内容。关闭同步不会删除本机记录。
+                    AI
+                    对话内容。关闭同步只停止上传，不会删除本机记录，也不会删除服务器上的已存副本——要彻底删除请用「删除账号」。
                   </p>
                 </>
               ) : (
@@ -1175,7 +1176,10 @@ export function SettingsPage() {
                   <span>03</span>
                   <div>
                     <strong>启用 HTTPS 与大小限制</strong>
-                    <p>只接受 HTTPS 请求，限制请求体和响应体大小，拒绝不必要的字段与附件。</p>
+                    <p>
+                      上线前启用 HTTPS，并限制请求体与响应体大小，拒绝不必要的字段与附件。当前为
+                      HTTP 内网调试，正式对外前必须完成证书与域名切换。
+                    </p>
                   </div>
                 </div>
                 <div className="deploy-step">

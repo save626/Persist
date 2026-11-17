@@ -382,6 +382,9 @@
   .priv-ico svg{width:17px;height:17px}
   .priv-item h3{font-size:15px;font-weight:600;letter-spacing:-.01em}
   .priv-item p{margin-top:9px;font-size:13px;line-height:1.85;color:var(--soft)}
+  .priv-note{
+    margin-top:clamp(16px,2.2vw,24px);font-size:13px;line-height:1.9;color:var(--muted);
+  }
 
   /* ---------- 12. 适合谁 ---------- */
   .fit{
@@ -824,7 +827,7 @@
             </svg>
           </div>
           <h3>本地优先</h3>
-          <p>记录优先留在你的设备上。同步是选项，不是前提。</p>
+          <p>记录先存在你的设备上。同步是选项：开启后增量副本存到你自己的服务器，删除账号会一并清掉服务器副本。</p>
         </div>
         <div class="priv-item reveal d1">
           <div class="priv-ico" aria-hidden="true">
@@ -835,7 +838,7 @@
             </svg>
           </div>
           <h3>只读需要的</h3>
-          <p>AI 分析只读取这次需要的事实，不读取无关内容。</p>
+          <p>只把这次分析需要的摘要发给 DeepSeek 生成文字，不含照片、原始备注和未授权的模块。</p>
         </div>
         <div class="priv-item reveal d2">
           <div class="priv-ico" aria-hidden="true">
@@ -850,6 +853,11 @@
           <p>没有社交，没有排行榜，没有陌生人看你的记录。</p>
         </div>
       </div>
+
+      <p class="priv-note reveal">
+        数据默认只在本机。开启同步后，增量副本存到你自己的服务器，分析归档保留 365 天；
+        删除账号会一并清掉服务器副本与快照，本机数据需单独清空。导出入口在设置页，随时可以带走全部记录。
+      </p>
     </div>
   </section>
 
