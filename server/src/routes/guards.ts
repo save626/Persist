@@ -6,7 +6,7 @@ import { recordAiCall } from '../ai/ai-audit.js'
 import { aiUnauthorizedBody, evaluateAiGate, type AiGateDecision } from '../ai/ai-guard.js'
 import { reserveAiQuota, type AiQuotaDecision } from '../ai/ai-usage.js'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { aiQuotaExceededBody, errorBody } from '../contract.js'
+import { aiQuotaExceededBody, aiTokenQuotaExceededBody, errorBody } from '../contract.js'
 import { authenticateRequest } from '../sync/service.js'
 
 /**
@@ -75,7 +75,7 @@ export function enforceAiGate(
 }
 
 /**
- * `/api/chat` 与 `/api/report` 的日配额（P0 Step 2）。
+ * `/api/chat` 与 `/api/report` 的日配额（P0 Step 2 次数 / Step 3 token）。
  *
  * 返回非空表示已经预占一次额度；返回 `null` 表示已写好 429，调用方直接 `return reply`。
  *
@@ -96,7 +96,8 @@ export function enforceAiQuota(options: {
 }): AiQuotaDecision | null {
   const decision = reserveAiQuota(options.db, {
     keyId: options.gate.keyId,
-    limit: options.config.aiDailyLimit,
+    requestLimit: options.config.aiDailyLimit,
+    tokenLimit: options.config.aiDailyTokens,
     now: options.now,
   })
   if (decision.allowed) return decision
@@ -118,17 +119,28 @@ export function enforceAiQuota(options: {
 
   options.request.log.warn(
     {
-      aiQuota: { used: decision.used, limit: decision.limit },
+      aiQuota: {
+        reason: decision.reason,
+        used: decision.used,
+        limit: decision.limit,
+        tokensUsed: decision.tokensUsed,
+        tokenLimit: decision.tokenLimit,
+      },
       keyId: options.gate.keyId ?? 'anonymous',
       route: options.request.url,
     },
     'ai daily quota exhausted',
   )
 
+  const body =
+    decision.reason === 'tokens'
+      ? aiTokenQuotaExceededBody(decision.tokenLimit)
+      : aiQuotaExceededBody(decision.limit)
+
   options.reply
     .header('cache-control', 'no-store')
     .header('retry-after', String(Math.max(1, Math.ceil((decision.resetAt - nowMs) / 1_000))))
     .code(429)
-    .send(aiQuotaExceededBody(decision.limit))
+    .send(body)
   return null
 }

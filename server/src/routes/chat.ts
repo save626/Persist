@@ -1,7 +1,8 @@
-import { AiError, type AiClient } from '../ai/deepseek.js'
+import { AiError, type AiClient, type AiTokenUsage } from '../ai/deepseek.js'
 import { sanitizeExtraction } from '../ai/extract.js'
 import { buildChatMessages, buildExtractionMessages } from '../ai/prompts.js'
 import { recordAiCall, type AiCallResult } from '../ai/ai-audit.js'
+import { addAiTokens } from '../ai/ai-usage.js'
 import type { ServerConfig } from '../config.js'
 import { errorBody, parseChatRequest, type ChatStreamEvent } from '../contract.js'
 import type { Db } from '../db/driver.js'
@@ -86,6 +87,14 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
     // 所以审计里靠 `result` 区分，不能靠 httpStatus。
     let result: AiCallResult = 'ai_failed'
 
+    // 一次 /api/chat 会打两次模型：流式回复 + 结构化抽取。两次的 usage 累计到这一处，
+    // 请求结束时一次写入（P0 Step 3）。拿不到 usage 时保持 0，不猜。
+    const tokens = { prompt: 0, completion: 0 }
+    const collectUsage = (usage: AiTokenUsage) => {
+      tokens.prompt += usage.promptTokens
+      tokens.completion += usage.completionTokens
+    }
+
     reply.hijack()
     const response = reply.raw
     response.writeHead(200, SSE_HEADERS)
@@ -112,6 +121,7 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
 
       for await (const text of options.ai.streamChat(buildChatMessages(parsed.value), {
         signal: abort.signal,
+        onUsage: collectUsage,
       })) {
         if (abort.signal.aborted) break
         write({ type: 'delta', text })
@@ -120,6 +130,7 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
       if (!abort.signal.aborted) {
         const raw = await options.ai.completeJson(buildExtractionMessages(parsed.value), {
           signal: abort.signal,
+          onUsage: collectUsage,
         })
         const extraction = sanitizeExtraction(raw, parsed.value.profile)
         if (extraction.questions.length > 0) {
@@ -154,6 +165,19 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
     } finally {
       clearInterval(heartbeat)
       if (!response.writableEnded) response.end()
+      // token 记账（P0 Step 3）：两维配额都关掉时不写库（回滚路径不留空行）。
+      if (options.config.aiDailyLimit > 0 || options.config.aiDailyTokens > 0) {
+        addAiTokens(
+          options.db,
+          {
+            keyId: gate.keyId,
+            promptTokens: tokens.prompt,
+            completionTokens: tokens.completion,
+            now: options.now,
+          },
+          (error) => request.log.warn({ err: error }, 'ai token accounting failed'),
+        )
+      }
       recordAiCall(
         options.db,
         {
@@ -163,6 +187,8 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
           httpStatus: 200,
           model: options.config.deepseekModel,
           latencyMs: options.now() - startedAt,
+          promptTokens: tokens.prompt,
+          completionTokens: tokens.completion,
           ip: request.ip,
           now: options.now,
         },

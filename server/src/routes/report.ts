@@ -2,6 +2,7 @@ import { AiError, type AiClient } from '../ai/deepseek.js'
 import { buildReportMessages } from '../ai/prompts.js'
 import { sanitizeReportContent } from '../ai/report.js'
 import { recordAiCall, type AiCallResult } from '../ai/ai-audit.js'
+import { addAiTokens } from '../ai/ai-usage.js'
 import type { ServerConfig } from '../config.js'
 import { errorBody, parseReportRequest, type ReportResponse } from '../contract.js'
 import type { Db } from '../db/driver.js'
@@ -81,6 +82,9 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
       httpStatus: 502,
     }
 
+    // token 记账（P0 Step 3）：取不到 usage 时为 0，写库时会跳过。
+    const tokens = { prompt: 0, completion: 0 }
+
     // 浏览器关闭连接时取消上游请求。request 的 'close' 在请求体读完后就会触发，
     // 这里改用响应的 'close'，并用 writableEnded 区分「正常回包」和「客户端提前断开」。
     const abort = new AbortController()
@@ -92,6 +96,10 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
     try {
       const raw = await options.ai.completeJson(buildReportMessages(parsed.value), {
         signal: abort.signal,
+        onUsage: (usage) => {
+          tokens.prompt += usage.promptTokens
+          tokens.completion += usage.completionTokens
+        },
       })
       const sanitized = sanitizeReportContent(raw)
       if (!sanitized.ok) {
@@ -129,6 +137,19 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
         .send(errorBody('ai_failed', UNAVAILABLE_MESSAGE))
     } finally {
       reply.raw.off('close', onClose)
+      // token 记账（P0 Step 3）：两维配额都关掉时不写库。
+      if (options.config.aiDailyLimit > 0 || options.config.aiDailyTokens > 0) {
+        addAiTokens(
+          options.db,
+          {
+            keyId: gate.keyId,
+            promptTokens: tokens.prompt,
+            completionTokens: tokens.completion,
+            now: options.now,
+          },
+          (error) => request.log.warn({ err: error }, 'ai token accounting failed'),
+        )
+      }
       recordAiCall(
         options.db,
         {
@@ -138,6 +159,8 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
           httpStatus: outcome.httpStatus,
           model: options.config.deepseekModel,
           latencyMs: options.now() - startedAt,
+          promptTokens: tokens.prompt,
+          completionTokens: tokens.completion,
           ip: request.ip,
           now: options.now,
         },

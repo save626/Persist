@@ -239,6 +239,124 @@ describe('日配额：/api/report', () => {
   })
 })
 
+describe('token 配额（P0 Step 3）', () => {
+  /** 每次模型调用固定报这么多 token，便于算出「第几次该被拦」。 */
+  function usageAi(promptTokens: number, completionTokens: number): AiClient {
+    return {
+      async *streamChat(_messages, options) {
+        options?.onUsage?.({ promptTokens, completionTokens })
+        yield '好'
+      },
+      async completeJson(_messages, options) {
+        options?.onUsage?.({ promptTokens, completionTokens })
+        return goodReport
+      },
+    }
+  }
+
+  it('次数还富余但 token 用满后返回 429，文案说清 token 上限', async () => {
+    await withServer(
+      {
+        ai: usageAi(500, 100),
+        env: { PERSIST_AI_DAILY_LIMIT: '100', PERSIST_AI_DAILY_TOKENS: '1000' },
+      },
+      async ({ baseUrl, db }) => {
+        // 第 1 次：账面 0 → 放行，记账 600。
+        const first = await postReport(baseUrl)
+        expect(first.status).toBe(200)
+        await first.arrayBuffer()
+        // 第 2 次：账面 600 < 1000 → 放行，记账 1200（事后记账允许最后一次顶过上限）。
+        const second = await postReport(baseUrl)
+        expect(second.status).toBe(200)
+        await second.arrayBuffer()
+
+        // 第 3 次：账面 1200 ≥ 1000 → 拦在门外，不打上游。
+        const blocked = await postReport(baseUrl)
+        expect(blocked.status).toBe(429)
+        expect(blocked.headers.get('cache-control')).toBe('no-store')
+        expect(Number(blocked.headers.get('retry-after'))).toBe(11 * 60 * 60)
+        const body = (await blocked.json()) as { error: { code: string; message: string } }
+        expect(body.error.code).toBe('ai_quota_exceeded')
+        expect(body.error.message).toContain('token')
+        expect(body.error.message).toContain('1,000')
+        expect(body.error.message).toContain('明天')
+
+        const usage = db
+          .prepare<{ requests: number; prompt_tokens: number; completion_tokens: number }>(
+            'SELECT requests, prompt_tokens, completion_tokens FROM ai_usage WHERE key_id = ?',
+          )
+          .get('k1')
+        // 只记成功放行的两次：被拒那次不预占、也不调上游。
+        expect(usage).toEqual({ requests: 2, prompt_tokens: 1_000, completion_tokens: 200 })
+      },
+    )
+  })
+
+  it('chat 一次请求的两次模型调用累加记账，并写进审计', async () => {
+    await withServer(
+      { ai: usageAi(300, 50), env: { PERSIST_AI_DAILY_LIMIT: '100' } },
+      async ({ baseUrl, db }) => {
+        const response = await postChat(baseUrl)
+        expect(response.status).toBe(200)
+        await response.text()
+
+        const usage = db
+          .prepare<{ prompt_tokens: number; completion_tokens: number }>(
+            'SELECT prompt_tokens, completion_tokens FROM ai_usage WHERE key_id = ?',
+          )
+          .get('k1')
+        expect(usage).toEqual({ prompt_tokens: 600, completion_tokens: 100 })
+
+        const rows = await waitForAudit(db, (list) => list.some((row) => row.route === '/api/chat'))
+        expect(rows[0]).toMatchObject({
+          result: 'ok',
+          prompt_tokens: 600,
+          completion_tokens: 100,
+        })
+      },
+    )
+  })
+
+  it('只关 token 维度时仍按次数限流', async () => {
+    await withServer(
+      {
+        ai: usageAi(10_000, 0),
+        env: { PERSIST_AI_DAILY_LIMIT: '1', PERSIST_AI_DAILY_TOKENS: '0' },
+      },
+      async ({ baseUrl }) => {
+        const first = await postReport(baseUrl)
+        expect(first.status).toBe(200)
+        await first.arrayBuffer()
+        const second = await postReport(baseUrl)
+        expect(second.status).toBe(429)
+        const body = (await second.json()) as { error: { message: string } }
+        // token 维度关掉了，文案必须是次数口径，不能提 token。
+        expect(body.error.message).toContain('次')
+        expect(body.error.message).not.toContain('token')
+      },
+    )
+  })
+
+  it('两维都关掉时既不拦截也不写用量表', async () => {
+    await withServer(
+      {
+        ai: usageAi(10_000, 0),
+        env: { PERSIST_AI_DAILY_LIMIT: '0', PERSIST_AI_DAILY_TOKENS: '0' },
+      },
+      async ({ baseUrl, db }) => {
+        for (let i = 0; i < 3; i += 1) {
+          const response = await postReport(baseUrl)
+          expect(response.status).toBe(200)
+          await response.arrayBuffer()
+        }
+        expect(
+          db.prepare<{ total: number }>('SELECT COUNT(*) AS total FROM ai_usage').get(),
+        ).toEqual({ total: 0 })
+      },
+    )
+  })
+})
+
 describe('审计', () => {
   it('成功与超限都留下记录，且不含请求正文', async () => {
     await withServer({ env: { PERSIST_AI_DAILY_LIMIT: '1' } }, async ({ baseUrl, db }) => {
@@ -319,9 +437,10 @@ describe('审计', () => {
 })
 
 describe('配置默认值', () => {
-  it('不设 PERSIST_AI_DAILY_LIMIT 时默认 100', () => {
+  it('不设 PERSIST_AI_DAILY_LIMIT / PERSIST_AI_DAILY_TOKENS 时默认 100 次 / 200000 token', () => {
     const config = loadConfig({ DEEPSEEK_API_KEY: 'sk-test' } as unknown as NodeJS.ProcessEnv)
     expect(config.aiDailyLimit).toBe(100)
+    expect(config.aiDailyTokens).toBe(200_000)
   })
 
   it('非法或越界值收敛到合法区间', () => {
@@ -333,6 +452,17 @@ describe('配置默认值', () => {
     expect(view('abc')).toBe(100)
     expect(view('-5')).toBe(0)
     expect(view('999999')).toBe(100_000)
+  })
+
+  it('token 上限同样可关可配，且有上界', () => {
+    const tokenView = (raw: string) =>
+      loadConfig({
+        DEEPSEEK_API_KEY: 'sk-test',
+        PERSIST_AI_DAILY_TOKENS: raw,
+      } as unknown as NodeJS.ProcessEnv).aiDailyTokens
+    expect(tokenView('0')).toBe(0)
+    expect(tokenView('abc')).toBe(200_000)
+    expect(tokenView('999999999999')).toBe(100_000_000)
   })
 })
 

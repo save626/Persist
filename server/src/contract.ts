@@ -296,6 +296,23 @@ export function aiQuotaExceededBody(limit: number) {
   )
 }
 
+/** token 上限的展示格式：`200000` → `200,000`，让「这是多少」一眼可读。 */
+export function formatTokenLimit(value: number): string {
+  const numeric = Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0
+  return String(numeric).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+/**
+ * token 配额耗尽（P0 Step 3）。与次数共用 `ai_quota_exceeded` 码：
+ * 前端两者都回退本地 Mock，区别只在文案；多造一个码只会让前端多一条无用分支。
+ */
+export function aiTokenQuotaExceededBody(tokenLimit: number) {
+  return errorBody(
+    AI_QUOTA_EXCEEDED_CODE,
+    `今日 AI token 用量已达上限（${formatTokenLimit(tokenLimit)}），明天 00:00 恢复；期间仍可使用本地 Mock。`,
+  )
+}
+
 // ---------------------------------------------------------------------------
 // AI 报告（8c）：类型与请求/响应契约统一放在 shared/contract/report.ts
 // ---------------------------------------------------------------------------

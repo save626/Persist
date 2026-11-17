@@ -26,17 +26,42 @@ export class AiError extends Error {
   }
 }
 
+/**
+ * 上游报告的 token 用量（P0 Step 3）。
+ *
+ * 只取两个数：输入与输出。不取 `total_tokens`——它是两者之和，存三份会有一份永远
+ * 可能和另两份对不上；配额判定要的是「花掉多少」，加出来即可。
+ */
+export interface AiTokenUsage {
+  promptTokens: number
+  completionTokens: number
+}
+
+export interface AiStreamOptions {
+  signal?: AbortSignal
+  /**
+   * 上游返回 usage 时回调一次。
+   *
+   * 流式下 DeepSeek 只在**最后一个 chunk**（`choices` 为空、带 `usage`）给出用量，
+   * 所以拿到它意味着这条流正常跑到了结尾；中途 abort / 断流时不会回调，
+   * 这次调用在账上就记 0 token（少算，不会多算）。
+   */
+  onUsage?: (usage: AiTokenUsage) => void
+}
+
 export interface AiJsonOptions {
   signal?: AbortSignal
   /** 本次调用覆盖默认 max_tokens（综合分析正文比简报长，需要更大额度）。 */
   maxTokens?: number
   /** 本次调用覆盖默认超时（长事实包生成更慢）。 */
   timeoutMs?: number
+  /** 同 `AiStreamOptions.onUsage`；非流式响应体里直接带 `usage`。 */
+  onUsage?: (usage: AiTokenUsage) => void
 }
 
 export interface AiClient {
   /** 逐块产出模型可见回复文本。 */
-  streamChat(messages: ChatMessage[], options?: { signal?: AbortSignal }): AsyncGenerator<string>
+  streamChat(messages: ChatMessage[], options?: AiStreamOptions): AsyncGenerator<string>
   /** 非流式 JSON 调用，返回已解析的对象（未校验结构）。 */
   completeJson(messages: ChatMessage[], options?: AiJsonOptions): Promise<unknown>
 }
@@ -121,23 +146,54 @@ function parseJsonContent(content: string): unknown {
   }
 }
 
-function parseSseLine(line: string): string | 'done' | null {
+/**
+ * 从上游响应里抠出 token 用量。取不到就返回 `null`（记 0），**绝不猜**：
+ * 编一个数字会让日配额看起来更紧，排查时却查不出缘由。
+ */
+export function readTokenUsage(value: unknown): AiTokenUsage | null {
+  if (typeof value !== 'object' || value === null) return null
+  const usage = value as { prompt_tokens?: unknown; completion_tokens?: unknown }
+  const prompt = toTokenCount(usage.prompt_tokens)
+  const completion = toTokenCount(usage.completion_tokens)
+  // 两项都缺或都为 0 视为没有用量（上游可能没返回 usage 字段）。
+  if (prompt === 0 && completion === 0) return null
+  return { promptTokens: prompt, completionTokens: completion }
+}
+
+function toTokenCount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 0
+  return Math.trunc(value)
+}
+
+type SseEvent = { content: string } | { usage: AiTokenUsage } | 'done'
+
+function parseSseLine(line: string): SseEvent | null {
   const trimmed = line.trim()
   if (!trimmed.startsWith('data:')) return null
   const data = trimmed.slice(5).trim()
   if (!data) return null
   if (data === '[DONE]') return 'done'
   try {
-    const parsed = JSON.parse(data) as { choices?: { delta?: { content?: unknown } }[] }
+    const parsed = JSON.parse(data) as {
+      choices?: { delta?: { content?: unknown } }[]
+      usage?: unknown
+    }
     const content = parsed.choices?.[0]?.delta?.content
-    return typeof content === 'string' && content.length > 0 ? content : null
+    if (typeof content === 'string' && content.length > 0) return { content }
+    // usage 只出现在最后一个 chunk 上，且那一帧的 choices 是空数组，
+    // 所以必须先判文本、再判 usage，否则会把纯 usage 帧误当成「空内容」丢掉。
+    const usage = readTokenUsage(parsed.usage)
+    return usage ? { usage } : null
   } catch {
     // 单行解析失败不中断整条流：跳过坏行，继续等后面的数据。
     return null
   }
 }
 
-async function* readSseContent(response: Response): AsyncGenerator<string> {
+async function* readSseContent(
+  response: Response,
+  onUsage?: (usage: AiTokenUsage) => void,
+): AsyncGenerator<string> {
   if (!response.body) throw new AiError('invalid_response', '模型服务没有返回响应体。')
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
@@ -153,12 +209,16 @@ async function* readSseContent(response: Response): AsyncGenerator<string> {
         buffer = buffer.slice(newline + 1)
         const payload = parseSseLine(line)
         if (payload === 'done') return
-        if (typeof payload === 'string') yield payload
+        if (payload && 'content' in payload) yield payload.content
+        else if (payload && 'usage' in payload) onUsage?.(payload.usage)
         newline = buffer.indexOf('\n')
       }
     }
     const tail = parseSseLine(buffer)
-    if (typeof tail === 'string') yield tail
+    if (tail && tail !== 'done') {
+      if ('content' in tail) yield tail.content
+      else onUsage?.(tail.usage)
+    }
   } finally {
     await reader.cancel().catch(() => undefined)
   }
@@ -212,8 +272,10 @@ export function createDeepSeekClient(
             stream: true,
             temperature: 0.6,
             max_tokens: 900,
+            // 要求上游在流末尾附带 usage，否则配额拿不到 token 数（P0 Step 3）。
+            stream_options: { include_usage: true },
           })
-          for await (const text of readSseContent(response)) {
+          for await (const text of readSseContent(response, options?.onUsage)) {
             yielded += 1
             yield text
           }
@@ -248,11 +310,15 @@ export function createDeepSeekClient(
           })
           const payload = (await response.json()) as {
             choices?: { message?: { content?: unknown } }[]
+            usage?: unknown
           }
           const content = payload.choices?.[0]?.message?.content
           if (typeof content !== 'string' || !content.trim()) {
             throw new AiError('invalid_response', '模型服务返回了空内容。')
           }
+          // 先回调再解析 JSON：即使正文结构不合规，这次调用的 token 也已经花掉了。
+          const usage = readTokenUsage(payload.usage)
+          if (usage) options?.onUsage?.(usage)
           return parseJsonContent(content)
         } catch (error) {
           lastError = normalizeError(error, session.timedOut())

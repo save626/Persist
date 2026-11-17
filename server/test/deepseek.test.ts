@@ -141,3 +141,93 @@ describe('createDeepSeekClient', () => {
     expect(calls).toBe(0)
   })
 })
+
+describe('token 用量采集（P0 Step 3）', () => {
+  const usageChunk = `data: ${JSON.stringify({
+    choices: [],
+    usage: { prompt_tokens: 1_234, completion_tokens: 56, total_tokens: 1_290 },
+  })}\n\n`
+
+  it('streamChat 从流末尾的 usage 帧回调，且不把它当成正文', async () => {
+    const bodies: string[] = []
+    const fetchImpl: FetchLike = async (_input, init) => {
+      bodies.push(String(init?.body ?? ''))
+      return sseResponse([deltaChunk('你好'), usageChunk, 'data: [DONE]\n\n'])
+    }
+    const client = createDeepSeekClient(makeConfig(), fetchImpl)
+    const seen: { promptTokens: number; completionTokens: number }[] = []
+    const chunks: string[] = []
+    for await (const text of client.streamChat([{ role: 'user', content: 'hi' }], {
+      onUsage: (usage) => seen.push(usage),
+    })) {
+      chunks.push(text)
+    }
+    expect(chunks).toEqual(['你好'])
+    expect(seen).toEqual([{ promptTokens: 1_234, completionTokens: 56 }])
+    // 必须显式要求上游带回 usage，否则永远采不到。
+    expect(JSON.parse(bodies[0] ?? '{}')).toMatchObject({
+      stream: true,
+      stream_options: { include_usage: true },
+    })
+  })
+
+  it('没有 usage 帧时不回调（不编造数字）', async () => {
+    const fetchImpl: FetchLike = async () => sseResponse([deltaChunk('好的'), 'data: [DONE]\n\n'])
+    const client = createDeepSeekClient(makeConfig(), fetchImpl)
+    let called = 0
+    for await (const _text of client.streamChat([{ role: 'user', content: 'hi' }], {
+      onUsage: () => {
+        called += 1
+      },
+    })) {
+      // 只为把流跑完
+    }
+    expect(called).toBe(0)
+  })
+
+  it('completeJson 从响应体的 usage 回调', async () => {
+    const fetchImpl: FetchLike = async () =>
+      jsonResponse({
+        choices: [{ message: { content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 800, completion_tokens: 40 },
+      })
+    const client = createDeepSeekClient(makeConfig(), fetchImpl)
+    const seen: unknown[] = []
+    await client.completeJson([{ role: 'user', content: 'x' }], {
+      onUsage: (usage) => seen.push(usage),
+    })
+    expect(seen).toEqual([{ promptTokens: 800, completionTokens: 40 }])
+  })
+
+  it('正文不合规也要先记 usage：钱已经花掉了', async () => {
+    const fetchImpl: FetchLike = async () =>
+      jsonResponse({
+        choices: [{ message: { content: '不是 JSON' } }],
+        usage: { prompt_tokens: 300, completion_tokens: 12 },
+      })
+    const client = createDeepSeekClient(makeConfig(), fetchImpl)
+    const seen: unknown[] = []
+    await expect(
+      client.completeJson([{ role: 'user', content: 'x' }], {
+        onUsage: (usage) => seen.push(usage),
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_response' })
+    expect(seen).toEqual([{ promptTokens: 300, completionTokens: 12 }])
+  })
+
+  it('usage 字段缺失或形状不对时视为没有用量', async () => {
+    const fetchImpl: FetchLike = async () =>
+      jsonResponse({
+        choices: [{ message: { content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 'x', completion_tokens: null },
+      })
+    const client = createDeepSeekClient(makeConfig(), fetchImpl)
+    let called = 0
+    await client.completeJson([{ role: 'user', content: 'x' }], {
+      onUsage: () => {
+        called += 1
+      },
+    })
+    expect(called).toBe(0)
+  })
+})

@@ -35,6 +35,9 @@ export interface AiCallRecord {
   httpStatus: number
   model?: string | null
   latencyMs?: number | null
+  /** 本次调用实际花掉的 token（P0 Step 3）；拿不到 usage 时留空，不写 0 假装知道。 */
+  promptTokens?: number | null
+  completionTokens?: number | null
   /** 调用方 IP；内部转哈希后落库，明文不落盘。 */
   ip?: string | null
   now: () => number
@@ -58,14 +61,17 @@ export function recordAiCall(
   try {
     db.prepare(
       `INSERT INTO ai_calls
-         (key_id, route, model, result, http_status, latency_ms, ip_hash, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (key_id, route, model, result, http_status, prompt_tokens, completion_tokens,
+          latency_ms, ip_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       record.keyId?.trim() || 'anonymous',
       record.route,
       record.model ?? null,
       record.result,
       Math.trunc(record.httpStatus),
+      toTokenColumn(record.promptTokens),
+      toTokenColumn(record.completionTokens),
       record.latencyMs === null || record.latencyMs === undefined
         ? null
         : Math.trunc(record.latencyMs),
@@ -77,6 +83,12 @@ export function recordAiCall(
   }
 }
 
+/** token 列：缺省留 NULL，不要用 0 冒充「上游说这次是 0」。 */
+function toTokenColumn(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null
+  return Math.max(0, Math.trunc(value))
+}
+
 export interface AiCallRow {
   id: number
   key_id: string
@@ -84,6 +96,8 @@ export interface AiCallRow {
   model: string | null
   result: string
   http_status: number
+  prompt_tokens: number | null
+  completion_tokens: number | null
   latency_ms: number | null
   ip_hash: string | null
   created_at: number
@@ -93,7 +107,8 @@ export interface AiCallRow {
 export function listRecentAiCalls(db: Db, limit = 20): AiCallRow[] {
   const rows = db
     .prepare<AiCallRow>(
-      `SELECT id, key_id, route, model, result, http_status, latency_ms, ip_hash, created_at
+      `SELECT id, key_id, route, model, result, http_status, prompt_tokens, completion_tokens,
+              latency_ms, ip_hash, created_at
          FROM ai_calls ORDER BY id DESC LIMIT ?`,
     )
     .all(Math.max(1, Math.trunc(limit)))

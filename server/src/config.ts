@@ -34,10 +34,16 @@ export interface ServerConfig {
    */
   aiKeys: AiKey[]
   /**
-   * 每个凭据的每日调用上限（P0 Step 2）。`0` 关闭配额。
+   * 每个凭据的每日调用上限（P0 Step 2）。`0` 关闭这一维。
    * 默认 100：凭据被提取后，这是唯一能把「无限盗刷」变成「每天有限」的止损手段。
    */
   aiDailyLimit: number
+  /**
+   * 每个凭据的每日 token 上限（P0 Step 3，输入 + 输出）。`0` 关闭这一维。
+   * 默认 200000：正常一天（十几次对话 + 两三份报告）大约 2–5 万 token，
+   * 留约 4–10 倍余量；按 deepseek-chat 的价格，跑满一天也只是几毛到一两块钱。
+   */
+  aiDailyTokens: number
   rateLimitMax: number
   rateLimitWindowMs: number
   /** 同步 / 账号接口单独计数：客户端每 60 s 轮询一次，不能吃掉 AI 接口的额度。 */
@@ -129,6 +135,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     aiGate: parseAiGateMode(env.PERSIST_AI_GATE),
     aiKeys: parseAiKeys(env.PERSIST_AI_KEYS),
     aiDailyLimit: readInt(env, 'PERSIST_AI_DAILY_LIMIT', 100, 0, 100_000),
+    aiDailyTokens: readInt(env, 'PERSIST_AI_DAILY_TOKENS', 200_000, 0, 100_000_000),
     rateLimitMax: readInt(env, 'RATE_LIMIT_MAX', 20, 1, 1_000),
     rateLimitWindowMs: readInt(env, 'RATE_LIMIT_WINDOW_MS', 5 * 60_000, 1_000, 3_600_000),
     syncRateLimitMax: readInt(env, 'SYNC_RATE_LIMIT_MAX', 240, 1, 10_000),
@@ -153,6 +160,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   }
 }
 
+/**
+ * 启动日志里的配额摘要。两维分别可关，用同一条 `aiQuota` 字段表达，
+ * 例如 `enforce/1` + `100/day, 200k tokens/day`；全关时是 `off`。
+ */
+function describeAiQuota(config: ServerConfig): string {
+  const parts: string[] = []
+  if (config.aiDailyLimit > 0) parts.push(`${config.aiDailyLimit}/day`)
+  if (config.aiDailyTokens > 0) {
+    const tokens =
+      config.aiDailyTokens >= 1_000
+        ? `${Math.round(config.aiDailyTokens / 1_000)}k`
+        : String(config.aiDailyTokens)
+    parts.push(`${tokens} tokens/day`)
+  }
+  return parts.length > 0 ? parts.join(', ') : 'off'
+}
+
 /** 打日志用：绝不包含 API Key。库路径与 schema 版本由调用方补（要等库打开后才准）。 */
 export function describeConfig(config: ServerConfig) {
   return {
@@ -162,7 +186,7 @@ export function describeConfig(config: ServerConfig) {
     model: config.deepseekModel,
     // 只报「模式/凭据条数」，不报 keyId，更不报哈希：启动日志会被到处贴。
     aiGate: `${config.aiGate}/${config.aiKeys.length}`,
-    aiQuota: config.aiDailyLimit > 0 ? `${config.aiDailyLimit}/day` : 'off',
+    aiQuota: describeAiQuota(config),
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
