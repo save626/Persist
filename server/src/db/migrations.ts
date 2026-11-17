@@ -14,6 +14,13 @@ import type { Db } from './driver.js'
  * `ai_calls` 记每一次调用的结果、状态码、耗时与 IP 哈希。
  * 这两张表**不参与账号删除清理**：它们是服务端运维事实（谁在花作者的钱），不属于用户
  * 业务数据；`ai_calls` 里也没有任何请求正文，删账号时留着不构成隐私残留。
+ *
+ * v4（P5-2）：数据操作审计。`ai_calls` 只覆盖「谁调了模型」，账号与同步侧的破坏性动作
+ * （建设备、吊销设备、删账号、建快照、恢复快照、导出）此前只落在 journald 日志里，
+ * 日志一滚就没了。`audit_log` 把这些事件落成可查询的行。
+ * 与 `ai_calls` 的区别：这张表有 `user_id`，所以**删账号时要把该用户的 `user_id` 置空**
+ * 而不是删行——事件本身（某个时间有人删了一个账号、删掉几台设备）仍是运维事实，
+ * 但不再指向具体账号。它同样不记正文，`detail_json` 只放计数与文件名这类必要字段。
  */
 
 export interface Migration {
@@ -23,7 +30,7 @@ export interface Migration {
 }
 
 /** 当前代码期望的 schema 版本；`/api/health` 会带出去，方便对比线上库。 */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 const PULL_COLUMNS = `
   payload_json TEXT NOT NULL,
@@ -231,6 +238,29 @@ export const MIGRATIONS: Migration[] = [
       // 保留期清理按 created_at 扫；按凭据查历史走 (key_id, created_at)。
       'CREATE INDEX idx_ai_calls_created_at ON ai_calls(created_at)',
       'CREATE INDEX idx_ai_calls_key_created ON ai_calls(key_id, created_at)',
+    ],
+  },
+  {
+    version: 4,
+    name: 'audit_log',
+    statements: [
+      // 数据操作审计：一次动作一行，既不覆盖业务数据也不记录正文。
+      // `user_id` 可为空——账号被删后整行保留但置空（见文件头 v4 说明）。
+      // `actor` 区分「用户主动操作」与「系统定时/任务」；`result` 区分成功、被拒、出错。
+      `CREATE TABLE audit_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     TEXT,
+  actor       TEXT    NOT NULL,
+  action      TEXT    NOT NULL,
+  target      TEXT,
+  result      TEXT    NOT NULL,
+  detail_json TEXT,
+  ip_hash     TEXT,
+  created_at  INTEGER NOT NULL
+)`,
+      // 保留期清理按 created_at 扫；「这个账号做过什么」走 (user_id, created_at)。
+      'CREATE INDEX idx_audit_log_created_at ON audit_log(created_at)',
+      'CREATE INDEX idx_audit_log_user_created ON audit_log(user_id, created_at)',
     ],
   },
 ]

@@ -7,6 +7,7 @@ import type {
 } from '@persist/shared/contract/backup'
 import { parseBackupRestoreBody } from '@persist/shared/contract/backup'
 import type { ServerConfig } from '../config.js'
+import { recordAuditEvent } from '../audit/audit-log.js'
 import { errorBody } from '../contract.js'
 import type { PersistDatabase } from '../db/index.js'
 import {
@@ -103,6 +104,14 @@ export function registerBackupRoutes(app: FastifyInstance, options: BackupRoutes
           sha256: created.sha256,
         },
       }
+      recordAuditEvent(options.database.db, {
+        userId: auth.userId,
+        action: 'backup.create',
+        target: created.file,
+        detail: { bytes: created.bytes, reason: created.reason },
+        ip: request.ip,
+        now: options.now,
+      })
       return reply.code(201).send(body)
     } catch (error) {
       if (error instanceof BackupCreateError) {
@@ -178,6 +187,16 @@ export function registerBackupRoutes(app: FastifyInstance, options: BackupRoutes
         preRestoreBackup: result.preRestoreBackup,
         restoredAt: result.restoredAt,
       }
+      // 只在真正换库后记一条：预览是只读的，记下来只会把这张表灌满噪声。
+      // `preRestoreBackup` 是关键线索——出事时能从这行找回「恢复前的那份」。
+      recordAuditEvent(options.database.db, {
+        userId: auth.userId,
+        action: 'backup.restore',
+        target: backupId,
+        detail: { preRestoreBackup: result.preRestoreBackup, schemaVersion: result.schemaVersion },
+        ip: request.ip,
+        now: options.now,
+      })
       return reply.header('cache-control', 'no-store').code(200).send(body)
     } catch (error) {
       if (error instanceof RestoreError) {

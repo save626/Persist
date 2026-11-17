@@ -22,18 +22,18 @@ describe('migrate', () => {
     try {
       const result = migrate(db, { now: () => 1_700_000_000_000 })
       expect(result.version).toBe(SCHEMA_VERSION)
-      expect(result.applied).toEqual([1, 2, 3])
+      // 版本号从 MIGRATIONS 推导，而不是抄一份字面量：加迁移时这里不用跟着改。
+      const versions = MIGRATIONS.map((migration) => migration.version)
+      expect(result.applied).toEqual(versions)
       expect(
         db
           .prepare<{ version: number; applied_at: number }>(
             'SELECT version, applied_at FROM schema_migrations ORDER BY version',
           )
           .all(),
-      ).toEqual([
-        { version: 1, applied_at: 1_700_000_000_000 },
-        { version: 2, applied_at: 1_700_000_000_000 },
-        { version: 3, applied_at: 1_700_000_000_000 },
-      ])
+      ).toEqual(
+        versions.map((version) => ({ version, applied_at: 1_700_000_000_000 })),
+      )
     } finally {
       db.close()
     }
@@ -48,7 +48,7 @@ describe('migrate', () => {
       expect(second.version).toBe(SCHEMA_VERSION)
       expect(
         db.prepare<{ total: number }>('SELECT COUNT(*) AS total FROM schema_migrations').get(),
-      ).toEqual({ total: 3 })
+      ).toEqual({ total: MIGRATIONS.length })
     } finally {
       db.close()
     }
@@ -62,6 +62,7 @@ describe('migrate', () => {
         'ai_calls',
         'ai_usage',
         'analysis_reports',
+        'audit_log',
         'devices',
         'diet_entries',
         'fitness_sessions',

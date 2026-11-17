@@ -12,6 +12,7 @@ import type {
 import { buildApp } from '../src/app.js'
 import { loadConfig } from '../src/config.js'
 import { createBackup, listBackups } from '../src/db/backup.js'
+import { SCHEMA_VERSION } from '../src/db/migrations.js'
 import { openPersistDatabase, type PersistDatabase } from '../src/db/index.js'
 import { upsertEntity } from '../src/db/repositories/entities.js'
 import { NOW, TODAY, seedRecords } from './helpers/analysis-fixtures.js'
@@ -337,7 +338,7 @@ describe('POST /api/v1/backups/:id/restore：', () => {
       expect(body.preRestoreBackup?.file).toMatch(/pre-restore\.sqlite$/)
       expect(existsSync(join(env.backupDir, body.preRestoreBackup?.file ?? ''))).toBe(true)
       expect(waterCount(env)).toBe(1)
-      expect(env.database.schemaVersion).toBe(3)
+      expect(env.database.schemaVersion).toBe(SCHEMA_VERSION)
 
       // 快照里包含当前设备令牌，恢复后同一 token 仍可继续使用。
       const reports = await env.app.inject({

@@ -57,6 +57,14 @@ export interface ServerConfig {
    */
   aiAuditKeepDays: number
   /**
+   * 数据操作审计保留天数（P5-2）：`audit_log` 里「建设备 / 吊销 / 删账号 / 建快照 / 恢复 / 导出」
+   * 这些行的保留期。`0` = 不清理（与 `aiAuditKeepDays` 同一套语义）。
+   *
+   * 与 `aiAuditKeepDays` 分开是为了能各自调：AI 调用记录和「谁动过数据」性质不同，
+   * 排查数据丢失时往往需要更长的窗口。默认同为 30 天（`DATA_RETENTION.auditLogDays`）。
+   */
+  auditLogKeepDays: number
+  /**
    * 同步留痕保留天数（P5-1）：墓碑行 + `sync_ops` 幂等记录。`0` = 不清理。
    *
    * 默认 30 天，与 `DATA_RETENTION.tombstoneDays` 同源——这个常量从 P4 就在，
@@ -164,6 +172,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       0,
       3_650,
     ),
+    auditLogKeepDays: readInt(env, 'PERSIST_AUDIT_KEEP_DAYS', DATA_RETENTION.auditLogDays, 0, 3_650),
     syncRetentionDays: readInt(
       env,
       'PERSIST_SYNC_RETENTION_DAYS',
@@ -224,6 +233,7 @@ export function describeConfig(config: ServerConfig) {
     aiQuota: describeAiQuota(config),
     // 审计保留期：`off` 表示不清理（不是「不记录」），避免看日志的人误解。
     aiAudit: config.aiAuditKeepDays > 0 ? `${config.aiAuditKeepDays}d` : 'off',
+    auditLog: config.auditLogKeepDays > 0 ? `${config.auditLogKeepDays}d` : 'off',
     // 同步留痕保留期：同样 `off` = 不清理。
     syncRetention: config.syncRetentionDays > 0 ? `${config.syncRetentionDays}d` : 'off',
     timeoutMs: config.aiTimeoutMs,

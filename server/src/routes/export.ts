@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { createPersistExportFilename } from '@persist/shared/contract/export'
+import { recordAuditEvent } from '../audit/audit-log.js'
 import { errorBody } from '../contract.js'
 import type { Db } from '../db/driver.js'
 import { buildAccountExport } from '../export/account-export.js'
@@ -27,6 +28,15 @@ export function registerExportRoutes(app: FastifyInstance, options: ExportRouteO
     try {
       const exportedAt = new Date(options.now()).toISOString()
       const body = buildAccountExport(options.db, auth.userId, exportedAt)
+      // 导出是「全量业务数据离开服务器」这一个动作，值得留痕。
+      // 只记文件名与时间，不记内容，也不记条数之外的任何东西。
+      recordAuditEvent(options.db, {
+        userId: auth.userId,
+        action: 'export.read',
+        detail: { exportedAt },
+        ip: request.ip,
+        now: options.now,
+      })
       return reply
         .header('cache-control', 'no-store')
         .header(

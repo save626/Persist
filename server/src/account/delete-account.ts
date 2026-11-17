@@ -113,6 +113,12 @@ export function deleteAccount(options: DeleteAccountOptions): AccountDeleteRespo
     deleteRows(options.db, 'job_runs', options.userId)
     deleteRows(options.db, 'sync_ops', options.userId)
     deleteRows(options.db, 'devices', options.userId)
+    // 审计行**不删**，只把 user_id 置空：事件本身（某时刻有人动过几台设备、删了一个账号）
+    // 仍是运维事实，但号已经不存在了，留着 id 就等于把「已删除账号」的标识永久留在库里。
+    // 放在同一事务里，避免「账号删了、审计还指着它」的中间态。
+    options.db
+      .prepare('UPDATE audit_log SET user_id = NULL WHERE user_id = ?')
+      .run(options.userId)
     const deletedUsers = options.db.prepare('DELETE FROM users WHERE id = ?').run(options.userId)
     if (deletedUsers.changes !== 1) {
       throw new AccountDeleteError('account_not_found', '账号不存在或已被删除。', 409)

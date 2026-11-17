@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { AccountDeleteResponse } from '@persist/shared/contract/account'
 import { parseAccountDeleteBody } from '@persist/shared/contract/account'
 import { AccountDeleteError, deleteAccount } from '../account/delete-account.js'
+import { recordAuditEvent } from '../audit/audit-log.js'
 import { errorBody } from '../contract.js'
 import type { Db } from '../db/driver.js'
 import type { RateLimiter } from '../rate-limit.js'
@@ -59,6 +60,21 @@ export function registerAccountDeletionRoute(
         { event: 'account_deleted', deletedAt: body.deletedAt, counts: body.counts },
         'account deleted',
       )
+      // 账号已经没了，所以 `userId` 传 null：行留下（「某时刻删掉过一个账号」是运维事实），
+      // 但不再指向具体账号。明细只放计数，不放任何实体内容。
+      recordAuditEvent(options.db, {
+        userId: null,
+        action: 'account.delete',
+        result: 'ok',
+        detail: {
+          devices: body.counts.devices,
+          syncOps: body.counts.syncOps,
+          reports: body.counts.analysisReports,
+          backupFiles: body.counts.backupFiles,
+        },
+        ip: request.ip,
+        now: options.now,
+      })
       return reply.header('cache-control', 'no-store').code(200).send(body)
     } catch (error) {
       if (error instanceof AccountDeleteError) {
@@ -72,6 +88,16 @@ export function registerAccountDeletionRoute(
         } else {
           request.log.warn(log, 'account deletion rejected')
         }
+        // 被拒也要留痕：反复被拒可能是「库里还有别的账号」这种配置问题，
+        // 也可能是在试着重删。两种都值得事后能查。
+        recordAuditEvent(options.db, {
+          userId: auth.userId,
+          action: 'account.delete',
+          result: error.statusCode >= 500 ? 'error' : 'denied',
+          detail: { code: error.code },
+          ip: request.ip,
+          now: options.now,
+        })
         return reply
           .header('cache-control', 'no-store')
           .code(error.statusCode)

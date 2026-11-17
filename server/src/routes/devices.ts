@@ -7,6 +7,7 @@ import {
   parseDeviceRevokeBody,
   type DeviceRevokeBody,
 } from '@persist/shared/contract/sync'
+import { recordAuditEvent } from '../audit/audit-log.js'
 import { registerAccount, restoreAccount, revokeDevice } from '../sync/accounts.js'
 import { enforceRateLimit, requireDevice } from './guards.js'
 import type { FastifyInstance } from 'fastify'
@@ -41,6 +42,13 @@ export function registerDeviceRoutes(app: FastifyInstance, options: AccountRoute
       label: parsed.value.label ?? null,
       now: options.now,
     })
+    recordAuditEvent(options.db, {
+      userId: result.userId,
+      action: 'device.create',
+      target: result.deviceId,
+      ip: request.ip,
+      now: options.now,
+    })
     return reply.header('cache-control', NO_STORE).code(201).send(result)
   })
 
@@ -64,6 +72,13 @@ export function registerDeviceRoutes(app: FastifyInstance, options: AccountRoute
         .code(400)
         .send(errorBody('invalid_recovery_code', '恢复码无效，请检查后重试。'))
     }
+    recordAuditEvent(options.db, {
+      userId: restored.credentials.userId,
+      action: 'device.restore',
+      target: restored.credentials.deviceId,
+      ip: request.ip,
+      now: options.now,
+    })
     return reply.header('cache-control', NO_STORE).code(200).send(restored.credentials)
   })
 
@@ -87,6 +102,15 @@ export function registerDeviceRoutes(app: FastifyInstance, options: AccountRoute
     if (!revoked) {
       return reply.code(404).send(errorBody('device_not_found', '设备不存在或已被吊销。'))
     }
+    recordAuditEvent(options.db, {
+      userId: auth.userId,
+      action: 'device.revoke',
+      target,
+      // 吊销自己与吊销别的设备在事后看是两件事：前者通常是换机，后者通常是在止损。
+      detail: { self: target === auth.deviceId },
+      ip: request.ip,
+      now: options.now,
+    })
     return reply.header('cache-control', NO_STORE).code(200).send({
       revoked: true,
       deviceId: target,

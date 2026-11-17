@@ -112,7 +112,7 @@ describe('runAiAuditPrune', () => {
     try {
       const now = shanghai(2026, 11, 17)
       seed(db, now - 400 * DAY_MS)
-      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 0 }, now: () => now })
+      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 0, auditLogKeepDays: 0 }, now: () => now })
       expect(outcome).toEqual({ status: 'skipped', reason: 'disabled' })
       expect(countRows(db, 'ai_calls')).toBe(1)
       expect(countRows(db, 'job_runs')).toBe(0)
@@ -126,7 +126,7 @@ describe('runAiAuditPrune', () => {
     try {
       const now = shanghai(2026, 11, 17, 3)
       seed(db, now - 40 * DAY_MS)
-      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 30 }, now: () => now })
+      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 }, now: () => now })
       expect(outcome).toEqual({ status: 'skipped', reason: 'not-due' })
       expect(countRows(db, 'ai_calls')).toBe(1)
       expect(countRows(db, 'job_runs')).toBe(0)
@@ -143,7 +143,7 @@ describe('runAiAuditPrune', () => {
       seed(db, now - 30 * DAY_MS)
       seed(db, now - 29 * DAY_MS)
 
-      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 30 }, now: () => now })
+      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 }, now: () => now })
       expect(outcome).toMatchObject({ status: 'pruned', deleted: 1, keepDays: 30 })
       expect((outcome as { cutoff: number }).cutoff).toBe(now - 30 * DAY_MS)
       expect(countRows(db, 'ai_calls')).toBe(2)
@@ -170,14 +170,14 @@ describe('runAiAuditPrune', () => {
       const now = shanghai(2026, 11, 17, 5)
       seed(db, now - 31 * DAY_MS)
       expect(
-        runAiAuditPrune({ db, config: { aiAuditKeepDays: 30 }, now: () => now }),
+        runAiAuditPrune({ db, config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 }, now: () => now }),
       ).toMatchObject({
         status: 'pruned',
       })
       seed(db, now - 31 * DAY_MS)
       const second = runAiAuditPrune({
         db,
-        config: { aiAuditKeepDays: 30 },
+        config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 },
         now: () => now + 60_000,
       })
       expect(second).toEqual({ status: 'skipped', reason: 'already-ran' })
@@ -192,14 +192,14 @@ describe('runAiAuditPrune', () => {
     try {
       const day1 = shanghai(2026, 11, 17, 5)
       expect(
-        runAiAuditPrune({ db, config: { aiAuditKeepDays: 30 }, now: () => day1 }),
+        runAiAuditPrune({ db, config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 }, now: () => day1 }),
       ).toMatchObject({
         status: 'pruned',
         deleted: 0,
       })
       const day2 = shanghai(2026, 11, 18, 5)
       expect(
-        runAiAuditPrune({ db, config: { aiAuditKeepDays: 30 }, now: () => day2 }),
+        runAiAuditPrune({ db, config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 }, now: () => day2 }),
       ).toMatchObject({
         status: 'pruned',
       })
@@ -214,7 +214,7 @@ describe('runAiAuditPrune', () => {
     try {
       const now = shanghai(2026, 11, 17, 5)
       db.exec('DROP TABLE ai_calls')
-      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 30 }, now: () => now })
+      const outcome = runAiAuditPrune({ db, config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 }, now: () => now })
       expect(outcome.status).toBe('failed')
       const run = db
         .prepare<{ status: string; error: string | null }>('SELECT status, error FROM job_runs')
@@ -235,7 +235,7 @@ describe('startAiAuditPruneScheduler', () => {
       seed(db, now - 45 * DAY_MS)
       const scheduler = startAiAuditPruneScheduler({
         db,
-        config: { aiAuditKeepDays: 30 },
+        config: { aiAuditKeepDays: 30, auditLogKeepDays: 30 },
         now: () => now,
         intervalMs: 60_000,
       })
@@ -254,7 +254,7 @@ describe('startAiAuditPruneScheduler', () => {
       seed(db, now - 400 * DAY_MS)
       const scheduler = startAiAuditPruneScheduler({
         db,
-        config: { aiAuditKeepDays: 0 },
+        config: { aiAuditKeepDays: 0, auditLogKeepDays: 0 },
         now: () => now,
         intervalMs: 60_000,
       })
