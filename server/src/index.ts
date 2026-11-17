@@ -3,6 +3,7 @@ import { buildApp } from './app.js'
 import { describeConfig, loadConfig } from './config.js'
 import { openPersistDatabase, type PersistDatabase } from './db/index.js'
 import { startDailyBriefScheduler, type DailyBriefScheduler } from './jobs/daily-brief.js'
+import { startAiAuditPruneScheduler, type AiAuditPruneScheduler } from './jobs/ai-audit-prune.js'
 
 /**
  * 生产入口：只监听回环地址（默认 127.0.0.1:3000），由 Nginx 反代 /api/*。
@@ -32,6 +33,7 @@ try {
 const ai = createDeepSeekClient(config)
 const app = buildApp({ config, db: database, ai })
 let scheduler: DailyBriefScheduler | null = null
+let auditPruner: AiAuditPruneScheduler | null = null
 
 try {
   await app.listen({ host: config.host, port: config.port })
@@ -54,6 +56,13 @@ try {
     now: () => Date.now(),
     logger: app.log,
   })
+  // 审计清理独立于简报任务：即使每日简报关着，`ai_calls` 也要按保留期收敛。
+  auditPruner = startAiAuditPruneScheduler({
+    db: database.db,
+    config,
+    now: () => Date.now(),
+    logger: app.log,
+  })
 } catch (error) {
   app.log.error({ err: error }, 'failed to start persist-server')
   database.db.close()
@@ -63,6 +72,7 @@ try {
 function shutdown(signal: string): void {
   app.log.info({ signal }, 'shutting down persist-server')
   scheduler?.stop()
+  auditPruner?.stop()
   app
     .close()
     .then(() => {

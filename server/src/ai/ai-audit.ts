@@ -103,6 +103,38 @@ export interface AiCallRow {
   created_at: number
 }
 
+/**
+ * 保留期清理（P0-4）：删除 `created_at < cutoff` 的审计，返回删除条数。
+ *
+ * 为什么要分批：`ai_calls` 是唯一会无界增长的表（配额只限「每天多少」，不限「总共多少」）。
+ * 单条 `DELETE ... WHERE created_at < ?` 在攒了几万行后会长时间持有写锁，把同一时刻的
+ * AI 请求卡在 `SQLITE_BUSY` 上。这里每轮最多 500 行，轮次之间让出事件循环，
+ * 锁的持有时间从「秒级」降到「毫秒级」。
+ *
+ * 不做的事：不顺手清 `ai_usage`（那是按天的汇总，几十行，删了反而丢掉历史成本曲线），
+ * 也不删 `job_runs`（每天一行）。
+ */
+export const AI_AUDIT_PRUNE_BATCH = 500
+
+export function pruneAiCalls(db: Db, cutoff: number, batchSize = AI_AUDIT_PRUNE_BATCH): number {
+  const limit = Math.max(1, Math.trunc(batchSize))
+  const cutoffMs = Math.trunc(cutoff)
+  // 用 id 做 IN 子查询而不是 DELETE ... LIMIT：后者需要 SQLITE_ENABLE_UPDATE_DELETE_LIMIT
+  // 编译选项，Node 自带的那份不保证开启。
+  const statement = db.prepare(
+    `DELETE FROM ai_calls
+      WHERE id IN (SELECT id FROM ai_calls WHERE created_at < ? ORDER BY id LIMIT ?)`,
+  )
+  let total = 0
+  // 上限只为防御「cutoff 传错把全表扫空」这种不可恢复的意外：最多清 50 万行/次，剩下的下次继续。
+  for (let round = 0; round < 1_000; round += 1) {
+    const changes = Number(statement.run(cutoffMs, limit).changes)
+    total += changes
+    if (changes < limit) break
+  }
+  return total
+}
+
 /** 读最近若干条审计，供排查与测试使用。 */
 export function listRecentAiCalls(db: Db, limit = 20): AiCallRow[] {
   const rows = db

@@ -7,7 +7,11 @@
  */
 
 import { dirname, join } from 'node:path'
-import { DEFAULT_DAILY_BRIEF_AT, parseDailyBriefAt } from '@persist/shared/contract/analysis'
+import {
+  DATA_RETENTION,
+  DEFAULT_DAILY_BRIEF_AT,
+  parseDailyBriefAt,
+} from '@persist/shared/contract/analysis'
 import { parseAiGateMode, parseAiKeys, type AiGateMode, type AiKey } from './ai/ai-guard.js'
 
 export interface ServerConfig {
@@ -44,6 +48,14 @@ export interface ServerConfig {
    * 留约 4–10 倍余量；按 deepseek-chat 的价格，跑满一天也只是几毛到一两块钱。
    */
   aiDailyTokens: number
+  /**
+   * `ai_calls` 审计保留天数（P0-4）。`0` = 不清理（无限保留）。
+   *
+   * 注意这里的 `0` 与配额的两个 `0` 语义相反：配额是「0 = 关掉限制」，这里是「0 = 关掉清理」。
+   * 保留期清理是删数据的动作，默认必须是「保守」——所以「关掉」= 不删，而不是「全删」。
+   * 默认 30 天，与 `DATA_RETENTION.auditLogDays` 同源，隐私说明可以照这个数字写。
+   */
+  aiAuditKeepDays: number
   rateLimitMax: number
   rateLimitWindowMs: number
   /** 同步 / 账号接口单独计数：客户端每 60 s 轮询一次，不能吃掉 AI 接口的额度。 */
@@ -136,6 +148,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     aiKeys: parseAiKeys(env.PERSIST_AI_KEYS),
     aiDailyLimit: readInt(env, 'PERSIST_AI_DAILY_LIMIT', 100, 0, 100_000),
     aiDailyTokens: readInt(env, 'PERSIST_AI_DAILY_TOKENS', 200_000, 0, 100_000_000),
+    aiAuditKeepDays: readInt(
+      env,
+      'PERSIST_AI_AUDIT_KEEP_DAYS',
+      DATA_RETENTION.auditLogDays,
+      0,
+      3_650,
+    ),
     rateLimitMax: readInt(env, 'RATE_LIMIT_MAX', 20, 1, 1_000),
     rateLimitWindowMs: readInt(env, 'RATE_LIMIT_WINDOW_MS', 5 * 60_000, 1_000, 3_600_000),
     syncRateLimitMax: readInt(env, 'SYNC_RATE_LIMIT_MAX', 240, 1, 10_000),
@@ -187,6 +206,8 @@ export function describeConfig(config: ServerConfig) {
     // 只报「模式/凭据条数」，不报 keyId，更不报哈希：启动日志会被到处贴。
     aiGate: `${config.aiGate}/${config.aiKeys.length}`,
     aiQuota: describeAiQuota(config),
+    // 审计保留期：`off` 表示不清理（不是「不记录」），避免看日志的人误解。
+    aiAudit: config.aiAuditKeepDays > 0 ? `${config.aiAuditKeepDays}d` : 'off',
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
