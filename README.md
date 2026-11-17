@@ -4,23 +4,24 @@
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
 - 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成；服务端 2026-11-06、前端产物 2026-11-07 均已部署，同步默认关闭）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
-- 规模：八页面可完整点击验收；当前本机为 app 单测 364（30 文件）、server 单测 234（27 文件）、E2E 132 次执行（11 文件，2.6 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收；owner 三张观察卡与 14d 删除流程真机验收未在本轮记录中确认）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；现有 APK 仍是旧代码构建，最新 owner 空白初始状态改动待重建 APK 与真机复验。
+- 规模：八页面可完整点击验收；当前本机为 app 单测 383（32 文件）、server 单测 293（31 文件）、E2E 132 次执行（11 文件，2.6 m），Lint 0 错 0 警告；视觉脚本 102 张页面截图 + 1 张快速记录（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
 
-## 当前阶段（2026-11-13：步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用，后端 CORS 补丁已部署；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
+## 当前阶段（2026-11-17：P0 的 AI 凭据门与服务端日配额已上线——`/api/chat`、`/api/report` 需凭据、每日 100 次、schema 3；步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
 
 前端产品原型**已完成并通过双端视觉验收，视觉范围冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI，`9f9cc71`）：AI 引导建档 → 长期计划草案确认 → 启用/归档闭环已通；AI 建档对话（`POST /api/chat`）、AI 报告文字与今日页晨间简报文字（`POST /api/report`）在「档案页开启 AI 数据授权 + 服务端健康」时走真实 DeepSeek，失败或未授权时回退本地规则/Mock 并如实标注；**报告的指标数字、依据条目与简报 KPI 始终由前端按本地记录确定性生成，模型只写文字**。业务数据全部写入本机 IndexedDB（刷新/重开不丢，有「清空本机数据」入口，导出导入为 0.3.0 备份格式并兼容旧版）：步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（本地 `schemaVersion` 当前为 3；步骤 11 初始为 2），报告页可按近 7 / 30 / 90 天窗口汇总真实历史。
 
-服务端 P3 已完成（8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`），并**于 2026-11-04 以 IP 直连方式部署到阿里云 ECS（Nginx + systemd + 真实 DeepSeek Key）并通过联调验收——仅内部调试，不得对外宣称「已上线」**。P4 已开工：步骤 11（数据历史化）2026-11-04 完成，步骤 12（P4a 账号 + 增量同步，12a–12f）2026-11-05 **本机完成并验收、已推送到 `origin/main`，服务端 2026-11-06 已部署**（服务器已升到 Node v22.19.0，`node:sqlite` 可用）。**步骤 13（P4b 服务端 SQL 聚合 + AI 综合分析）2026-11-05 在本机完成并验证，源码与文档已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**：事实包 v2 → 单次模型调用 → 模型只写文字（数字全来自 SQL 且有白名单校验）；四个 `/api/v1` 接口（分析生成 / 事实包 / 归档列表 / 归档详情）、每日简报 job（默认关闭、进程内调度）、报告归档 365 天保留；前端 `/reports` 新增「服务端综合分析」块、设置页新增「每日简报」卡片。**本机已用真实 DeepSeek Key 验证 chat / report / 综合分析三条链路（2026-11-05）**：分析首次 5.7 s、同参 `cached`、`force` 重生成、正文无英文字段名；联调暴露的「模型偶尔写 6 段导致 502、正文夹带英文字段名」已修（`18d5f77`：内容不合规带原因重试一次）。**该结论只适用于本机；线上已换新版服务端与静态包（仍 IP 直连，未上线）。** 步骤 14 的本机面已补齐：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号，以及 `GET/POST /api/v1/backups` 备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产（`c309001`）。14c 的 `GET /api/v1/export` 返回可被客户端 0.3.0 导入的账号级 JSON，并排除凭据、设备信息与分析归档；14d 的 `DELETE /api/v1/account` 只接受显式 `confirm:true`，在单事务中硬删除当前账号的业务行、分析归档、任务、同步台账与设备，并清理规范快照及旁车；多 active 账号且存在整库快照时返回 409，避免误删他人恢复副本。备份 HTTP 端点只暴露稳定 id 与元数据，不返回绝对路径。14d 前端「先删服务端、成功后清本机」入口已随 2026-11-11 web 包部署；真机验收未在本轮记录中确认。域名已购、阿里云备案初审已通过、**备案号未下发**（因此不得宣称已上线，也不能用域名对外提供服务）。Android/P5 已补齐 `app/android/` Capacitor 8.6.0 工程、移动端 API 桥接、USB 安装脚本和服务端 `https://localhost` CORS 白名单；JDK 21.0.13、Android SDK Platform 36、adb 与 debug APK USB 安装均已验证。现有 debug APK 仍是旧代码构建，最新 owner 空白初始状态改动尚未重新构建 / 真机复验；生产后端已于 2026-11-13 部署 `https://localhost` CORS 补丁并完成验证；真实 AI 真机验收仍需重新构建 / 安装 APK 后完成。
+服务端 P3 已完成（8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`），并**于 2026-11-04 以 IP 直连方式部署到阿里云 ECS（Nginx + systemd + 真实 DeepSeek Key）并通过联调验收——仅内部调试，不得对外宣称「已上线」**。P4 已开工：步骤 11（数据历史化）2026-11-04 完成，步骤 12（P4a 账号 + 增量同步，12a–12f）2026-11-05 **本机完成并验收、已推送到 `origin/main`，服务端 2026-11-06 已部署**（服务器已升到 Node v22.19.0，`node:sqlite` 可用）。**步骤 13（P4b 服务端 SQL 聚合 + AI 综合分析）2026-11-05 在本机完成并验证，源码与文档已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**：事实包 v2 → 单次模型调用 → 模型只写文字（数字全来自 SQL 且有白名单校验）；四个 `/api/v1` 接口（分析生成 / 事实包 / 归档列表 / 归档详情）、每日简报 job（默认关闭、进程内调度）、报告归档 365 天保留；前端 `/reports` 新增「服务端综合分析」块、设置页新增「每日简报」卡片。**本机已用真实 DeepSeek Key 验证 chat / report / 综合分析三条链路（2026-11-05）**：分析首次 5.7 s、同参 `cached`、`force` 重生成、正文无英文字段名；联调暴露的「模型偶尔写 6 段导致 502、正文夹带英文字段名」已修（`18d5f77`：内容不合规带原因重试一次）。**该结论只适用于本机；线上已换新版服务端与静态包（仍 IP 直连，未上线）。** 步骤 14 的本机面已补齐：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号，以及 `GET/POST /api/v1/backups` 备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产（`c309001`）。14c 的 `GET /api/v1/export` 返回可被客户端 0.3.0 导入的账号级 JSON，并排除凭据、设备信息与分析归档；14d 的 `DELETE /api/v1/account` 只接受显式 `confirm:true`，在单事务中硬删除当前账号的业务行、分析归档、任务、同步台账与设备，并清理规范快照及旁车；多 active 账号且存在整库快照时返回 409，避免误删他人恢复副本。备份 HTTP 端点只暴露稳定 id 与元数据，不返回绝对路径。14d 前端「先删服务端、成功后清本机」入口已随 2026-11-11 web 包部署；真机验收未在本轮记录中确认。域名已购、阿里云备案初审已通过、**备案号未下发**（因此不得宣称已上线，也不能用域名对外提供服务）。Android/P5 已补齐 `app/android/` Capacitor 8.6.0 工程、移动端 API 桥接、USB 安装脚本和服务端 `https://localhost` CORS 白名单；JDK 21.0.13、Android SDK Platform 36、adb 与 debug APK USB 安装均已验证。2026-11-17 已用最新代码重打 debug APK 并覆盖安装到 RMX3800（11:15:15，保留数据），在 `PERSIST_AI_GATE=enforce` 下完成真实 AI 真机闭环（`ai credential check did not pass` 0 条，`POST /api/report` 11 次全 200），并已开启同步（`users=1 / devices=1`，真实数据落库）。
 
 下一步（2026-11-06 更正口径）：**步骤 10 不再整步等备案号**。①**已完成（2026-11-06 / 11-07）**：服务器升 Node 22 LTS（`/opt/node22` v22.19.0）、建 `/var/lib/persist` + systemd `ReadWritePaths`、每日 `VACUUM INTO` 备份（`persist-backup.timer` 每日 03:00）、上传 `shared/dist` + `server/dist` 并部署步骤 12/13、前端产物上传（2026-11-07 14:14）；**未走 3100 端口预演，改为备份先行 + 版本化目录（`/opt/persist-next`）**。②**已完成（2026-11-10）**：SSH 仅密钥 + 禁用密码 + `fail2ban` 已启用并验证；安全组 3389 入方向规则已由用户删除，外部复验为超时不可达，22/80 正常。③**必须等备案号**：域名解析、443、证书、HTTP→HTTPS、页脚备案号、「已上线」表述。④14b / 14c / 14d 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产（停机 501 ms；部署后备份实跑 `integrity:"ok"`）；Nginx 根路径与 `/settings` 均 200，5 条新端点未鉴权请求均 401。逐项拆解见 [`HANDOFF.md`](HANDOFF.md) §13.3 与 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) §6。
 
-**对外入口（P7）**：桌面落地页与产品介绍首页由另一 Agent 负责，本仓库只处理跳转链路与跳转后的运行模式。生产路由为 `/` 落地页 → `/home.html` 产品介绍首页 → `/app/?mode=demo`（查看演示）或 `/app/?mode=guest`（自己体验）。网页域名 / IP 只部署 `npm run build` 产物，`owner` 在网页解析层不可达；无参数、非法参数或 `mode=owner` 一律进入 `guest`。demo 使用完整预置数据且全部 AI 内容均在部署前真实生成并固化，部署后只读、零 `/api/*`；guest 从空白数据开始，全部 AI Mock、零 `/api/*`、同步关闭。作者自有移动端通过 USB 安装 `npm run build:mobile` 生成的 `app/dist-mobile` 包，默认 `owner`，保留完整真实 AI 与同步。owner 首启 / 清空为无业务占位的空白状态（无目标、计划、训练、饮食、学习、档案、报告；饮水基线 0），AI 总授权保留开启，数据来源开关、提醒与每日简报默认关闭；真实 AI 不可用时降级为本地 Mock / 规则并标注来源。2026-11-12 已部署新 web 包 `index-DKsHXSEx.js` 671633 B + `index-BMbKaiLQ.css` 153875 B，web demo / guest 产品的桌面侧栏与窄屏顶栏提供“返回首页”，均回到 `/home.html`，用户已完成双端验收；整体仍未上线。对外开放前仍须补 `/api/chat`、`/api/report` 服务端 token 门、来源限制、配额与审计，并完成生成式 AI 专门备案 / 安全评估。详见 [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)。
+**对外入口（P7）**：桌面落地页与产品介绍首页由另一 Agent 负责，本仓库只处理跳转链路与跳转后的运行模式。生产路由为 `/` 落地页 → `/home.html` 产品介绍首页 → `/app/?mode=demo`（查看演示）或 `/app/?mode=guest`（自己体验）。网页域名 / IP 只部署 `npm run build` 产物，`owner` 在网页解析层不可达；无参数、非法参数或 `mode=owner` 一律进入 `guest`。demo 使用完整预置数据且全部 AI 内容均在部署前真实生成并固化，部署后只读、零 `/api/*`；guest 从空白数据开始，全部 AI Mock、零 `/api/*`、同步关闭。作者自有移动端通过 USB 安装 `npm run build:mobile` 生成的 `app/dist-mobile` 包，默认 `owner`，保留完整真实 AI 与同步。owner 首启 / 清空为无业务占位的空白状态（无目标、计划、训练、饮食、学习、档案、报告；饮水基线 0），AI 总授权保留开启，数据来源开关、提醒与每日简报默认关闭；真实 AI 不可用时降级为本地 Mock / 规则并标注来源。2026-11-12 已部署新 web 包 `index-DKsHXSEx.js` 671633 B + `index-BMbKaiLQ.css` 153875 B，web demo / guest 产品的桌面侧栏与窄屏顶栏提供“返回首页”，均回到 `/home.html`，用户已完成双端验收；整体仍未上线。**服务端 AI 边界已于 2026-11-17 补齐**：`/api/chat` 与 `/api/report` 需 `Authorization: Bearer psa_…`（预共享密钥，服务端只存 sha256；`PERSIST_AI_GATE=off|warn|enforce`，生产为 `enforce`），两条路由共用每日 100 次请求配额并写 `ai_calls` 审计，公网无凭据调用一律 `401 ai_unauthorized`；客户端凭据只在 `build:mobile` 时由 `app/.env.mobile.local` 内联，非 mobile 构建检测到该变量会直接失败。**仍未完成**：token 配额（Step 3）、`ai_calls` 保留期、生成式 AI 专门备案 / 安全评估——后者完成前不得宣称对外开放。详见 [`docs/P0-AI接口服务端安全门设计方案.md`](docs/P0-AI接口服务端安全门设计方案.md)、[`docs/项目交接-2026-11-17.md`](docs/项目交接-2026-11-17.md) 与 [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)。
 
 ## 文档地图
 
 | 文档                                                                             | 作用                                                                                                                                      | 什么时候读                                                    |
 | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| [`HANDOFF.md`](HANDOFF.md)                                                       | **唯一现状与计划来源**：一页摘要、产品与功能清单、技术架构、契约、验证数字、路线、风险、变更史、接手顺序                                  | 接手第一读物；任何冲突以它和代码为准                          |
+| [`docs/项目交接-2026-11-17.md`](docs/项目交接-2026-11-17.md)                     | **当前进度与任务看板的第一入口**：生产实况、P0 实施记录、测试基线、任务看板、风险与操作边界                                              | 接手第一读物；进度与下一步以它为准                            |
+| [`HANDOFF.md`](HANDOFF.md)                                                       | **长期历史与细节依据**：一页摘要、产品与功能清单、技术架构、契约、路线、风险、变更史                                                      | 需要回溯历史决策与变更时                                      |
 | [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)                   | **项目介绍与长期规划（v2.0）**：愿景与边界、八页功能规划、数据与技术架构、P0–P6 / 步骤 9–15、风险、Backlog、发布验收清单                  | 想先弄清「这个项目是什么、要走到哪」时                        |
 | [`docs/工程约定.md`](docs/工程约定.md)                                           | 技术选型、设计令牌、响应式与可访问性基线、非功能要求、测试门禁、术语                                                                      | 改 UI、加测试、定验收口径前                                   |
 | [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)                   | **对外入口唯一来源**：为什么公开页不做真实 AI、demo / guest / owner 三模式、闸门与 5 屏决策、原型实测数字、上线前占位、M2/M2.5/M0/M1 顺序 | 做对外入口、分享 pilot、准备公开传播时                        |
@@ -64,7 +65,7 @@ npm run android:usb                # 构建、同步并通过 USB 安装 debug A
 ```powershell
 npm run lint
 npm run typecheck
-npm test               # 364 条 / 30 个文件
+npm test               # 383 条 / 32 个文件
 npx playwright test    # 66 用例 × 2 项目 = 132 次执行，11 个文件
 npm run build
 npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；需先起无 Key 后端，改布局/弹层时跑
@@ -77,7 +78,7 @@ npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；�
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
-npm run typecheck && npm test && npm run build   # 234 条 / 27 个文件
+npm run typecheck && npm test && npm run build   # 293 条 / 31 个文件
 Copy-Item .env.example .env    # 本机联调才填 DEEPSEEK_API_KEY；.env 不入库、用完即删
 node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动读 .env，带 Key 必须加 --env-file，否则 /api/chat、/api/report 返回 503
 ```
@@ -85,6 +86,8 @@ node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动�
 > Key 只允许存在于服务端环境变量（生产放 `/etc/persist/server.env`，600）。真实 Key 曾出现在开发对话中，**上线前必须轮换**。
 >
 > 步骤 13 新增 5 个分析与简报相关变量：`ANALYSIS_RATE_LIMIT_MAX`（默认 6 次 / 5 分钟，独立于 chat/report 的限流器）、`ANALYSIS_TIMEOUT_MS`（45000）、`ANALYSIS_MAX_TOKENS`（2600）、`DAILY_BRIEF_ENABLED`（false）、`DAILY_BRIEF_AT`（21:00）；默认值与注释见 [`server/.env.example`](server/.env.example)，行为说明见 [`server/README.md`](server/README.md)。
+>
+> 2026-11-17 新增 3 个 P0 变量：`PERSIST_AI_GATE`（`off` / `warn` / `enforce`，默认 `off`）、`PERSIST_AI_KEYS`（`k1:<sha256hex>[,k2:<sha256hex>]`，空 = fail-closed）、`PERSIST_AI_DAILY_LIMIT`（默认 `100`，`0` 关闭）；客户端侧对应 `VITE_PERSIST_AI_KEY`，**只允许写在 `app/.env.mobile.local`**，写进 `.env` / `.env.local` / `.env.production*` 会被 web 构建硬拦截。
 
 ## 视觉与交互基线
 
