@@ -187,8 +187,8 @@ test('JSON backup keeps long-term plans across export and re-import', async ({ p
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: /导出 JSON 备份/ }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^persist-mock-backup-\d{4}-\d{2}-\d{2}\.json$/)
-  await expect(page.getByText('Mock 数据备份已导出 · 含 1 个长期计划')).toBeVisible()
+  expect(download.suggestedFilename()).toMatch(/^persist-backup-\d{4}-\d{2}-\d{2}\.json$/)
+  await expect(page.getByText('数据备份已导出 · 含 1 个长期计划')).toBeVisible()
 
   const downloadPath = await download.path()
   expect(downloadPath).not.toBeNull()

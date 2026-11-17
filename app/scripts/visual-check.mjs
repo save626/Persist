@@ -61,54 +61,74 @@ async function installAiOfflineMock(page, options = {}) {
   // `syncFailure: 'rate-limited'` 让同步接口返回 429，用来截「限流」这一分支的文案
   // （P5-4）。默认仍是「成功但无数据」，既有状态不受影响。
   const syncFailure = options.syncFailure ?? null
-  await page.addInitScript((syncFailureKind) => {
-    const originalFetch = window.fetch.bind(window)
-    const json = (body) =>
-      new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })
-    window.fetch = async (input, init) => {
-      const rawUrl =
-        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-      const pathname = new URL(rawUrl, window.location.href).pathname
-      if (pathname === '/api/v1/sync/pull') {
-        if (syncFailureKind === 'rate-limited') {
+  // `health` 用来造「测试服务端连接」的成功 / 降级两种结局。默认不处理 /api/health
+  // （落到下面那条 503），所以既有状态里设置页仍停在「未测试」，不受影响。
+  const healthMode = options.health ?? null
+  await page.addInitScript(
+    ({ syncFailureKind, healthKind }) => {
+      const originalFetch = window.fetch.bind(window)
+      const json = (body) =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      window.fetch = async (input, init) => {
+        const rawUrl =
+          typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+        const pathname = new URL(rawUrl, window.location.href).pathname
+        if (pathname === '/api/health' && healthKind) {
+          // 与 server/src/routes/health.ts 的返回同形：只改 status / db / version 三个字段。
+          return json({
+            status: healthKind === 'degraded' ? 'degraded' : 'ok',
+            service: 'persist-server',
+            ai: 'deepseek',
+            model: 'deepseek-chat',
+            time: '2026-11-17T10:00:00.000Z',
+            db: healthKind === 'degraded' ? 'error' : 'ok',
+            version: 4,
+            storage: { usedPercent: 13.6, status: 'ok' },
+            warnings: [],
+          })
+        }
+        if (pathname === '/api/v1/sync/pull') {
+          if (syncFailureKind === 'rate-limited') {
+            return new Response(
+              JSON.stringify({
+                error: { code: 'rate_limited', message: '请求过于频繁，请稍后再试。' },
+              }),
+              {
+                status: 429,
+                headers: { 'content-type': 'application/json', 'retry-after': '7' },
+              },
+            )
+          }
+          return json({ entities: [], nextSince: 0, hasMore: false })
+        }
+        if (pathname === '/api/v1/sync/push' || pathname === '/api/v1/sync/bootstrap') {
+          let applied = 0
+          try {
+            applied = JSON.parse(init?.body ?? '{}')?.entities?.length ?? 0
+          } catch {
+            applied = 0
+          }
+          return json({ applied, skipped: [], serverRev: 0 })
+        }
+        if (pathname.startsWith('/api/')) {
           return new Response(
             JSON.stringify({
-              error: { code: 'rate_limited', message: '请求过于频繁，请稍后再试。' },
+              error: { code: 'ai_unavailable', message: 'visual check: external AI disabled' },
             }),
             {
-              status: 429,
-              headers: { 'content-type': 'application/json', 'retry-after': '7' },
+              status: 503,
+              headers: { 'content-type': 'application/json' },
             },
           )
         }
-        return json({ entities: [], nextSince: 0, hasMore: false })
+        return originalFetch(input, init)
       }
-      if (pathname === '/api/v1/sync/push' || pathname === '/api/v1/sync/bootstrap') {
-        let applied = 0
-        try {
-          applied = JSON.parse(init?.body ?? '{}')?.entities?.length ?? 0
-        } catch {
-          applied = 0
-        }
-        return json({ applied, skipped: [], serverRev: 0 })
-      }
-      if (pathname.startsWith('/api/')) {
-        return new Response(
-          JSON.stringify({
-            error: { code: 'ai_unavailable', message: 'visual check: external AI disabled' },
-          }),
-          {
-            status: 503,
-            headers: { 'content-type': 'application/json' },
-          },
-        )
-      }
-      return originalFetch(input, init)
-    }
-  }, syncFailure)
+    },
+    { syncFailureKind: syncFailure, healthKind: healthMode },
+  )
 }
 
 /**
@@ -248,6 +268,32 @@ const pages = [
     },
     waitFor: OPEN_DIALOG,
   },
+  // 「测试服务端连接」改成真探活之后，成功与降级两条分支各有自己的文案，
+  // 不造状态就永远没有基线。不造「连不上」那条：503 会在控制台留一条 error，
+  // 与脚本「控制台零错误」的判据冲突，那条分支由 server-health.test.ts 覆盖。
+  {
+    slug: 'settings-ai-ready',
+    path: '/settings',
+    ready: '.settings-ai-card',
+    health: 'ok',
+    setup: async (page) => {
+      await page.getByRole('button', { name: '测试服务端连接' }).click()
+      // toast 停留 2.2 秒，且浮在卡片上方；不等它消失，基线里会有一块黑色气泡挡住结论文字。
+      await dismissToast(page)
+    },
+    expect: '.settings-ai-card .settings-ai-health',
+  },
+  {
+    slug: 'settings-ai-degraded',
+    path: '/settings',
+    ready: '.settings-ai-card',
+    health: 'degraded',
+    setup: async (page) => {
+      await page.getByRole('button', { name: '测试服务端连接' }).click()
+      await dismissToast(page)
+    },
+    expect: '.settings-ai-card .surface-error',
+  },
   { slug: 'fitness-new', path: '/fitness?new=1', waitFor: OPEN_DIALOG },
   { slug: 'diet-new', path: '/diet?new=1', waitFor: OPEN_DIALOG },
   { slug: 'study-new', path: '/study?new=1', waitFor: OPEN_DIALOG },
@@ -313,7 +359,7 @@ for (const pageDef of activePages) {
       viewport: { width: viewport.width, height: viewport.height },
       deviceScaleFactor: 1,
     })
-    await installAiOfflineMock(page, { syncFailure: pageDef.syncFailure })
+    await installAiOfflineMock(page, { syncFailure: pageDef.syncFailure, health: pageDef.health })
     const errors = []
     const expectedNoKeyReport503 = []
     page.on('response', (response) => {

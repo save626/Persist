@@ -531,6 +531,16 @@
   color: var(--deep);
 }
 
+/*
+ * 「测试服务端连接」的失败结论。
+ * `.surface-error` 本身是 `margin: 0`（同步卡里它被 `.settings-sync-body` 的内边距包着），
+ * 而设置卡片自身 `padding: 0`、由每个子区块各自留白，所以直接放进来会顶到卡片两侧边线。
+ * 这里补齐与 `.settings-inline-note` 同一套外边距，红条才不会像漏出来的。
+ */
+.settings-ai-card .surface-error.settings-ai-health {
+  margin: 14px 22px 18px;
+}
+
 .settings-data-actions {
   display: grid;
 }

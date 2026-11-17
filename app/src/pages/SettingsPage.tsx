@@ -13,6 +13,7 @@ import {
 } from '../lib/mock-data-transfer'
 import { createCompleteMockData } from '../data/complete-mock-data'
 import { useNetworkOnline } from '../lib/network-status'
+import { checkServerHealth, type ServerHealth } from '../lib/server-health'
 import {
   DEFAULT_DAILY_BRIEF_AT,
   normalizeDailyBriefSettings,
@@ -107,6 +108,7 @@ export function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { reminders, summaryOnly, sources } = settings
   const [aiState, setAiState] = useState<AiState>('idle')
+  const [aiHealth, setAiHealth] = useState<ServerHealth | null>(null)
   const [savedAt, setSavedAt] = useState('尚未保存')
   const [saving, setSaving] = useState(false)
   const [importName, setImportName] = useState('')
@@ -169,16 +171,40 @@ export function SettingsPage() {
     }, 650)
   }
 
-  const testConnection = () => {
+  /**
+   * 真的打一次 `/api/health`。
+   *
+   * 改之前这里是个 `setTimeout(950)` 之后无条件成功的占位：不发请求，却显示
+   * 「服务端代理可用」。一个永远通过的测试比没有测试更糟——它会让「连不上服务端」
+   * 这种真问题看起来像已经排除过了。现在按健康检查的四种结局分别给话术，
+   * 见 `lib/server-health.ts`。
+   */
+  const testConnection = async () => {
     if (aiState === 'testing') return
     setAiState('testing')
-    window.setTimeout(() => {
-      setAiState('connected')
-      showToast('Mock 连接测试完成：服务端代理可用')
-    }, 950)
+    setAiHealth(null)
+    const health = await checkServerHealth()
+    setAiHealth(health)
+    // `connected` / `error` 只是 CSS 用的两档，真实区别由 `aiHealth.kind` 决定文案。
+    setAiState(health.kind === 'ready' ? 'connected' : 'error')
+    showToast(health.kind === 'ready' ? '服务端连接正常' : '连接检查未通过，原因见下方')
   }
 
-  const exportMockData = () => {
+  /** 徽标文案按健康检查的结局分档；未点过按钮时是「未测试」，不是「待配置」——密钥不在这个页面上配。 */
+  const aiPillLabel =
+    aiState === 'testing'
+      ? '测试中'
+      : aiHealth?.kind === 'ready'
+        ? '服务端在线'
+        : aiHealth?.kind === 'ai-disabled'
+          ? '模型未配置'
+          : aiHealth?.kind === 'degraded'
+            ? '服务端降级'
+            : aiHealth
+              ? '连接失败'
+              : '未测试'
+
+  const exportLocalBackup = () => {
     try {
       const payload = serializeMockBackup({
         goals,
@@ -201,10 +227,10 @@ export function SettingsPage() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `persist-mock-backup-${backupDateStamp()}.json`
+      anchor.download = `persist-backup-${backupDateStamp()}.json`
       anchor.click()
       URL.revokeObjectURL(url)
-      showToast(`Mock 数据备份已导出 · 含 ${payload.data.longTermPlans.length} 个长期计划`)
+      showToast(`数据备份已导出 · 含 ${payload.data.longTermPlans.length} 个长期计划`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误'
       showToast(`导出失败：${message}`)
@@ -540,13 +566,7 @@ export function SettingsPage() {
               </div>
               <span className={`settings-service-pill ${aiState}`}>
                 <span className="dot" />
-                {aiState === 'testing'
-                  ? '测试中'
-                  : aiState === 'connected'
-                    ? 'Mock 可用'
-                    : aiState === 'error'
-                      ? '连接失败'
-                      : '待配置'}
+                {aiPillLabel}
               </span>
             </div>
 
@@ -562,9 +582,25 @@ export function SettingsPage() {
                 disabled={aiState === 'testing'}
                 onClick={testConnection}
               >
-                {aiState === 'testing' ? '测试连接中…' : '测试 Mock 连接'}
+                {aiState === 'testing' ? '测试连接中…' : '测试服务端连接'}
               </button>
             </div>
+
+            {/*
+              结果必须落在页面上，不能只弹 toast：toast 两秒就没了，
+              而「服务端返回 503」这种事用户需要一边看着一边去查。
+            */}
+            {aiHealth &&
+              (aiHealth.kind === 'ready' ? (
+                <p className="settings-inline-note settings-ai-health">
+                  <Icon name="check" className="icon-sm" />
+                  {aiHealth.message}
+                </p>
+              ) : (
+                <p className="surface-error settings-ai-health" role="alert">
+                  {aiHealth.message}
+                </p>
+              ))}
 
             <div className="settings-toggle-stack">
               <label className="toggle-row">
@@ -641,13 +677,13 @@ export function SettingsPage() {
               </div>
             </div>
             <div className="settings-data-actions">
-              <button className="settings-data-action" type="button" onClick={exportMockData}>
+              <button className="settings-data-action" type="button" onClick={exportLocalBackup}>
                 <span>
                   <Icon name="today" />
                 </span>
                 <span>
                   <strong>导出 JSON 备份</strong>
-                  <small>包含当前 Mock 记录、设置与长期计划</small>
+                  <small>包含当前本机记录、设置与长期计划</small>
                 </span>
                 <Icon name="chev" className="icon-sm" />
               </button>
