@@ -4,9 +4,9 @@
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
 - 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成；服务端 2026-11-06、前端产物 2026-11-07 均已部署，同步默认关闭）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
-- 规模：八页面可完整点击验收；当前本机为 app 单测 383（32 文件）、server 单测 343（33 文件）、E2E 132 次执行（11 文件，1.4 m），Lint 0 错 0 警告；视觉脚本 120 张页面截图 + 1 张快速记录（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
+- 规模：八页面可完整点击验收；当前本机为 app 单测 388（32 文件）、server 单测 356（34 文件）、E2E 132 次执行（11 文件，1.7 m），Lint 0 错 0 警告；视觉脚本 126 张页面截图 + 1 张快速记录（21 状态）（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
 
-## 当前阶段（2026-11-17：P0 的 AI 凭据门、双配额与审计保留期已上线——`/api/chat`、`/api/report` 需凭据、每日 100 次 / 20 万 token、`ai_calls` 只留 30 天、schema 3；步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
+## 当前阶段（2026-11-17：P0 的 AI 凭据门、双配额与审计保留期已上线——`/api/chat`、`/api/report` 需凭据、每日 100 次 / 20 万 token、`ai_calls` 只留 30 天；数据库级 `audit_log` 记录建设备 / 吊销 / 删账号 / 建快照 / 恢复 / 导出七类动作；前端七个页面已按路由分包（主包 684 → 392 kB）；schema 4；步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
 
 前端产品原型**已完成并通过双端视觉验收，视觉范围冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI，`9f9cc71`）：AI 引导建档 → 长期计划草案确认 → 启用/归档闭环已通；AI 建档对话（`POST /api/chat`）、AI 报告文字与今日页晨间简报文字（`POST /api/report`）在「档案页开启 AI 数据授权 + 服务端健康」时走真实 DeepSeek，失败或未授权时回退本地规则/Mock 并如实标注；**报告的指标数字、依据条目与简报 KPI 始终由前端按本地记录确定性生成，模型只写文字**。业务数据全部写入本机 IndexedDB（刷新/重开不丢，有「清空本机数据」入口，导出导入为 0.3.0 备份格式并兼容旧版）：步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（本地 `schemaVersion` 当前为 3；步骤 11 初始为 2），报告页可按近 7 / 30 / 90 天窗口汇总真实历史。
 
@@ -14,7 +14,7 @@
 
 下一步（2026-11-06 更正口径）：**步骤 10 不再整步等备案号**。①**已完成（2026-11-06 / 11-07）**：服务器升 Node 22 LTS（`/opt/node22` v22.19.0）、建 `/var/lib/persist` + systemd `ReadWritePaths`、每日 `VACUUM INTO` 备份（`persist-backup.timer` 每日 03:00）、上传 `shared/dist` + `server/dist` 并部署步骤 12/13、前端产物上传（2026-11-07 14:14）；**未走 3100 端口预演，改为备份先行 + 版本化目录（`/opt/persist-next`）**。②**已完成（2026-11-10）**：SSH 仅密钥 + 禁用密码 + `fail2ban` 已启用并验证；安全组 3389 入方向规则已由用户删除，外部复验为超时不可达，22/80 正常。③**必须等备案号**：域名解析、443、证书、HTTP→HTTPS、页脚备案号、「已上线」表述。④14b / 14c / 14d 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产（停机 501 ms；部署后备份实跑 `integrity:"ok"`）；Nginx 根路径与 `/settings` 均 200，5 条新端点未鉴权请求均 401。逐项拆解见 [`HANDOFF.md`](HANDOFF.md) §13.3 与 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) §6。
 
-**对外入口（P7）**：桌面落地页与产品介绍首页由另一 Agent 负责，本仓库只处理跳转链路与跳转后的运行模式。生产路由为 `/` 落地页 → `/home.html` 产品介绍首页 → `/app/?mode=demo`（查看演示）或 `/app/?mode=guest`（自己体验）。网页域名 / IP 只部署 `npm run build` 产物，`owner` 在网页解析层不可达；无参数、非法参数或 `mode=owner` 一律进入 `guest`。demo 使用完整预置数据且全部 AI 内容均在部署前真实生成并固化，部署后只读、零 `/api/*`；guest 从空白数据开始，全部 AI Mock、零 `/api/*`、同步关闭。作者自有移动端通过 USB 安装 `npm run build:mobile` 生成的 `app/dist-mobile` 包，默认 `owner`，保留完整真实 AI 与同步。owner 首启 / 清空为无业务占位的空白状态（无目标、计划、训练、饮食、学习、档案、报告；饮水基线 0），AI 总授权保留开启，数据来源开关、提醒与每日简报默认关闭；真实 AI 不可用时降级为本地 Mock / 规则并标注来源。2026-11-12 已部署新 web 包 `index-DKsHXSEx.js` 671633 B + `index-BMbKaiLQ.css` 153875 B，web demo / guest 产品的桌面侧栏与窄屏顶栏提供“返回首页”，均回到 `/home.html`，用户已完成双端验收；整体仍未上线。**服务端 AI 边界已于 2026-11-17 补齐**：`/api/chat` 与 `/api/report` 需 `Authorization: Bearer psa_…`（预共享密钥，服务端只存 sha256；`PERSIST_AI_GATE=off|warn|enforce`，生产为 `enforce`），两条路由共用每日 100 次请求配额并写 `ai_calls` 审计，公网无凭据调用一律 `401 ai_unauthorized`；客户端凭据只在 `build:mobile` 时由 `app/.env.mobile.local` 内联，非 mobile 构建检测到该变量会直接失败。**仍未完成**：token 配额（Step 3）、`ai_calls` 保留期、生成式 AI 专门备案 / 安全评估——后者完成前不得宣称对外开放。详见 [`docs/P0-AI接口服务端安全门设计方案.md`](docs/P0-AI接口服务端安全门设计方案.md)、[`docs/项目交接-2026-11-17.md`](docs/项目交接-2026-11-17.md) 与 [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)。
+**对外入口（P7）**：桌面落地页与产品介绍首页由另一 Agent 负责，本仓库只处理跳转链路与跳转后的运行模式。生产路由为 `/` 落地页 → `/home.html` 产品介绍首页 → `/app/?mode=demo`（查看演示）或 `/app/?mode=guest`（自己体验）。网页域名 / IP 只部署 `npm run build` 产物，`owner` 在网页解析层不可达；无参数、非法参数或 `mode=owner` 一律进入 `guest`。demo 使用完整预置数据且全部 AI 内容均在部署前真实生成并固化，部署后只读、零 `/api/*`；guest 从空白数据开始，全部 AI Mock、零 `/api/*`、同步关闭。作者自有移动端通过 USB 安装 `npm run build:mobile` 生成的 `app/dist-mobile` 包，默认 `owner`，保留完整真实 AI 与同步。owner 首启 / 清空为无业务占位的空白状态（无目标、计划、训练、饮食、学习、档案、报告；饮水基线 0），AI 总授权保留开启，数据来源开关、提醒与每日简报默认关闭；真实 AI 不可用时降级为本地 Mock / 规则并标注来源。2026-11-12 已部署新 web 包 `index-DKsHXSEx.js` 671633 B + `index-BMbKaiLQ.css` 153875 B，web demo / guest 产品的桌面侧栏与窄屏顶栏提供“返回首页”，均回到 `/home.html`，用户已完成双端验收；整体仍未上线。**服务端 AI 边界已于 2026-11-17 补齐**：`/api/chat` 与 `/api/report` 需 `Authorization: Bearer psa_…`（预共享密钥，服务端只存 sha256；`PERSIST_AI_GATE=off|warn|enforce`，生产为 `enforce`），两条路由共用每日 100 次请求配额并写 `ai_calls` 审计，公网无凭据调用一律 `401 ai_unauthorized`；客户端凭据只在 `build:mobile` 时由 `app/.env.mobile.local` 内联，非 mobile 构建检测到该变量会直接失败。**2026-11-17 后续补齐**：token 配额（Step 3，20 万/天）、`ai_calls` 保留期（30 天）、墓碑与 `sync_ops` 保留期、数据库级 `audit_log`、同步失败 401/429 差异化文案、路由分包（主包 684 → 392 kB）均已上线；生产恢复演练已通过。**生成式 AI 专门备案本版不做**（网页端不存在 AI 能力，属个人自用；三条行为前提见交接文档 §11.3），但域名 / 443 / 证书 / 页脚备案号仍未下发，**不得宣称「已上线」**。详见 [`docs/P0-AI接口服务端安全门设计方案.md`](docs/P0-AI接口服务端安全门设计方案.md)、[`docs/项目交接-2026-11-17.md`](docs/项目交接-2026-11-17.md) 与 [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)。
 
 ## 文档地图
 
@@ -39,7 +39,7 @@ app/      React + Vite Web 客户端（web 产物 app/dist，生产挂在 /app/�
 landing/  对外落地页与产品介绍首页（/ 与 /home.html，由另一 Agent 维护视觉）
 server/   Fastify 服务端：P3 的 /api/health、SSE /api/chat、POST /api/report；步骤 12 的 /api/v1/devices*、/api/v1/sync/* + SQLite；步骤 13 的 /api/v1/analysis/*、/api/v1/reports* + 每日简报 job + 报告归档（12/13 均已部署）；14b 恢复 / 14c 导出 / 14d 删除账号 / 备份列表与手动创建端点已于 2026-11-10 部署到生产
 shared/   跨端共享纯 TS 契约（`@persist/shared`）：同步实体与接口契约（步骤 12c）、综合分析契约（步骤 13），前后端同源，`shared/dist` 已 gitignore
-design/   视觉基线与截图（17 状态 × 6 视口 = 102 张页面截图 + 1 张快速记录，由 visual:check 生成）
+design/   视觉基线与截图（21 状态 × 6 视口 = 126 张页面截图 + 1 张快速记录，由 visual:check 生成）
 docs/     工程约定、部署现状、P4 设计方案
 ```
 
@@ -65,10 +65,10 @@ npm run android:usb                # 构建、同步并通过 USB 安装 debug A
 ```powershell
 npm run lint
 npm run typecheck
-npm test               # 383 条 / 32 个文件
+npm test               # 388 条 / 32 个文件
 npx playwright test    # 66 用例 × 2 项目 = 132 次执行，11 个文件
 npm run build
-npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；需先起无 Key 后端，改布局/弹层时跑
+npm run visual:check   # 126 张页面截图 + 1 张快速记录 → design/；需先起无 Key 后端，改布局/弹层时跑
 ```
 
 > `app/` 与 `server/` 的 `predev` / `prebuild` / `pretypecheck` / `pretest` 等钩子会自动执行 `npm run shared:build`（编译 `shared/src` → `shared/dist`），一般不需要手动跑。
@@ -78,7 +78,7 @@ npm run visual:check   # 102 张页面截图 + 1 张快速记录 → design/；�
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
-npm run typecheck && npm test && npm run build   # 343 条 / 33 个文件
+npm run typecheck && npm test && npm run build   # 356 条 / 34 个文件
 Copy-Item .env.example .env    # 本机联调才填 DEEPSEEK_API_KEY；.env 不入库、用完即删
 node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动读 .env，带 Key 必须加 --env-file，否则 /api/chat、/api/report 返回 503
 ```
@@ -99,4 +99,4 @@ node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动�
 
 跨设备同步的代码已在步骤 12 完成（服务端 SQLite 副本 + 设备令牌 + 增量同步 + 设置页开关，**默认关闭**），且**服务端已于 2026-11-06 部署、前端「数据同步」卡片 2026-11-07 已上传**——但**同步默认关闭**，不开开关服务端不会收到任何业务数据；开启后本机数据副本才会分批上传到自己的服务器，且同步副本不是备份。
 
-步骤 13 的服务端综合分析报告同样**只存在服务端归档**（`analysis_reports`，保留 365 天，每次生成时清理过期项），不进本机 IndexedDB、不进 0.3.0 导出包；归档里只存模型文字与指标快照；墓碑与 `sync_ops` 30 天、`ai_calls` 30 天的清理均已实现（`sync_retention` / `ai_audit_prune`，每日 04:00 后跑一次）。步骤 14c 的 `GET /api/v1/export` 只导出当前账号的业务实体，**不会把服务端分析归档伪装成本地报告**；步骤 14d 的 `DELETE /api/v1/account` 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产并完成专项测试，14d 前端「先删服务端、成功后清本机」入口已在本机接线，待双端验收。
+步骤 13 的服务端综合分析报告同样**只存在服务端归档**（`analysis_reports`，保留 365 天，每次生成时清理过期项），不进本机 IndexedDB、不进 0.3.0 导出包；归档里只存模型文字与指标快照；墓碑与 `sync_ops` 30 天、`ai_calls` 30 天、`audit_log` 30 天的清理均已实现（`sync_retention` / `ai_audit_prune`，每日 04:00 后跑一次）；`audit_log` 只记写动作（建设备 / 换设备 / 吊销 / 删账号 / 建快照 / 恢复 / 导出），删账号时该账号的历史行只置空 `user_id` 不删行。步骤 14c 的 `GET /api/v1/export` 只导出当前账号的业务实体，**不会把服务端分析归档伪装成本地报告**；步骤 14d 的 `DELETE /api/v1/account` 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产并完成专项测试，14d 前端「先删服务端、成功后清本机」入口已在本机接线，待双端验收。
