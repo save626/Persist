@@ -313,6 +313,52 @@ describe('SyncEngine', () => {
     expect(client.push).toHaveBeenCalled()
   })
 
+  it('限流（429）：标记 rate-limited，交给退避重试，不提示重新绑定', async () => {
+    const { engine, state, scheduler, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+
+    setData({ ...getData(), waterLog: getData().waterLog.slice(1) })
+    engine.noteDataChange()
+    await tick()
+    state.pushError = new SyncRequestError('rate-limited', '请求过于频繁，请稍后再试。', {
+      status: 429,
+      code: 'rate_limited',
+    })
+
+    await engine.flush('test')
+
+    const status = engine.status()
+    // 401 与 429 对用户是两件不同的事：前者重试永远不会成功，后者等一下就好。
+    expect(status.errorKind).toBe('rate-limited')
+    expect(status.needsAttention).toBe(false)
+    expect(status.error).toContain('请求过于频繁')
+    expect(scheduler.delays()).toContain(5_000)
+
+    state.pushError = null
+    state.pushResults.push({ applied: 1, skipped: [], serverRev: 1 })
+    await engine.flush('test')
+
+    expect(engine.status().error).toBeNull()
+    expect(engine.status().errorKind).toBeNull()
+  })
+
+  it('401 的分类是 unauthorized，与限流区分开', async () => {
+    const { engine, state, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+
+    setData({ ...getData(), waterLog: getData().waterLog.slice(1) })
+    engine.noteDataChange()
+    await tick()
+    state.pushError = new SyncRequestError('unauthorized', '缺少或无效的设备令牌。')
+
+    await engine.flush('test')
+
+    expect(engine.status().errorKind).toBe('unauthorized')
+    expect(engine.status().needsAttention).toBe(true)
+  })
+
   it('网络失败按指数退避重试，成功后清空错误', async () => {
     const { engine, state, scheduler, getData, setData } = createEngine()
     await engine.init()

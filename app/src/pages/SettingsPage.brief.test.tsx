@@ -7,6 +7,7 @@ import { UIContext, type UIContextValue } from '../context/ui-context'
 import { MockDataContext, type MockDataContextValue } from '../context/mock-data-context'
 import { INITIAL_SETTINGS } from '../data/settings'
 import type { MockSettings } from '../types'
+import type { SyncErrorKind } from '../lib/sync-client'
 import { SettingsPage } from './SettingsPage'
 
 const UI_VALUE: UIContextValue = {
@@ -108,6 +109,7 @@ function buildContextValue(
       syncing: false,
       error: null,
       needsAttention: false,
+      errorKind: null,
       state: '未开启',
     },
     syncRecoveryCode: null,
@@ -271,6 +273,7 @@ describe('SettingsPage 账号删除', () => {
         syncing: false,
         error: null,
         needsAttention: false,
+        errorKind: null,
         state: '已同步',
       },
       deleteServerAccount,
@@ -312,5 +315,61 @@ describe('SettingsPage 账号删除', () => {
       ),
     )
     expect(clearLocalData).not.toHaveBeenCalled()
+  })
+})
+
+describe('SettingsPage 同步失败文案（P5-4）', () => {
+  const ENABLED_SYNC = {
+    enabled: true,
+    pending: 0,
+    lastSyncAt: '2026-11-17 12:00',
+    online: true,
+    syncing: false,
+    needsAttention: false,
+    errorKind: null as SyncErrorKind | null,
+    state: '已同步' as const,
+  }
+
+  it('限流（429）说明会自动重试，而不是让用户自己反复点', () => {
+    renderSettings(INITIAL_SETTINGS, {
+      syncStatus: {
+        ...ENABLED_SYNC,
+        error: '请求过于频繁，请稍后再试。',
+        errorKind: 'rate-limited',
+      },
+    })
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('请求过于频繁，服务端已安排自动重试')
+    expect(alert).toHaveTextContent('本机记录不受影响')
+    // 服务端原文不该同时出现：两句话叠在一起会让人以为要手动处理。
+    expect(screen.queryByText('请求过于频繁，请稍后再试。')).not.toBeInTheDocument()
+  })
+
+  it('令牌失效（401）仍然是「用恢复码重新绑定」，不混进限流文案', () => {
+    renderSettings(INITIAL_SETTINGS, {
+      syncStatus: {
+        ...ENABLED_SYNC,
+        error: '设备令牌已失效，请用恢复码重新绑定本机。',
+        errorKind: 'unauthorized',
+        needsAttention: true,
+      },
+    })
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('设备令牌已失效，本机数据不会被清空')
+    expect(alert).not.toHaveTextContent('自动重试')
+  })
+
+  it('普通失败照旧展示服务端原因，不被限流分支吞掉', () => {
+    renderSettings(INITIAL_SETTINGS, {
+      syncStatus: {
+        ...ENABLED_SYNC,
+        error: '本地有一条变更无法同步：记录格式不合法。',
+        errorKind: 'invalid',
+      },
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('记录格式不合法')
   })
 })

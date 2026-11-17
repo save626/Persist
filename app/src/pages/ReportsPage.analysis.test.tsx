@@ -165,6 +165,7 @@ function buildContextValue(overrides: Partial<MockDataContextValue> = {}): MockD
       syncing: false,
       error: null,
       needsAttention: false,
+      errorKind: null,
       state: '已同步',
     },
     syncRecoveryCode: '0123456789abcdef0123456789abcdef',

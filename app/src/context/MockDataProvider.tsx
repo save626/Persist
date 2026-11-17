@@ -59,6 +59,7 @@ const INITIAL_SYNC_STATUS: SyncStatusSnapshot = {
   syncing: false,
   error: null,
   needsAttention: false,
+  errorKind: null,
   state: '未开启',
 }
 

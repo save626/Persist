@@ -6,7 +6,12 @@ import {
   type EntityCandidate,
   type PushResult,
 } from './sync-contract'
-import { nextBackoffMs, SyncRequestError, type SyncClient } from './sync-client'
+import {
+  nextBackoffMs,
+  SyncRequestError,
+  type SyncClient,
+  type SyncErrorKind,
+} from './sync-client'
 import {
   applyPulledEntities,
   collectLocalEntities,
@@ -52,6 +57,12 @@ export interface SyncStatusSnapshot {
   error: string | null
   /** 令牌失效，需要用户用恢复码重新绑定。 */
   needsAttention: boolean
+  /**
+   * 最近一次失败的分类（P5-4）。UI 靠它给不同文案，而不是靠匹配 `error` 里的字串：
+   * `rate-limited`（429，服务端会自己退避重试）与 `unauthorized`（401，重试永远不会成功）
+   * 对用户是两件完全不同的事，文案必须能区分。
+   */
+  errorKind: SyncErrorKind | null
   state: SyncState
 }
 
@@ -104,12 +115,15 @@ export class SyncEngine {
   /** 正常同步完成也会保留的提示（例如跳过了格式不合法的记录）。 */
   private warning: string | null = null
   private needsAttention = false
+  /** 与 `error` 同时写入 / 清除，只用于让 UI 选文案。 */
+  private errorKind: SyncErrorKind | null = null
   private started = false
   private readonly onOnline = () => {
     void this.flush('online')
   }
   private readonly onOffline = () => {
     this.error = null
+    this.errorKind = null
     this.emit()
   }
   private readonly onVisibility = () => {
@@ -196,6 +210,8 @@ export class SyncEngine {
       syncing: this.syncing,
       error: this.error ?? this.lastError ?? this.warning,
       needsAttention: this.needsAttention,
+      // 只有真的还挂着错误时才报类型：成功了但保留 warning 时不该让 UI 走「失败」分支。
+      errorKind: this.error || this.lastError ? this.errorKind : null,
       state,
     }
   }
@@ -226,6 +242,7 @@ export class SyncEngine {
    */
   async enable(deviceLabel: string): Promise<void> {
     this.error = null
+    this.errorKind = null
     this.lastError = null
     this.needsAttention = false
     if (this.meta.token) {
@@ -335,6 +352,7 @@ export class SyncEngine {
       this.retryAttempt = 0
       this.lastError = null
       this.error = null
+      this.errorKind = null
       this.warning = null
       this.needsAttention = false
       this.emit()
@@ -444,6 +462,7 @@ export class SyncEngine {
     if (!this.meta.enabled || !this.meta.token) return this.status()
     if (!this.online) {
       this.error = null
+      this.errorKind = null
       this.emit()
       return this.status()
     }
@@ -454,6 +473,7 @@ export class SyncEngine {
 
     this.syncing = true
     this.error = null
+    this.errorKind = null
     this.warning = null
     this.emit()
     const token = this.meta.token
@@ -481,9 +501,11 @@ export class SyncEngine {
       this.retryAttempt = 0
       this.lastError = null
       this.error = null
+      this.errorKind = null
     } catch (error) {
       this.lastError = describeError(error)
       this.error = this.lastError
+      this.errorKind = error instanceof SyncRequestError ? error.kind : null
       if (error instanceof SyncRequestError) {
         if (error.kind === 'unauthorized') {
           this.needsAttention = true

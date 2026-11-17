@@ -53,12 +53,15 @@ async function openManualDraft(page, { title, goal }, open = openBlankManualDraf
   return dialog
 }
 
-async function installAiOfflineMock(page) {
+async function installAiOfflineMock(page, options = {}) {
   // 视觉检查必须可重复：在页面内截断 /api/*，避免本机 .env.mobile.local 指向真实服务端后
   // 因跨源 CORS 或网络状态把布局检查误判为失败。页面仍会走既有的“AI 不可用”降级分支。
   // 同步接口例外：给「成功但没有数据」的应答。`settings-sync-on` 要的是「同步已开启」这个
   // 渲染分支，若按 503 处理，引擎会落进错误态，说明文字被错误提示挤掉甚至换气口。
-  await page.addInitScript(() => {
+  // `syncFailure: 'rate-limited'` 让同步接口返回 429，用来截「限流」这一分支的文案
+  // （P5-4）。默认仍是「成功但无数据」，既有状态不受影响。
+  const syncFailure = options.syncFailure ?? null
+  await page.addInitScript((syncFailureKind) => {
     const originalFetch = window.fetch.bind(window)
     const json = (body) =>
       new Response(JSON.stringify(body), {
@@ -70,6 +73,17 @@ async function installAiOfflineMock(page) {
         typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
       const pathname = new URL(rawUrl, window.location.href).pathname
       if (pathname === '/api/v1/sync/pull') {
+        if (syncFailureKind === 'rate-limited') {
+          return new Response(
+            JSON.stringify({
+              error: { code: 'rate_limited', message: '请求过于频繁，请稍后再试。' },
+            }),
+            {
+              status: 429,
+              headers: { 'content-type': 'application/json', 'retry-after': '7' },
+            },
+          )
+        }
         return json({ entities: [], nextSince: 0, hasMore: false })
       }
       if (pathname === '/api/v1/sync/push' || pathname === '/api/v1/sync/bootstrap') {
@@ -94,7 +108,7 @@ async function installAiOfflineMock(page) {
       }
       return originalFetch(input, init)
     }
-  })
+  }, syncFailure)
 }
 
 /**
@@ -205,6 +219,15 @@ const pages = [
     setup: enableSyncForScreenshot,
     expect: '.settings-sync-code',
   },
+  // P5-4：限流（429）的文案与 401 分开，只有真的 429 才渲染，所以要造这个状态。
+  {
+    slug: 'settings-sync-limit',
+    path: '/settings',
+    ready: '.settings-sync-card',
+    syncFailure: 'rate-limited',
+    setup: enableSyncForScreenshot,
+    expect: '.settings-sync-card .surface-error',
+  },
   // A5（部署指引 03 的 HTTPS 口径）在弹层里，默认折叠。
   {
     slug: 'settings-deploy',
@@ -290,7 +313,7 @@ for (const pageDef of activePages) {
       viewport: { width: viewport.width, height: viewport.height },
       deviceScaleFactor: 1,
     })
-    await installAiOfflineMock(page)
+    await installAiOfflineMock(page, { syncFailure: pageDef.syncFailure })
     const errors = []
     const expectedNoKeyReport503 = []
     page.on('response', (response) => {

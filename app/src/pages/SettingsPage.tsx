@@ -742,11 +742,23 @@ export function SettingsPage() {
                   设备令牌已失效，本机数据不会被清空。请用恢复码重新绑定本机。
                 </p>
               )}
-              {syncStatus.error && !syncStatus.needsAttention && (
+              {/*
+                限流（429）必须与普通网络失败分开说：它自己会退避重试，用户不需要做任何事；
+                而「同步失败」这四个字会让人以为要去点按钮或换网络。401 走上面那条分支。
+              */}
+              {!syncStatus.needsAttention && syncStatus.errorKind === 'rate-limited' && (
                 <p className="surface-error" role="alert">
-                  {syncStatus.error}
+                  请求过于频繁，服务端已安排自动重试（间隔从 5 秒起逐次翻倍，最长 5
+                  分钟一次）；本机记录不受影响。
                 </p>
               )}
+              {!syncStatus.needsAttention &&
+                syncStatus.error &&
+                syncStatus.errorKind !== 'rate-limited' && (
+                  <p className="surface-error" role="alert">
+                    {syncStatus.error}
+                  </p>
+                )}
               {syncStatus.enabled && !syncStatus.online && (
                 <p className="settings-inline-note">
                   <Icon name="clock" className="icon-sm" />
