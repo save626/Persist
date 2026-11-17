@@ -48,3 +48,11 @@ npm-debug.log*
 
 # 步骤 13 评审截图（与基线逐字节相同，仅本地验收用，不入库）
 .step13-review/
+
+# Playwright 产物（根目录下运行时落在仓库根，与 app/test-results 同源）
+test-results/
+
+# 本机素材与草稿，不入库
+picture/
+产品/
+.workbuddy/
