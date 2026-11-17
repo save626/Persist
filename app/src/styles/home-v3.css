@@ -275,6 +275,16 @@ svg {
   max-width: 1240px;
   margin: 0 auto;
 }
+/* 路由分包加载占位（P5-3）：只占位，不画骨架，避免先闪假布局再跳成真布局。 */
+.route-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
 .head {
   display: flex;
   align-items: flex-start;
