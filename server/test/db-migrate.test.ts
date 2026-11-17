@@ -22,7 +22,7 @@ describe('migrate', () => {
     try {
       const result = migrate(db, { now: () => 1_700_000_000_000 })
       expect(result.version).toBe(SCHEMA_VERSION)
-      expect(result.applied).toEqual([1, 2])
+      expect(result.applied).toEqual([1, 2, 3])
       expect(
         db
           .prepare<{ version: number; applied_at: number }>(
@@ -32,6 +32,7 @@ describe('migrate', () => {
       ).toEqual([
         { version: 1, applied_at: 1_700_000_000_000 },
         { version: 2, applied_at: 1_700_000_000_000 },
+        { version: 3, applied_at: 1_700_000_000_000 },
       ])
     } finally {
       db.close()
@@ -47,17 +48,19 @@ describe('migrate', () => {
       expect(second.version).toBe(SCHEMA_VERSION)
       expect(
         db.prepare<{ total: number }>('SELECT COUNT(*) AS total FROM schema_migrations').get(),
-      ).toEqual({ total: 2 })
+      ).toEqual({ total: 3 })
     } finally {
       db.close()
     }
   })
 
-  it('建出全部表：身份 / 单行 / 六类记录 + 计划 / 报告与任务 / 迁移记账', () => {
+  it('建出全部表：身份 / 单行 / 六类记录 + 计划 / 报告与任务 / AI 配额与审计 / 迁移记账', () => {
     const db = fresh()
     try {
       migrate(db)
       expect(tableNames(db)).toEqual([
+        'ai_calls',
+        'ai_usage',
         'analysis_reports',
         'devices',
         'diet_entries',
@@ -130,6 +133,8 @@ describe('migrate', () => {
       expect(indexes).toContain('idx_analysis_reports_user_created')
       expect(indexes).toContain('idx_analysis_reports_created')
       expect(indexes).toContain('idx_job_runs_name_started')
+      expect(indexes).toContain('idx_ai_calls_created_at')
+      expect(indexes).toContain('idx_ai_calls_key_created')
     } finally {
       db.close()
     }

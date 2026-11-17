@@ -1,10 +1,12 @@
 import { AiError, type AiClient } from '../ai/deepseek.js'
 import { buildReportMessages } from '../ai/prompts.js'
 import { sanitizeReportContent } from '../ai/report.js'
+import { recordAiCall, type AiCallResult } from '../ai/ai-audit.js'
 import type { ServerConfig } from '../config.js'
 import { errorBody, parseReportRequest, type ReportResponse } from '../contract.js'
+import type { Db } from '../db/driver.js'
 import type { RateLimiter } from '../rate-limit.js'
-import { enforceAiGate } from './guards.js'
+import { enforceAiGate, enforceAiQuota } from './guards.js'
 import type { FastifyInstance } from 'fastify'
 
 /**
@@ -29,6 +31,9 @@ export interface ReportRouteOptions {
   config: ServerConfig
   ai: AiClient
   limiter: RateLimiter
+  /** 配额与审计要用：`ai_usage` / `ai_calls` 都在同一个库。 */
+  db: Db
+  now: () => number
 }
 
 export function registerReportRoute(app: FastifyInstance, options: ReportRouteOptions): void {
@@ -45,12 +50,35 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
     }
 
     // 调用者凭据门（P0）。与 /api/chat 同序：Key 检查之后、限流之前。
-    if (!enforceAiGate(options.config, request, reply)) return reply
+    const gate = enforceAiGate(options.config, request, reply)
+    if (!gate) return reply
 
     const decision = options.limiter.take(request.ip)
     if (!decision.allowed) {
       reply.header('retry-after', String(Math.max(1, Math.ceil(decision.retryAfterMs / 1_000))))
       return reply.code(429).send(errorBody('rate_limited', '请求过于频繁，请稍后再试。'))
+    }
+
+    // 日配额（P0 Step 2）。与 /api/chat 共用同一份 `ai_usage`：
+    // 两条路由花的是同一个 Key 的钱，分开计数会让人误以为各有 100 次。
+    if (
+      !enforceAiQuota({
+        db: options.db,
+        config: options.config,
+        gate,
+        request,
+        reply,
+        now: options.now,
+      })
+    ) {
+      return reply
+    }
+
+    const startedAt = options.now()
+    // 终态先按「上游失败」记，各返回路径再覆盖成真实结果。
+    let outcome: { result: AiCallResult; httpStatus: number } = {
+      result: 'ai_failed',
+      httpStatus: 502,
     }
 
     // 浏览器关闭连接时取消上游请求。request 的 'close' 在请求体读完后就会触发，
@@ -68,6 +96,7 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
       const sanitized = sanitizeReportContent(raw)
       if (!sanitized.ok) {
         request.log.warn({ reason: sanitized.reason }, 'report response rejected')
+        outcome = { result: 'invalid_response', httpStatus: 502 }
         return reply
           .header('cache-control', 'no-store')
           .code(502)
@@ -78,24 +107,42 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
         report: sanitized.value,
         model: options.config.deepseekModel,
       }
+      outcome = { result: 'ok', httpStatus: 200 }
       return reply.header('cache-control', 'no-store').code(200).send(body)
     } catch (error) {
       if (abort.signal.aborted) {
+        outcome = { result: 'client_closed', httpStatus: 499 }
         return reply.code(499).send(errorBody('client_closed', '请求已取消。'))
       }
       if (error instanceof AiError && error.code === 'timeout') {
+        outcome = { result: 'timeout', httpStatus: 504 }
         return reply
           .header('cache-control', 'no-store')
           .code(504)
           .send(errorBody('timeout', TIMEOUT_MESSAGE))
       }
       request.log.warn({ err: error }, 'report generation failed')
+      outcome = { result: 'ai_failed', httpStatus: 502 }
       return reply
         .header('cache-control', 'no-store')
         .code(502)
         .send(errorBody('ai_failed', UNAVAILABLE_MESSAGE))
     } finally {
       reply.raw.off('close', onClose)
+      recordAiCall(
+        options.db,
+        {
+          keyId: gate.keyId,
+          route: '/api/report',
+          result: outcome.result,
+          httpStatus: outcome.httpStatus,
+          model: options.config.deepseekModel,
+          latencyMs: options.now() - startedAt,
+          ip: request.ip,
+          now: options.now,
+        },
+        (error) => request.log.warn({ err: error }, 'ai audit write failed'),
+      )
     }
   })
 }

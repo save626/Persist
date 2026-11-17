@@ -279,6 +279,23 @@ export function errorBody(code: string, message: string) {
  */
 export const AI_UNAUTHORIZED_CODE = 'ai_unauthorized'
 
+/**
+ * AI 日配额耗尽（P0 Step 2 §4.8）。
+ *
+ * 与 `rate_limited`（IP 短窗口限流）刻意分开：限流是「你太快了，等几秒」，
+ * 配额是「你今天用完了，等明天」。前端两者都回退本地 Mock，但文案必须能区分，
+ * 否则使用者会以为过几分钟就能继续。响应带 `retry-after` 指向次日零点。
+ */
+export const AI_QUOTA_EXCEEDED_CODE = 'ai_quota_exceeded'
+
+/** 配额耗尽的用户文案。写明上限与恢复时间，避免「稍后再试」这种误导。 */
+export function aiQuotaExceededBody(limit: number) {
+  return errorBody(
+    AI_QUOTA_EXCEEDED_CODE,
+    `今日 AI 用量已达上限（${limit} 次），明天 00:00 恢复；期间仍可使用本地 Mock。`,
+  )
+}
+
 // ---------------------------------------------------------------------------
 // AI 报告（8c）：类型与请求/响应契约统一放在 shared/contract/report.ts
 // ---------------------------------------------------------------------------

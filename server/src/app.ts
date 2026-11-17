@@ -99,8 +99,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   })
 
   registerHealthRoute(app, { config: options.config, db })
-  registerChatRoute(app, { config: options.config, ai, limiter })
-  registerReportRoute(app, { config: options.config, ai, limiter })
+  registerChatRoute(app, { config: options.config, ai, limiter, db: db.db, now })
+  registerReportRoute(app, { config: options.config, ai, limiter, db: db.db, now })
   registerAnalysisRoutes(app, {
     db: db.db,
     ai,

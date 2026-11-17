@@ -33,6 +33,11 @@ export interface ServerConfig {
    * 宁可自己用不了，也不放行匿名调用。
    */
   aiKeys: AiKey[]
+  /**
+   * 每个凭据的每日调用上限（P0 Step 2）。`0` 关闭配额。
+   * 默认 100：凭据被提取后，这是唯一能把「无限盗刷」变成「每天有限」的止损手段。
+   */
+  aiDailyLimit: number
   rateLimitMax: number
   rateLimitWindowMs: number
   /** 同步 / 账号接口单独计数：客户端每 60 s 轮询一次，不能吃掉 AI 接口的额度。 */
@@ -123,6 +128,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     aiMaxRetries: readInt(env, 'AI_MAX_RETRIES', 1, 0, 3),
     aiGate: parseAiGateMode(env.PERSIST_AI_GATE),
     aiKeys: parseAiKeys(env.PERSIST_AI_KEYS),
+    aiDailyLimit: readInt(env, 'PERSIST_AI_DAILY_LIMIT', 100, 0, 100_000),
     rateLimitMax: readInt(env, 'RATE_LIMIT_MAX', 20, 1, 1_000),
     rateLimitWindowMs: readInt(env, 'RATE_LIMIT_WINDOW_MS', 5 * 60_000, 1_000, 3_600_000),
     syncRateLimitMax: readInt(env, 'SYNC_RATE_LIMIT_MAX', 240, 1, 10_000),
@@ -156,6 +162,7 @@ export function describeConfig(config: ServerConfig) {
     model: config.deepseekModel,
     // 只报「模式/凭据条数」，不报 keyId，更不报哈希：启动日志会被到处贴。
     aiGate: `${config.aiGate}/${config.aiKeys.length}`,
+    aiQuota: config.aiDailyLimit > 0 ? `${config.aiDailyLimit}/day` : 'off',
     timeoutMs: config.aiTimeoutMs,
     rateLimit: `${config.rateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,

@@ -9,6 +9,11 @@ import type { Db } from './driver.js'
  *
  * v2（步骤 13）：分析报告归档 + 每日简报任务台账。报告内容、指标、事实包都存全文，
  * 方便「报告里的每个数字都能回溯到当时的聚合结果」；缓存键是 (用户, 类型, 窗口, data_rev)。
+ *
+ * v3（P0 Step 2）：AI 调用配额与审计。`ai_usage` 按 (凭据, 本地日期) 累计次数，
+ * `ai_calls` 记每一次调用的结果、状态码、耗时与 IP 哈希。
+ * 这两张表**不参与账号删除清理**：它们是服务端运维事实（谁在花作者的钱），不属于用户
+ * 业务数据；`ai_calls` 里也没有任何请求正文，删账号时留着不构成隐私残留。
  */
 
 export interface Migration {
@@ -18,7 +23,7 @@ export interface Migration {
 }
 
 /** 当前代码期望的 schema 版本；`/api/health` 会带出去，方便对比线上库。 */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 const PULL_COLUMNS = `
   payload_json TEXT NOT NULL,
@@ -192,6 +197,40 @@ export const MIGRATIONS: Migration[] = [
   UNIQUE (name, run_key)
 )`,
       'CREATE INDEX idx_job_runs_name_started ON job_runs (name, started_at)',
+    ],
+  },
+  {
+    version: 3,
+    name: 'ai_quota_audit',
+    statements: [
+      // 按天累计：主键 (key_id, day) 让「查用量」和「加一次」落在同一行，天然原子。
+      // prompt_tokens / completion_tokens 先留着（Step 3 采集 usage 时才写），避免再改表。
+      `CREATE TABLE ai_usage (
+  key_id            TEXT    NOT NULL,
+  day               TEXT    NOT NULL,
+  requests          INTEGER NOT NULL DEFAULT 0,
+  prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0,
+  updated_at        INTEGER NOT NULL,
+  PRIMARY KEY (key_id, day)
+)`,
+      // 审计：只记「谁、哪条路由、结果、状态码、耗时」，不记请求正文、不记 IP 明文。
+      `CREATE TABLE ai_calls (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  key_id            TEXT    NOT NULL,
+  route             TEXT    NOT NULL,
+  model             TEXT,
+  result            TEXT    NOT NULL,
+  http_status       INTEGER NOT NULL,
+  prompt_tokens     INTEGER,
+  completion_tokens INTEGER,
+  latency_ms        INTEGER,
+  ip_hash           TEXT,
+  created_at        INTEGER NOT NULL
+)`,
+      // 保留期清理按 created_at 扫；按凭据查历史走 (key_id, created_at)。
+      'CREATE INDEX idx_ai_calls_created_at ON ai_calls(created_at)',
+      'CREATE INDEX idx_ai_calls_key_created ON ai_calls(key_id, created_at)',
     ],
   },
 ]

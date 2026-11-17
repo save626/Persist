@@ -1,10 +1,12 @@
 import { AiError, type AiClient } from '../ai/deepseek.js'
 import { sanitizeExtraction } from '../ai/extract.js'
 import { buildChatMessages, buildExtractionMessages } from '../ai/prompts.js'
+import { recordAiCall, type AiCallResult } from '../ai/ai-audit.js'
 import type { ServerConfig } from '../config.js'
 import { errorBody, parseChatRequest, type ChatStreamEvent } from '../contract.js'
+import type { Db } from '../db/driver.js'
 import type { RateLimiter } from '../rate-limit.js'
-import { enforceAiGate } from './guards.js'
+import { enforceAiGate, enforceAiQuota } from './guards.js'
 import type { FastifyInstance } from 'fastify'
 
 /**
@@ -31,6 +33,9 @@ export interface ChatRouteOptions {
   config: ServerConfig
   ai: AiClient
   limiter: RateLimiter
+  /** 配额与审计要用：`ai_usage` / `ai_calls` 都在同一个库。 */
+  db: Db
+  now: () => number
   heartbeatMs?: number
 }
 
@@ -52,13 +57,34 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
     // 调用者凭据门（P0）。位置刻意在 Key 检查之后：没配 Key 的部署不应该对任何人返回
     // 401，否则会把「服务端没配好」误报成「凭据错」。放在限流之前：没有凭据的请求
     // 不该消耗 IP 额度。
-    if (!enforceAiGate(options.config, request, reply)) return reply
+    const gate = enforceAiGate(options.config, request, reply)
+    if (!gate) return reply
 
     const decision = options.limiter.take(request.ip)
     if (!decision.allowed) {
       reply.header('retry-after', String(Math.max(1, Math.ceil(decision.retryAfterMs / 1_000))))
       return reply.code(429).send(errorBody('rate_limited', '请求过于频繁，请稍后再试。'))
     }
+
+    // 日配额（P0 Step 2）。放在 IP 限流之后：短时突发先被限流挡住，避免一个脚本
+    // 用光整天的额度；预占的额度失败不退还。
+    if (
+      !enforceAiQuota({
+        db: options.db,
+        config: options.config,
+        gate,
+        request,
+        reply,
+        now: options.now,
+      })
+    ) {
+      return reply
+    }
+
+    const startedAt = options.now()
+    // SSE 一旦 hijack，HTTP 状态就固定为 200；失败以 `error` 事件表达，
+    // 所以审计里靠 `result` 区分，不能靠 httpStatus。
+    let result: AiCallResult = 'ai_failed'
 
     reply.hijack()
     const response = reply.raw
@@ -112,18 +138,36 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
       }
 
       write({ type: 'done' })
+      result = abort.signal.aborted ? 'client_closed' : 'ok'
     } catch (error) {
       request.log.warn({ err: error }, 'chat turn failed')
-      if (!abort.signal.aborted) {
+      if (abort.signal.aborted) {
+        result = 'client_closed'
+      } else {
+        result = error instanceof AiError && error.code === 'timeout' ? 'timeout' : 'ai_failed'
         write({
           type: 'error',
-          code: error instanceof AiError && error.code === 'timeout' ? 'timeout' : 'ai_failed',
+          code: result === 'timeout' ? 'timeout' : 'ai_failed',
           message: FALLBACK_MESSAGE,
         })
       }
     } finally {
       clearInterval(heartbeat)
       if (!response.writableEnded) response.end()
+      recordAiCall(
+        options.db,
+        {
+          keyId: gate.keyId,
+          route: '/api/chat',
+          result,
+          httpStatus: 200,
+          model: options.config.deepseekModel,
+          latencyMs: options.now() - startedAt,
+          ip: request.ip,
+          now: options.now,
+        },
+        (error) => request.log.warn({ err: error }, 'ai audit write failed'),
+      )
     }
   })
 }

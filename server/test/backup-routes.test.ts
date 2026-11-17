@@ -337,7 +337,7 @@ describe('POST /api/v1/backups/:id/restore：', () => {
       expect(body.preRestoreBackup?.file).toMatch(/pre-restore\.sqlite$/)
       expect(existsSync(join(env.backupDir, body.preRestoreBackup?.file ?? ''))).toBe(true)
       expect(waterCount(env)).toBe(1)
-      expect(env.database.schemaVersion).toBe(2)
+      expect(env.database.schemaVersion).toBe(3)
 
       // 快照里包含当前设备令牌，恢复后同一 token 仍可继续使用。
       const reports = await env.app.inject({
