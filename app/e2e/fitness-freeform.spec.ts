@@ -105,7 +105,7 @@ test('legacy strength JSON imports while malformed workout JSON is rejected', as
     mimeType: 'application/json',
     buffer: Buffer.from(backupText(data)),
   })
-  await expect(page.getByText(/Mock 备份已导入/).first()).toBeVisible()
+  await expect(page.getByText(/备份已导入/).first()).toBeVisible()
 
   await mainNav(page, '健身')
   await expect(page.getByText('杠铃平板卧推', { exact: true }).first()).toBeVisible()

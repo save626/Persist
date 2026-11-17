@@ -257,10 +257,10 @@ export function SettingsPage() {
       if (extension === 'json') {
         const data = parseMockBackupJson(text)
         replaceMockData(data)
-        setSavedAt('已导入 Mock 备份')
+        setSavedAt('已导入备份')
         const planCount = data.longTermPlans?.length ?? 0
         showToast(
-          `Mock 备份已导入 · ${countMockRecords(data)} 条记录（含 ${planCount} 个长期计划）`,
+          `备份已导入 · ${countMockRecords(data)} 条记录（含 ${planCount} 个长期计划）`,
         )
       } else {
         const records = parseStudyCsv(text)
@@ -280,7 +280,7 @@ export function SettingsPage() {
   const generateSnapshot = () => {
     const next = createMockSnapshot()
     setSavedAt('快照已更新')
-    showToast(`Mock 快照已生成 · ${next.recordCount} 条记录`)
+    showToast(`本机快照已生成 · ${next.recordCount} 条记录`)
   }
 
   const loadCompleteDemoData = () => {
@@ -299,7 +299,7 @@ export function SettingsPage() {
     setImportName('')
     setImportError('')
     setAiState('idle')
-    setSavedAt('已清空 Mock 设置')
+    setSavedAt('已清空本机设置')
     showToast('本地设置已清空，训练、饮食、学习与计划记录仍会保留')
   }
 
@@ -707,7 +707,7 @@ export function SettingsPage() {
                 </span>
                 <span>
                   <strong>导入 CSV / JSON</strong>
-                  <small>{importName || 'JSON 恢复 Mock 备份；CSV 追加学习记录'}</small>
+                  <small>{importName || 'JSON 恢复本机备份；CSV 追加学习记录'}</small>
                 </span>
                 <Icon name="chev" className="icon-sm" />
               </button>
@@ -970,7 +970,7 @@ export function SettingsPage() {
                 <Icon name="clock" className="icon-sm" />
                 {runtime.sync
                   ? '到点后服务器汇总最近 7 天的训练、饮食、学习与个人档案摘要，报告写入服务端归档；服务端报告保留 365 天后自动删除。'
-                  : '桌面体验模式固定使用本地 Mock，不启用服务端每日简报。'}
+                  : '桌面体验模式固定使用本地规则，不启用服务端每日简报。'}
               </p>
             </div>
           </section>
@@ -1011,13 +1011,13 @@ export function SettingsPage() {
             <div className="settings-card-head compact">
               <div>
                 <h2 id="deviceTitle">设备与服务</h2>
-                <p>为 Android 部署预留。</p>
+                <p>本机运行环境与自建服务器的连接状态。</p>
               </div>
             </div>
             <div className="settings-device-list">
               <div>
-                <span>当前环境</span>
-                <strong>桌面浏览器 Mock</strong>
+                <span>运行模式</span>
+                <strong>{runtime.label}</strong>
               </div>
               <div>
                 <span>目标设备</span>
@@ -1025,11 +1025,25 @@ export function SettingsPage() {
               </div>
               <div>
                 <span>云服务器</span>
-                <strong className="muted-value">未连接</strong>
+                <strong
+                  className={
+                    runtime.sync && syncStatus.enabled && syncStatus.lastSyncAt
+                      ? undefined
+                      : 'muted-value'
+                  }
+                >
+                  {/* 不写「已连接」，也不写具体时间：`online` 只是 navigator.onLine（设备有网 ≠
+                      服务器可达），而 lastSyncAt 是动态值，放进视觉基线会天天漂。 */}
+                  {!runtime.sync
+                    ? '本次运行不启用'
+                    : syncStatus.enabled
+                      ? '自建 · 已开启同步'
+                      : '自建 · 未开启同步'}
+                </strong>
               </div>
               <div>
                 <span>本地数据库</span>
-                <strong className="muted-value">后端阶段接入</strong>
+                <strong>浏览器 IndexedDB</strong>
               </div>
             </div>
             <button
@@ -1044,7 +1058,7 @@ export function SettingsPage() {
 
           <section className="settings-danger-card" aria-labelledby="dangerTitle">
             <span className="settings-kicker">DANGER ZONE</span>
-            <h2 id="dangerTitle">清空本地 Mock 设置</h2>
+            <h2 id="dangerTitle">清空本机设置</h2>
             <p>
               只重置本页设置，不会删除训练、饮食、学习和计划记录。正式版会提供更细的数据删除范围。
             </p>
@@ -1053,7 +1067,7 @@ export function SettingsPage() {
               type="button"
               onClick={() => setConfirmClear(true)}
             >
-              清空本地 Mock 设置
+              清空本机设置
             </button>
           </section>
 
@@ -1093,14 +1107,14 @@ export function SettingsPage() {
 
           <div className="settings-version">
             <span>Persist v0.1.0</span>
-            <span>Frontend Mock · 2026</span>
+            <span>自托管 · 2026</span>
           </div>
         </aside>
       </div>
 
       {confirmClear && (
         <ConfirmDialog
-          title="清空本地 Mock 设置？"
+          title="清空本机设置？"
           description="提醒、AI 授权与导入选择会恢复为关闭状态。业务记录不会被删除，清空后的设置会保存在本机。"
           confirmLabel="确认清空"
           danger

@@ -137,7 +137,7 @@ test('snapshot shows a generated time and current record count', async ({ page }
   await expect(snapshotRow).toContainText('尚未生成快照')
   await page.getByRole('button', { name: '立即生成快照' }).click()
 
-  await expect(page.getByText(/Mock 快照已生成 · \d+ 条记录/)).toBeVisible()
+  await expect(page.getByText(/本机快照已生成 · \d+ 条记录/)).toBeVisible()
   await expect(snapshotRow).not.toContainText('尚未生成快照')
   await expect(snapshotRow).toContainText(/\d+ 条记录/)
 })
@@ -167,7 +167,7 @@ test('valid JSON backup replaces mock data and updates the study page', async ({
     buffer: Buffer.from(JSON.stringify(backup)),
   })
 
-  await expect(page.getByText(/Mock 备份已导入 · \d+ 条记录（含 0 个长期计划）/)).toBeVisible()
+  await expect(page.getByText(/备份已导入 · \d+ 条记录（含 0 个长期计划）/)).toBeVisible()
   await mainNav(page, '学习')
   const importedJsonRow = page.locator('.study-timeline-row').filter({ hasText: 'JSON 导入验证' })
   await expect(importedJsonRow).toBeVisible()
@@ -207,7 +207,7 @@ test('JSON backup keeps long-term plans across export and re-import', async ({ p
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(backup)),
   })
-  await expect(page.getByText(/Mock 备份已导入 · \d+ 条记录（含 1 个长期计划）/)).toBeVisible()
+  await expect(page.getByText(/备份已导入 · \d+ 条记录（含 1 个长期计划）/)).toBeVisible()
 
   await openPlansFromToday(page)
   await expect(page.locator('.plans-current')).toContainText('E2E 备份保留计划')
@@ -226,7 +226,7 @@ test('JSON backup keeps long-term plans across export and re-import', async ({ p
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(legacy)),
   })
-  await expect(page.getByText(/Mock 备份已导入 · \d+ 条记录（含 0 个长期计划）/)).toBeVisible()
+  await expect(page.getByText(/备份已导入 · \d+ 条记录（含 0 个长期计划）/)).toBeVisible()
 
   await openPlansFromToday(page)
   await expect(page.locator('.plans-empty')).toBeVisible()

@@ -17,6 +17,10 @@ async function openReportsFromStudy(page: Page) {
   await page.getByRole('button', { name: '查看分析依据' }).click()
   await page.getByRole('button', { name: '前往 AI 报告' }).click()
   await expect(page).toHaveURL(/\/reports$/)
+  // ReportsPage 是懒加载 chunk：webServer 冷启动时首次导航要先现场编译，
+  // 只等 URL 就点「查看分析依据」会撞上挂载窗口，点击落在被替换的旧节点上
+  // （state 丢失，evidence 永不展开）。先等容器渲染出来再交互。
+  await page.locator('.reports-brief-actions').waitFor({ timeout: 10_000 })
 }
 
 async function loadCompleteDemoData(page: Page) {

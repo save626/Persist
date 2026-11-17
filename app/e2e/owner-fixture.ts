@@ -195,6 +195,6 @@ export async function seedOwnerFixture(page: Page, data = createOwnerFixture()) 
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(payload), 'utf8'),
   })
-  await expect(page.getByText(/Mock 备份已导入/)).toBeVisible()
+  await expect(page.getByText(/备份已导入/)).toBeVisible()
   await page.waitForTimeout(450)
 }

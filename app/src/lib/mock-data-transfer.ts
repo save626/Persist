@@ -529,7 +529,7 @@ export function parseMockBackupJson(text: string): ImportableMockData {
  */
 export function parseMockBackupValue(payload: unknown, now: Date = new Date()): ImportableMockData {
   if (!isRecord(payload) || payload.app !== 'Persist' || !isRecord(payload.data)) {
-    throw new Error('不是 Persist Mock 备份，缺少 app 或 data 数据块')
+    throw new Error('不是 Persist 备份，缺少 app 或 data 数据块')
   }
 
   const upgraded = upgradeMockBackupData(payload.data, now)
