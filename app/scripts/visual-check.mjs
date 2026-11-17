@@ -56,12 +56,32 @@ async function openManualDraft(page, { title, goal }, open = openBlankManualDraf
 async function installAiOfflineMock(page) {
   // 视觉检查必须可重复：在页面内截断 /api/*，避免本机 .env.mobile.local 指向真实服务端后
   // 因跨源 CORS 或网络状态把布局检查误判为失败。页面仍会走既有的“AI 不可用”降级分支。
+  // 同步接口例外：给「成功但没有数据」的应答。`settings-sync-on` 要的是「同步已开启」这个
+  // 渲染分支，若按 503 处理，引擎会落进错误态，说明文字被错误提示挤掉甚至换气口。
   await page.addInitScript(() => {
     const originalFetch = window.fetch.bind(window)
+    const json = (body) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
     window.fetch = async (input, init) => {
       const rawUrl =
         typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-      if (new URL(rawUrl, window.location.href).pathname.startsWith('/api/')) {
+      const pathname = new URL(rawUrl, window.location.href).pathname
+      if (pathname === '/api/v1/sync/pull') {
+        return json({ entities: [], nextSince: 0, hasMore: false })
+      }
+      if (pathname === '/api/v1/sync/push' || pathname === '/api/v1/sync/bootstrap') {
+        let applied = 0
+        try {
+          applied = JSON.parse(init?.body ?? '{}')?.entities?.length ?? 0
+        } catch {
+          applied = 0
+        }
+        return json({ applied, skipped: [], serverRev: 0 })
+      }
+      if (pathname.startsWith('/api/')) {
         return new Response(
           JSON.stringify({
             error: { code: 'ai_unavailable', message: 'visual check: external AI disabled' },
@@ -75,6 +95,57 @@ async function installAiOfflineMock(page) {
       return originalFetch(input, init)
     }
   })
+}
+
+/**
+ * 让设置页停在「同步已开启」状态，用于截 A3 的同步说明与恢复码区块。
+ *
+ * 为什么不点开关：点开关会真的去 `POST /api/v1/devices` 建账号，脚本里没有后端。
+ * 这里直接往 `persist-sync` 写一条 enabled 的 meta，重载后由引擎自己 hydrate。
+ * 「点开关 → 恢复码」这条真实路径已由 `e2e/smoke.spec.ts` 的
+ * 「settings can enable sync against a mocked device API」覆盖，视觉只负责像素。
+ * 代价：`SyncMetaRecord` 改形状时这里会跟着失败——正是想要的效果，别默默漂移。
+ * 为什么固定时钟：「最近同步」由引擎用 `Date.now()` 写入并在页面里格式化，
+ * 不冻结就会每跑一次基线变一次，制造假差异。
+ */
+async function enableSyncForScreenshot(page) {
+  await page.evaluate(async () => {
+    const open = () =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open('persist-sync', 1)
+        request.onupgradeneeded = () => {
+          const db = request.result
+          if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'id' })
+          if (!db.objectStoreNames.contains('outbox'))
+            db.createObjectStore('outbox', { keyPath: 'id' })
+        }
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+    const db = await open()
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('meta', 'readwrite')
+      tx.objectStore('meta').put({
+        id: 'persist-sync-meta',
+        enabled: true,
+        userId: 'visual-check-user',
+        deviceId: 'visual-check-device',
+        token: 'pst_visual_check_device_token',
+        recoveryCode: '4f2c9a1b7d3e50618c4a2f9d6b0e735a',
+        deviceLabel: '视觉检查设备',
+        bootstrapDone: true,
+        lastPulledRev: 0,
+        lastSyncAt: null,
+        entityTimes: {},
+        entityHashes: {},
+      })
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  })
+  await page.clock.setFixedTime(new Date('2026-11-17T12:00:00+08:00'))
+  await page.reload({ waitUntil: 'networkidle' })
 }
 
 async function dismissToast(page) {
@@ -126,6 +197,34 @@ const pages = [
   { slug: 'profile', path: '/profile', mustShow: ['AI 建档'] },
   { slug: 'reports', path: '/reports' },
   { slug: 'settings', path: '/settings' },
+  // A3（同步已开启后的说明）默认态不可见，需要先把同步置为已开启。
+  {
+    slug: 'settings-sync-on',
+    path: '/settings',
+    ready: '.settings-sync-card',
+    setup: enableSyncForScreenshot,
+    expect: '.settings-sync-code',
+  },
+  // A5（部署指引 03 的 HTTPS 口径）在弹层里，默认折叠。
+  {
+    slug: 'settings-deploy',
+    path: '/settings',
+    ready: '.settings-device-card',
+    setup: async (page) => {
+      await page.getByRole('button', { name: '自托管部署说明' }).click()
+    },
+    waitFor: OPEN_DIALOG,
+  },
+  // 数据使用说明里是「服务端只留 30 天调用记录」这句的实际落点。
+  {
+    slug: 'settings-privacy',
+    path: '/settings',
+    ready: '.settings-privacy-card',
+    setup: async (page) => {
+      await page.getByRole('button', { name: '查看数据使用说明' }).click()
+    },
+    waitFor: OPEN_DIALOG,
+  },
   { slug: 'fitness-new', path: '/fitness?new=1', waitFor: OPEN_DIALOG },
   { slug: 'diet-new', path: '/diet?new=1', waitFor: OPEN_DIALOG },
   { slug: 'study-new', path: '/study?new=1', waitFor: OPEN_DIALOG },
@@ -158,6 +257,20 @@ function outputPath(filename) {
   return new URL(filename, outputDir).pathname.replace(/^\/([A-Za-z]:)/, '$1')
 }
 
+// 只跑指定状态（逗号分隔的 slug），用于反复调一个新状态的构图：
+// `PERSIST_VISUAL_ONLY=settings-sync-on npm run visual:check`。
+const onlyStates = (process.env.PERSIST_VISUAL_ONLY ?? '')
+  .split(',')
+  .map((slug) => slug.trim())
+  .filter(Boolean)
+const activePages = onlyStates.length
+  ? pages.filter((pageDef) => onlyStates.includes(pageDef.slug))
+  : pages
+if (onlyStates.length && activePages.length === 0) {
+  console.error(`[visual] 没有匹配的状态：${onlyStates.join(', ')}`)
+  process.exit(1)
+}
+
 const NO_KEY_REPORT_503 =
   'Failed to load resource: the server responded with a status of 503 (Service Unavailable)'
 let aiDisabled = false
@@ -171,7 +284,7 @@ try {
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const results = []
 
-for (const pageDef of pages) {
+for (const pageDef of activePages) {
   for (const viewport of viewports) {
     const page = await browser.newPage({
       viewport: { width: viewport.width, height: viewport.height },
@@ -202,6 +315,12 @@ for (const pageDef of pages) {
     }
     if (pageDef.waitFor) {
       await page.locator(pageDef.waitFor).waitFor({ state: 'visible' })
+      await page.waitForTimeout(180)
+    }
+    // `expect` 与 `waitFor` 的区别：只等元素出现，不参与「弹层必须打开」的判定
+    // （sync-on 等的是页面里的一个区块，不是弹窗）。
+    if (pageDef.expect) {
+      await page.locator(pageDef.expect).waitFor({ state: 'visible', timeout: 20_000 })
       await page.waitForTimeout(180)
     }
     const layout = await page.evaluate(
@@ -250,6 +369,7 @@ for (const pageDef of pages) {
   }
 }
 
+async function probeQuickRecord() {
 const interactionPage = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
 await installAiOfflineMock(interactionPage)
 await interactionPage.goto(baseUrl, { waitUntil: 'networkidle' })
@@ -290,6 +410,10 @@ await interactionPage.screenshot({
   fullPage: false,
 })
 results.push({ overlay: { box, hitTest } })
+}
+
+// 只跑子集时不重截快速记录：那张图不随状态变化，单跑一次状态却覆盖它等于制造假改动。
+if (!onlyStates.length) await probeQuickRecord()
 
 await browser.close()
 const pageResults = results.filter((result) => 'page' in result)
@@ -307,7 +431,7 @@ const failures = results.filter((result) => {
   return overflow || result.errors.length > 0 || missingDialog || missingElement
 })
 const summary = {
-  states: pages.length,
+  states: activePages.length,
   screenshots: pageResults.length,
   overflow: pageResults.filter(
     (result) =>
