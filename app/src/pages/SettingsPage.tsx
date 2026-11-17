@@ -1096,7 +1096,7 @@ export function SettingsPage() {
       {infoSheet === 'privacy' && (
         <PageSheet
           title="数据使用说明"
-          subtitle="当前是前端 Mock；下面是正式接入 AI 时遵循的数据边界。"
+          subtitle="下面是 AI 请求、服务端记录与同步各自实际遵循的数据边界。"
           onClose={() => setInfoSheet(null)}
           className="mock-detail-sheet"
         >
@@ -1130,6 +1130,14 @@ export function SettingsPage() {
               </p>
             </div>
             <div className="info-sheet-block">
+              <h3>服务端只留 30 天调用记录</h3>
+              <p>
+                每次 AI 调用会在你的自建服务器留下一条记录：时间、接口、模型、结果、token
+                用量与 IP 哈希。不保存请求内容，也不保存生成的文字；记录保留 30
+                天后自动删除，要长期留证只能改服务端配置。
+              </p>
+            </div>
+            <div className="info-sheet-block">
               <h3>备注按最小范围处理</h3>
               <p>原始备注默认排除，除非你在未来版本中单独授权。饮食餐次只记录文字与营养数据。</p>
             </div>
@@ -1145,7 +1153,7 @@ export function SettingsPage() {
       {infoSheet === 'deploy' && (
         <PageSheet
           title="自托管部署说明"
-          subtitle="第一版先保留接口边界，后端阶段再逐项实现。"
+          subtitle="下面四条是服务端实际生效的边界；改任何一条都要同步改服务器配置。"
           onClose={() => setInfoSheet(null)}
           className="mock-detail-sheet"
         >
@@ -1161,7 +1169,8 @@ export function SettingsPage() {
                   <div>
                     <strong>配置服务端密钥</strong>
                     <p>
-                      通过环境变量保存 `DEEPSEEK_API_KEY`，不要把密钥写入前端构建产物或公开仓库。
+                      通过环境变量保存 <code>DEEPSEEK_API_KEY</code>
+                      ，不要把密钥写入前端构建产物或公开仓库。
                     </p>
                   </div>
                 </div>
