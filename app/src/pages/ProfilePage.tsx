@@ -7,6 +7,7 @@ import { useMockData } from '../context/mock-data-context'
 import { useUI } from '../context/ui-context'
 import { calculateProfileCompleteness, countProfileFields } from '../data/profile'
 import { cn } from '../lib/cn'
+import { exportTextFile, formatBytes } from '../lib/file-export'
 import {
   isProfileNumberInRange,
   PROFILE_NUMBER_RULES,
@@ -416,25 +417,29 @@ export function ProfilePage() {
   const missing = fieldGroups.flatMap((group) => group.missing)
   const isBlankStart = completeness === 0 && recordDates.length === 0
 
-  const exportProfile = () => {
+  /** 浏览器下载在 APK 里对 blob 无效，按真实出口换话术。 */
+  const exportProfile = async () => {
     const payload = {
       app: 'Persist',
       version: '0.1.0',
       exportedAt: new Date().toISOString(),
       profile,
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: 'application/json;charset=utf-8',
-    })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = 'persist-profile.json'
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 0)
-    showToast('个人档案副本已导出')
+    try {
+      const outcome = await exportTextFile(
+        'persist-profile.json',
+        JSON.stringify(payload, null, 2),
+        'application/json;charset=utf-8',
+      )
+      showToast(
+        outcome.kind === 'downloaded'
+          ? '个人档案副本已导出'
+          : `档案已复制到剪贴板 · ${formatBytes(outcome.bytes)}，请粘贴保存为 .json`,
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      showToast(`导出失败：${message}`)
+    }
   }
 
   return (
@@ -843,7 +848,13 @@ export function ProfilePage() {
                     <strong>JSON</strong>
                   </div>
                 </div>
-                <button className="profile-export" type="button" onClick={exportProfile}>
+                <button
+                  className="profile-export"
+                  type="button"
+                  onClick={() => {
+                    void exportProfile()
+                  }}
+                >
                   <Icon name="undo" className="icon-sm" />
                   导出档案副本
                 </button>

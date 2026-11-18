@@ -12,6 +12,7 @@ import {
   serializeMockBackup,
 } from '../lib/mock-data-transfer'
 import { createCompleteMockData } from '../data/complete-mock-data'
+import { exportTextFile, formatBytes } from '../lib/file-export'
 import { useNetworkOnline } from '../lib/network-status'
 import { checkServerHealth, type ServerHealth } from '../lib/server-health'
 import {
@@ -205,7 +206,13 @@ export function SettingsPage() {
               ? '连接失败'
               : '未测试'
 
-  const exportLocalBackup = () => {
+  /**
+   * 导出本机备份。
+   * 手机上（Capacitor WebView）浏览器下载对 blob 是静默忽略的，所以这里必须
+   * 按真实出口换话术：桌面是「已导出」，APK 是「已复制到剪贴板」。
+   * 什么都不成时抛错，绝不能报成功。
+   */
+  const exportLocalBackup = async () => {
     try {
       const payload = serializeMockBackup({
         goals,
@@ -222,16 +229,14 @@ export function SettingsPage() {
         reports,
         longTermPlans,
       })
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: 'application/json;charset=utf-8',
-      })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `persist-backup-${backupDateStamp()}.json`
-      anchor.click()
-      URL.revokeObjectURL(url)
-      showToast(`数据备份已导出 · 含 ${payload.data.longTermPlans.length} 个长期计划`)
+      const fileName = `persist-backup-${backupDateStamp()}.json`
+      const outcome = await exportTextFile(fileName, JSON.stringify(payload, null, 2))
+      const planCount = payload.data.longTermPlans.length
+      showToast(
+        outcome.kind === 'downloaded'
+          ? `数据备份已导出 · 含 ${planCount} 个长期计划`
+          : `备份已复制到剪贴板 · ${formatBytes(outcome.bytes)}，请粘贴保存为 .json`,
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误'
       showToast(`导出失败：${message}`)
@@ -678,7 +683,13 @@ export function SettingsPage() {
               </div>
             </div>
             <div className="settings-data-actions">
-              <button className="settings-data-action" type="button" onClick={exportLocalBackup}>
+              <button
+                className="settings-data-action"
+                type="button"
+                onClick={() => {
+                  void exportLocalBackup()
+                }}
+              >
                 <span>
                   <Icon name="today" />
                 </span>
