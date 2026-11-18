@@ -24,6 +24,7 @@
     "format:check": "prettier --check .",
     "previsual:check": "npm run shared:build",
     "visual:check": "node scripts/visual-check.mjs",
+    "visual:diff": "node scripts/pixel-diff.mjs",
     "android:check": "node scripts/android-usb.mjs --check",
     "android:sync": "node scripts/android-usb.mjs --sync",
     "android:usb": "node scripts/android-usb.mjs",

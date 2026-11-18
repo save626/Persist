@@ -227,8 +227,12 @@ const pages = [
   { slug: 'home', path: '/' },
   { slug: 'fitness', path: '/fitness' },
   { slug: 'diet', path: '/diet' },
-  { slug: 'study', path: '/study' },
-  { slug: 'profile', path: '/profile', mustShow: ['AI 建档'] },
+  // owner 从空数据起步（`isBlankStart`），这两页的头部操作条在空白档位下不渲染：
+  // 学习页是「今日记录 N 条 / 新增记录」，档案页是「本地优先 / AI 建档 / 完善档案」，
+  // 两者在空状态面板里都已有同名入口，留着就是同一动作两个按钮。
+  // 光靠像素基线守不住这条——没人会逐像素看 138 张图，所以写成反向断言。
+  { slug: 'study', path: '/study', hidden: ['header .head-actions'] },
+  { slug: 'profile', path: '/profile', mustShow: ['AI 建档'], hidden: ['header .head-actions'] },
   { slug: 'reports', path: '/reports' },
   { slug: 'settings', path: '/settings' },
   // A3（同步已开启后的说明）默认态不可见，需要先把同步置为已开启。
@@ -411,6 +415,15 @@ for (const pageDef of activePages) {
         .catch(() => false)
       if (!visible) missingElements.push(name)
     }
+    const unexpectedElements = []
+    for (const selector of pageDef.hidden ?? []) {
+      const visible = await page
+        .locator(selector)
+        .first()
+        .isVisible()
+        .catch(() => false)
+      if (visible) unexpectedElements.push(selector)
+    }
     const filename =
       pageDef.slug === 'home' ? `${viewport.name}.png` : `${pageDef.slug}-${viewport.name}.png`
     // 弹窗状态只截当前视口：对话框是 fixed 居中定位，整页截图会让它在长图顶部显得“没居中”。
@@ -431,6 +444,7 @@ for (const pageDef of activePages) {
       viewport: viewport.name,
       layout,
       missingElements,
+      unexpectedElements,
       errors: unexpectedErrors,
       expectedNoKeyReport503: expectedNoKeyReport503.length - expected503Budget,
     })
@@ -497,7 +511,8 @@ const failures = results.filter((result) => {
     result.layout.innerWidth + 1
   const missingDialog = Boolean(definition?.waitFor) && !result.layout.dialogOpen
   const missingElement = (result.missingElements ?? []).length > 0
-  return overflow || result.errors.length > 0 || missingDialog || missingElement
+  const unexpectedElement = (result.unexpectedElements ?? []).length > 0
+  return overflow || result.errors.length > 0 || missingDialog || missingElement || unexpectedElement
 })
 const summary = {
   states: activePages.length,
@@ -517,6 +532,8 @@ const summary = {
     return Boolean(definition?.waitFor) && !result.layout.dialogOpen
   }).length,
   missingElements: pageResults.filter((result) => (result.missingElements ?? []).length > 0).length,
+  unexpectedElements: pageResults.filter((result) => (result.unexpectedElements ?? []).length > 0)
+    .length,
   quickRecordReady: Boolean(
     overlayResult &&
     overlayResult.overlay.box &&
