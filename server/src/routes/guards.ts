@@ -88,8 +88,11 @@ export function enforceAiGate(
 export function enforceAiQuota(options: {
   db: Db
   config: ServerConfig
-  /** 凭据门的判定；`keyId` 为 null 时归到 `anonymous`。 */
-  gate: AiGateDecision
+  /**
+   * 计数归属。凭据门传判定结果；不走凭据门的接口（如综合分析，它只认设备令牌）
+   * 直接传一个固定归属，让「同一类调用」共用一份当日额度。
+   */
+  gate: { keyId: string | null }
   request: FastifyRequest
   reply: FastifyReply
   now: () => number

@@ -1,4 +1,4 @@
-import { AiError, type AiClient } from '../ai/deepseek.js'
+import { AiError, type AiClient, type AiTokenUsage } from '../ai/deepseek.js'
 import { AnalysisContentError, generateAnalysisContent } from '../ai/analysis.js'
 import type { ServerConfig } from '../config.js'
 import type { Db } from '../db/driver.js'
@@ -60,6 +60,13 @@ export interface GenerateAnalysisOptions {
   force?: boolean
   now: number
   signal?: AbortSignal
+  /** 模型返回 usage 时回调（含重试的每次尝试），供路由层记账与审计。 */
+  onUsage?: (usage: AiTokenUsage) => void
+  /**
+   * 已经算好的事实包。路由层要在「预占配额」之前判掉 403/409，否则被拒的请求也会
+   * 吃掉一份额度、变成打满作者额度的低成本手段；判完把事实包传进来避免重复聚合。
+   */
+  facts?: ReportFactsV2
 }
 
 function toResponse(report: StoredReport, cached: boolean): AnalysisReportResponse {
@@ -123,6 +130,7 @@ async function generateContent(
         timeoutMs: deps.config.analysisTimeoutMs,
         ...(options.signal === undefined ? {} : { signal: options.signal }),
         ...(retryNote === undefined ? {} : { retryNote }),
+        ...(options.onUsage === undefined ? {} : { onUsage: options.onUsage }),
       })
       return { content, origin: 'ai', model: deps.config.deepseekModel }
     } catch (error) {
@@ -158,24 +166,38 @@ async function generateContent(
   throw new AnalysisFailure('invalid_response', '模型返回的分析内容不合规，请重试。')
 }
 
+/**
+ * 生成前的两道硬前提：档案页 AI 授权开着、窗口内至少有一条记录。
+ *
+ * 单独导出是为了让路由层能**在预占配额之前**调用：被 403/409 拒掉的请求不该吃掉
+ * 一份当日额度，否则「注册个空账号反复打分析接口」就成了打满作者额度的低成本手段。
+ */
+export function loadAnalysisFacts(
+  db: Db,
+  userId: string,
+  rangeDays: AnalysisRangeDays,
+  now: number,
+): ReportFactsV2 {
+  if (isAiConsentOff(db, userId)) {
+    throw new AnalysisFailure('consent_off', '你在档案页关闭了 AI 分析授权，先开启后再生成。')
+  }
+
+  const facts = buildAnalysisFacts(db, userId, { rangeDays, now })
+  if (facts.totals.daysWithAnyRecord === 0) {
+    throw new AnalysisFailure(
+      'insufficient_data',
+      `近 ${rangeDays} 天还没有可用于分析的记录，先记录几次再生成。`,
+    )
+  }
+  return facts
+}
+
 export async function generateAnalysisReport(
   deps: AnalysisServiceDeps,
   options: GenerateAnalysisOptions,
 ): Promise<AnalysisReportResponse> {
-  if (isAiConsentOff(deps.db, options.userId)) {
-    throw new AnalysisFailure('consent_off', '你在档案页关闭了 AI 分析授权，先开启后再生成。')
-  }
-
-  const facts = buildAnalysisFacts(deps.db, options.userId, {
-    rangeDays: options.rangeDays,
-    now: options.now,
-  })
-  if (facts.totals.daysWithAnyRecord === 0) {
-    throw new AnalysisFailure(
-      'insufficient_data',
-      `近 ${options.rangeDays} 天还没有可用于分析的记录，先记录几次再生成。`,
-    )
-  }
+  const facts =
+    options.facts ?? loadAnalysisFacts(deps.db, options.userId, options.rangeDays, options.now)
 
   const cacheKey = {
     userId: options.userId,

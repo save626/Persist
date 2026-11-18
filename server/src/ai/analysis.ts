@@ -10,7 +10,7 @@
 
 import type { ReportContentV2, ReportFactsV2 } from '@persist/shared/contract/analysis'
 import { ANALYSIS_CONTENT_LIMITS } from '@persist/shared/contract/analysis'
-import type { AiClient } from './deepseek.js'
+import type { AiClient, AiTokenUsage } from './deepseek.js'
 import { buildAnalysisMessages } from './prompts.js'
 
 export class AnalysisContentError extends Error {
@@ -169,6 +169,13 @@ export interface GenerateAnalysisOptions {
   signal?: AbortSignal
   /** 重试时带上的纠正说明：上一次为什么被判不合规。 */
   retryNote?: string
+  /**
+   * 上游返回 usage 时回调一次。
+   *
+   * 分析链路原先不接这个回调，导致它花的 token 从不进 `ai_usage`——配额里看不到，
+   * 成本曲线里也看不到。重试时每次尝试都会回调一次，调用方累加即可。
+   */
+  onUsage?: (usage: AiTokenUsage) => void
 }
 
 /**
@@ -185,6 +192,7 @@ export async function generateAnalysisContent(
     maxTokens: options.maxTokens ?? 2_600,
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onUsage === undefined ? {} : { onUsage: options.onUsage }),
   })
   const content = sanitizeAnalysisContent(raw)
   assertNumbersSourced(content, facts)

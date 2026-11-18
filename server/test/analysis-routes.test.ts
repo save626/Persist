@@ -456,3 +456,83 @@ describe('分析接口限流', () => {
     }
   })
 })
+
+/**
+ * 配额与审计：这条链路只认设备令牌，而设备注册是开放的。若不记账，
+ * 「注册空账号 → push 假记录 → 反复 force 生成」就是一条看不见的账单。
+ */
+describe('分析接口：日配额与审计', () => {
+  function callsFor(env: Env, route: string) {
+    return env.db.db
+      .prepare<{ key_id: string; result: string; http_status: number; prompt_tokens: number | null }>(
+        'SELECT key_id, result, http_status, prompt_tokens FROM ai_calls WHERE route = ? ORDER BY id',
+      )
+      .all(route)
+  }
+
+  function usageOf(env: Env, keyId: string) {
+    return env.db.db
+      .prepare<{ requests: number; prompt_tokens: number; completion_tokens: number }>(
+        'SELECT requests, prompt_tokens, completion_tokens FROM ai_usage WHERE key_id = ?',
+      )
+      .get(keyId)
+  }
+
+  it('每次生成都写 ai_calls（按账号归因）并累加 ai_usage（按固定归属）', async () => {
+    const env = await setup()
+    try {
+      expect((await postAnalysis(env)).statusCode).toBe(200)
+
+      const calls = callsFor(env, '/api/v1/analysis/reports')
+      expect(calls).toHaveLength(1)
+      expect(calls[0]?.key_id).toBe(`user:${env.userId}`)
+      expect(calls[0]?.result).toBe('ok')
+      expect(calls[0]?.http_status).toBe(200)
+
+      const usage = usageOf(env, 'analysis:global')
+      expect(usage?.requests).toBe(1)
+    } finally {
+      await close(env)
+    }
+  })
+
+  it('用掉日额度后返回 429 ai_quota_exceeded，且拒绝也留审计', async () => {
+    const env = await setup({ env: { PERSIST_AI_DAILY_LIMIT: '1' } })
+    try {
+      expect((await postAnalysis(env)).statusCode).toBe(200)
+      const denied = await postAnalysis(env, { rangeDays: 7, force: true })
+      expect(denied.statusCode).toBe(429)
+      expect(denied.json<{ error: { code: string } }>().error.code).toBe('ai_quota_exceeded')
+
+      const results = callsFor(env, '/api/v1/analysis/reports').map((row) => row.result)
+      expect(results).toContain('quota_exceeded')
+    } finally {
+      await close(env)
+    }
+  })
+
+  it('命中缓存不重复占额度（开页面不等于花额度）', async () => {
+    const env = await setup()
+    try {
+      expect((await postAnalysis(env)).statusCode).toBe(200)
+      const cached = await postAnalysis(env)
+      expect(cached.statusCode).toBe(200)
+      expect(cached.json<{ cached: boolean }>().cached).toBe(true)
+      expect(usageOf(env, 'analysis:global')?.requests).toBe(1)
+    } finally {
+      await close(env)
+    }
+  })
+
+  it('被 409 拒掉的请求不消耗额度（不能靠空账号打满作者的额度）', async () => {
+    const env = await setup({ seed: false })
+    try {
+      expect((await postAnalysis(env)).statusCode).toBe(409)
+      expect((await postAnalysis(env)).statusCode).toBe(409)
+      expect(usageOf(env, 'analysis:global') ?? null).toBeNull()
+      expect(callsFor(env, '/api/v1/analysis/reports')).toHaveLength(0)
+    } finally {
+      await close(env)
+    }
+  })
+})
