@@ -19,7 +19,15 @@ export interface ServerConfig {
   port: number
   /** Capacitor Android WebView 的 CORS 白名单；只接受完整 http(s) origin。 */
   allowedOrigins: string[]
-  trustProxy: boolean
+  /**
+   * 信任哪一级代理写入的 `X-Forwarded-For`。默认 `'loopback'`：只信本机 Nginx。
+   *
+   * 这不是「开不开代理支持」，而是**来源 IP 是否可信**。`true` 表示无条件相信
+   * 整个 XFF 链，`request.ip` 会取到客户端自己填的第一个值——攻击者每次换一个
+   * 伪造值就能重置 IP 限流桶。生产链路是 `客户端 → Nginx → 127.0.0.1:3000`，
+   * 只有 Nginx 那一跳可信，所以从右往左跳过回环地址后取到的才是真实来源。
+   */
+  trustProxy: boolean | string
   logLevel: string
   deepseekApiKey: string | null
   deepseekBaseUrl: string
@@ -137,6 +145,26 @@ export function parseAllowedOrigins(raw: string | undefined): string[] {
   return origins.size > 0 ? [...origins] : [...DEFAULT_ALLOWED_ORIGINS]
 }
 
+/**
+ * 解析 `TRUST_PROXY`。
+ *
+ * - 留空 → `'loopback'`（只信任本机反向代理，安全默认值）
+ * - `0/false/off/no/none` → `false`（完全不信任，直接取 socket 对端地址）
+ * - `1/true/all/yes/on` → `true`（整条链都信；只在没有反向代理时才是正确的）
+ * - 其余原样透传给 Fastify，例如 `10.0.0.0/8`、单个 IP，用于代理不在本机的部署
+ *
+ * 之所以不用 `readBool`：布尔值只有两档，而「信一跳」和「信全部」是完全不同的
+ * 安全语义，混成一个开关后默认值一旦取 `true` 就等于关掉 IP 限流。
+ */
+export function parseTrustProxy(raw: string | undefined): boolean | string {
+  const value = raw?.trim()
+  if (!value) return 'loopback'
+  const lowered = value.toLowerCase()
+  if (['0', 'false', 'off', 'no', 'none'].includes(lowered)) return false
+  if (['1', 'true', 'all', 'yes', 'on'].includes(lowered)) return true
+  return value
+}
+
 function readInt(env: NodeJS.ProcessEnv, key: string, fallback: number, min: number, max: number) {
   const raw = env[key]?.trim()
   if (!raw) return fallback
@@ -160,7 +188,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     host: env.HOST?.trim() || '127.0.0.1',
     port: readInt(env, 'PORT', 3000, 1, 65_535),
     allowedOrigins: parseAllowedOrigins(env.PERSIST_ALLOWED_ORIGINS),
-    trustProxy: readBool(env, 'TRUST_PROXY', true),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
     deepseekApiKey: apiKey.length > 0 ? apiKey : null,
     deepseekBaseUrl: (env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL).replace(

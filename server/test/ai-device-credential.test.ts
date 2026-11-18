@@ -97,7 +97,7 @@ async function register(baseUrl: string): Promise<{ userId: string; token: strin
     body: JSON.stringify({}),
   })
   expect(response.status).toBe(201)
-  return response.json()
+  return (await response.json()) as { userId: string; token: string; deviceId: string }
 }
 
 describe('/api/chat：设备令牌作为 AI 凭据', () => {
