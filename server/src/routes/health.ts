@@ -8,14 +8,19 @@ import type { FastifyInstance } from 'fastify'
  * GET /api/health —— 部署验收用：返回 200 即代表进程与 Nginx 反代都通了。
  * 只暴露「有没有配模型」「库能不能读」这种非敏感状态，绝不回显密钥或数据内容。
  *
- * 步骤 12 起新增 `db` 与 `version`（设计文档 §10 允许的向后兼容字段）：
- * 部署脚本可以据此确认迁移是否跑到最新版本。
+ * 2026-11-18 起不再返回 `version`（schema 版本）与 `model`：这两个字段对运维
+ * 有用，但 `/api/health` 是公网可达的，等于白送「迁移到第几版、用的哪个模型」
+ * 这类指纹。需要确认迁移版本时在本机执行 `sqlite3 <db> 'PRAGMA user_version'`，
+ * 启动日志的 `describeConfig` 也会打印同一信息。
  *
  * 步骤 14a 起新增 `storage` / `warnings`：库所在分区使用率超过阈值时告警
  * （P4 §11.3「磁盘水位 > 85% 时 /api/health 报 warn」）。
  * 注意顶层 `status` 保持 ok/degraded 两个值不变：前端把 `status === 'ok'`
  * 当作「AI 可用」的信号，磁盘告警不应该让聊天误退回 mock，所以磁盘状态只放在
  * `storage.status` 与 `warnings` 里，告警语义交给监控脚本判断。
+ *
+ * 前端只读取 `status` 与 `ai` 两个字段（见 `ai-chat-client.ts`），
+ * 增删其余字段不影响客户端。
  */
 
 export interface StorageStatus {
@@ -63,10 +68,8 @@ export function registerHealthRoute(
       status: db === 'ok' ? 'ok' : 'degraded',
       service: 'persist-server',
       ai: options.config.deepseekApiKey ? 'deepseek' : 'disabled',
-      model: options.config.deepseekModel,
       time: new Date().toISOString(),
       db,
-      version: options.db.schemaVersion,
       storage,
       warnings: storage && storage.status === 'warn' ? ['disk_usage_high'] : [],
     }

@@ -37,7 +37,7 @@ describe('健康检查的磁盘水位：', () => {
 })
 
 describe('GET /api/health：', () => {
-  it('返回 200，并带向后兼容的 storage / warnings 字段：', async () => {
+  it('返回 200，并带 storage / warnings 字段：', async () => {
     const config = loadConfig({ DB_PATH: ':memory:' } as unknown as NodeJS.ProcessEnv)
     const app = buildApp({ config })
     try {
@@ -48,18 +48,32 @@ describe('GET /api/health：', () => {
         service: string
         ai: string
         db: string
-        version: number
         storage: { usedPercent: number; status: string } | null
         warnings: string[]
       }
       expect(body.status).toBe('ok')
       expect(body.service).toBe('persist-server')
       expect(body.db).toBe('ok')
-      expect(typeof body.version).toBe('number')
       expect(Array.isArray(body.warnings)).toBe(true)
       // 本机磁盘远没到 85%，所以是 ok 且没有告警；字段本身必须在。
       expect(body.storage?.status).toBe('ok')
       expect(body.warnings).toEqual([])
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('不暴露 schema 版本与模型名（公网可达，属于服务端指纹）', async () => {
+    const config = loadConfig({ DB_PATH: ':memory:' } as unknown as NodeJS.ProcessEnv)
+    const app = buildApp({ config })
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/health' })
+      const body = response.json() as Record<string, unknown>
+      expect(body.version).toBeUndefined()
+      expect(body.model).toBeUndefined()
+      // 前端依赖的两个字段必须保留，否则健康检查会误判。
+      expect(body.status).toBe('ok')
+      expect(body.ai).toBe('disabled')
     } finally {
       await app.close()
     }

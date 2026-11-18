@@ -4,7 +4,6 @@ import { buildApp } from '../src/app.js'
 import { loadConfig } from '../src/config.js'
 import type { PersistDatabase } from '../src/db/index.js'
 import { countSyncOps, openPersistDatabase } from '../src/db/index.js'
-import { SCHEMA_VERSION } from '../src/db/migrations.js'
 
 /**
  * 同步接口测试：push 幂等 / LWW / 非法实体、bootstrap 事务、pull 游标翻页、鉴权与限流。
@@ -473,7 +472,7 @@ describe('GET /api/v1/sync/pull', () => {
 })
 
 describe('GET /api/health', () => {
-  it('带有 db 与 version，且库可用时 status 为 ok', async () => {
+  it('库可用时 status 为 ok，且不再回显 schema 版本', async () => {
     const env = setup()
     try {
       const response = await env.app.inject({ method: 'GET', url: '/api/health' })
@@ -482,7 +481,8 @@ describe('GET /api/health', () => {
       expect(body.status).toBe('ok')
       expect(body.service).toBe('persist-server')
       expect(body.db).toBe('ok')
-      expect(body.version).toBe(SCHEMA_VERSION)
+      // 2026-11-18 起公网不再暴露迁移版本；需要时用 PRAGMA user_version 查。
+      expect(body.version).toBeUndefined()
       expect(body.ai).toBe('disabled')
     } finally {
       await close(env)

@@ -5,7 +5,6 @@ import { openPersistDatabase, type PersistDatabase } from './db/index.js'
 import { createRateLimiter } from './rate-limit.js'
 import { registerAccountDeletionRoute } from './routes/account.js'
 import { registerAnalysisRoutes } from './routes/analysis.js'
-import { registerBackupRoutes } from './routes/backups.js'
 import { registerChatRoute } from './routes/chat.js'
 import { registerDeviceRoutes } from './routes/devices.js'
 import { registerExportRoutes } from './routes/export.js'
@@ -109,7 +108,9 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     now,
   })
   registerReportArchiveRoutes(app, { db: db.db, limiter: syncLimiter, now })
-  registerBackupRoutes(app, { database: db, config: options.config, limiter: syncLimiter, now })
+  // 备份/恢复刻意不提供 HTTP 入口（2026-11-18）：整库替换是运维动作，
+  // 走 `/api/v1/backups` 时任何有效设备令牌都能列举并回滚整库，而前端
+  // 从未调用过这三个路由。能力保留在本机 `db/backup-cli.ts` 与 systemd timer。
   registerAccountDeletionRoute(app, {
     db: db.db,
     backupDir: options.config.backupDir,
