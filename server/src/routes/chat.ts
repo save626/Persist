@@ -58,7 +58,13 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
     // 调用者凭据门（P0）。位置刻意在 Key 检查之后：没配 Key 的部署不应该对任何人返回
     // 401，否则会把「服务端没配好」误报成「凭据错」。放在限流之前：没有凭据的请求
     // 不该消耗 IP 额度。
-    const gate = enforceAiGate(options.config, request, reply)
+    const gate = enforceAiGate({
+      db: options.db,
+      config: options.config,
+      request,
+      reply,
+      now: options.now,
+    })
     if (!gate) return reply
 
     const decision = options.limiter.take(request.ip)

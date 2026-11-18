@@ -8,6 +8,7 @@ import { reserveAiQuota, type AiQuotaDecision } from '../ai/ai-usage.js'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { aiQuotaExceededBody, aiTokenQuotaExceededBody, errorBody } from '../contract.js'
 import { authenticateRequest } from '../sync/service.js'
+import { readBearerToken, TOKEN_PREFIX } from '../auth.js'
 
 /**
  * `/api/v1/*` 两个前置动作：按 IP 限流、按设备令牌鉴权。
@@ -48,29 +49,45 @@ export function requireDevice(
 }
 
 /**
- * `/api/chat` 与 `/api/report` 的调用者凭据门（P0）。
+ * `/api/chat` 与 `/api/report` 的调用者凭据门（P0 + 17:3x 起接受设备令牌）。
+ *
+ * 两种凭据都收：
+ * - `pst_*` 设备令牌：查库换出 `userId`，额度与审计都归到这个账号。这是**首选**形态——
+ *   它可吊销、按账号归因，且不必在安装包里藏任何长期密钥（开源仓库下尤其重要）。
+ * - `psa_*` 构建期内联凭据：保留为回滚锚点，旧 APK 仍可用；新包不再带它。
  *
  * 返回判定结果表示可以继续处理（调用方要用 `keyId` 归集配额与审计）；
  * 返回 `null` 表示已经写好 401，调用方直接 `return reply`。
- *
- * `warn` 模式下放行，但仍把失败结果写进日志——这是「切换 enforce 之前，先确认新 APK
- * 到底有没有带对凭据」的唯一观测手段。`off` 模式正常通过，不产生日志噪音。
  */
-export function enforceAiGate(
-  config: ServerConfig,
-  request: FastifyRequest,
-  reply: FastifyReply,
-): AiGateDecision | null {
-  const decision = evaluateAiGate(config.aiGate, config.aiKeys, request.headers.authorization)
+export function enforceAiGate(options: {
+  db: Db
+  config: ServerConfig
+  request: FastifyRequest
+  reply: FastifyReply
+  now: () => number
+}): AiGateDecision | null {
+  const header = options.request.headers.authorization
+  const token = readBearerToken(header)
+
+  // 设备令牌优先：它绑定账号，能吊销，也能把额度落到具体使用者身上。
+  if (token?.startsWith(TOKEN_PREFIX)) {
+    const auth = authenticateRequest(options.db, header, options.now)
+    if (auth) return { allowed: true, keyId: `user:${auth.userId}`, result: 'ok' }
+    options.request.log.warn({ route: options.request.url }, 'ai device credential rejected')
+    options.reply.header('cache-control', 'no-store').code(401).send(aiUnauthorizedBody())
+    return null
+  }
+
+  const decision = evaluateAiGate(options.config.aiGate, options.config.aiKeys, header)
   if (decision.result !== 'ok' && decision.result !== 'gate_off') {
-    request.log.warn(
-      { aiGate: decision.result, route: request.url, allowed: decision.allowed },
+    options.request.log.warn(
+      { aiGate: decision.result, route: options.request.url, allowed: decision.allowed },
       'ai credential check did not pass',
     )
   }
   if (decision.allowed) return decision
   // 401 不缓存：同一条连接上的后续请求不应该复用这个结论。
-  reply.header('cache-control', 'no-store').code(401).send(aiUnauthorizedBody())
+  options.reply.header('cache-control', 'no-store').code(401).send(aiUnauthorizedBody())
   return null
 }
 

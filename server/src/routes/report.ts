@@ -51,7 +51,13 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
     }
 
     // 调用者凭据门（P0）。与 /api/chat 同序：Key 检查之后、限流之前。
-    const gate = enforceAiGate(options.config, request, reply)
+    const gate = enforceAiGate({
+      db: options.db,
+      config: options.config,
+      request,
+      reply,
+      now: options.now,
+    })
     if (!gate) return reply
 
     const decision = options.limiter.take(request.ip)

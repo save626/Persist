@@ -18,6 +18,7 @@ import {
   createLongTermPlan,
   type LongTermPlanDraft,
 } from '../lib/long-term-plan'
+import { setAiRuntimeCredential } from '../lib/ai-credential'
 import { countMockRecords } from '../lib/mock-data-transfer'
 import { PERSIST_SAVE_DEBOUNCE_MS } from '../lib/persist-state'
 import { clearPersistedState, loadPersistedState, savePersistedState } from '../lib/persist-storage'
@@ -140,6 +141,17 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     deviceLabel: '',
     token: null,
   })
+
+  /**
+   * 把设备令牌交给 AI 客户端做凭据（`pst_` 优先于构建期内联的 `psa_`）。
+   *
+   * 放在这里而不是各调用点传参：令牌是「账号态」，与「谁在发 AI 请求」无关。
+   * 令牌被吊销后下次同步会拿到 401，`syncInfo.token` 归 null，AI 也随之失去凭据——
+   * 这正是设备令牌比内联密钥好的地方：吊销即失效，不用重新打包。
+   */
+  useEffect(() => {
+    setAiRuntimeCredential(syncInfo.token)
+  }, [syncInfo.token])
 
   /** 「今天」的切片：页面读到的 `planItems` / `waterLog` / `meals` 语义不变，只表示今天。 */
   const todayPlanItems = useMemo(() => planItemsForDate(planItems, today), [planItems, today])
