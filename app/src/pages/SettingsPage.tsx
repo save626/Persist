@@ -130,6 +130,15 @@ export function SettingsPage() {
   const [briefTimeError, setBriefTimeError] = useState(false)
 
   const enabledReminderCount = reminders.filter((reminder) => reminder.enabled).length
+  /**
+   * guest 的数据是持久的（`storageDbName: 'persist-app-guest'`，`persist: true`）：
+   * 从介绍页再进来看到的是上次留下的记录。这是 P5-5 确认过的语义——访客的浏览器
+   * 归访客，悄悄抹掉反而像「点了没保存」。所以这里只改说法的诚实度，不改行为：
+   * 卡片从「清空本机数据」变成「重新开始体验」，明确这是访客主动重开，而不是清库。
+   */
+  const isGuest = runtime.mode === 'guest'
+  /** demo 是只读快照（`readOnly` + `persist: false`）：任何删除按钮都只会弹「仅可查看」，是假按钮。 */
+  const isDemo = runtime.mode === 'demo'
   const resetTargetLabel = '空白初始状态'
   const sourceCount = useMemo(() => Object.values(sources).filter(Boolean).length, [sources])
   // 旧快照没有 dailyBrief：normalize 会补「关闭 + 21:00」，不需要提升 state schema 版本。
@@ -318,13 +327,15 @@ export function SettingsPage() {
     setSavedAt('正在清空本机数据…')
     void clearAllLocalData()
       .then(() => {
-        setSavedAt('本机数据已清空')
+        setSavedAt(isGuest ? '已重新开始' : '本机数据已清空')
         // 同步开着时服务端那份不会被删，下一轮拉取会把记录取回本机：
         // 不说明白就是一句新的假话（看起来清空了，5 秒后又回来）。
         showToast(
-          syncStatus.enabled
-            ? `本机数据已清空 · 同步开启中，稍后会从服务器取回`
-            : `本机数据已清空 · 已恢复${resetTargetLabel}`,
+          isGuest
+            ? '体验数据已清空 · 已回到空白状态'
+            : syncStatus.enabled
+              ? `本机数据已清空 · 同步开启中，稍后会从服务器取回`
+              : `本机数据已清空 · 已恢复${resetTargetLabel}`,
         )
       })
       .catch((error: unknown) => {
@@ -1074,20 +1085,22 @@ export function SettingsPage() {
             </button>
           </section>
 
-          <section className="settings-danger-card" aria-labelledby="dangerTitle">
-            <span className="settings-kicker">DANGER ZONE</span>
-            <h2 id="dangerTitle">清空本机设置</h2>
-            <p>
-              只重置本页设置，不会删除训练、饮食、学习和计划记录。正式版会提供更细的数据删除范围。
-            </p>
-            <button
-              className="settings-danger-button"
-              type="button"
-              onClick={() => setConfirmClear(true)}
-            >
-              清空本机设置
-            </button>
-          </section>
+          {!isDemo && (
+            <section className="settings-danger-card" aria-labelledby="dangerTitle">
+              <span className="settings-kicker">DANGER ZONE</span>
+              <h2 id="dangerTitle">清空本机设置</h2>
+              <p>
+                只重置本页设置，不会删除训练、饮食、学习和计划记录。正式版会提供更细的数据删除范围。
+              </p>
+              <button
+                className="settings-danger-button"
+                type="button"
+                onClick={() => setConfirmClear(true)}
+              >
+                清空本机设置
+              </button>
+            </section>
+          )}
 
           {syncToken && (
             <section className="settings-danger-card" aria-labelledby="deleteAccountTitle">
@@ -1107,21 +1120,26 @@ export function SettingsPage() {
               </button>
             </section>
           )}
-          <section className="settings-danger-card" aria-labelledby="clearDataTitle">
-            <span className="settings-kicker">RESET · LOCAL DATA</span>
-            <h2 id="clearDataTitle">清空本机数据</h2>
-            <p>
-              删除本机浏览器里的全部记录、设置、长期计划与快照，并恢复到{resetTargetLabel}
-              。此操作不可撤销，建议先导出 JSON 备份。
-            </p>
-            <button
-              className="settings-danger-button"
-              type="button"
-              onClick={() => setConfirmClearAll(true)}
-            >
-              清空本机数据
-            </button>
-          </section>
+          {!isDemo && (
+            <section className="settings-danger-card" aria-labelledby="clearDataTitle">
+              <span className="settings-kicker">
+                {isGuest ? 'RESET · GUEST DATA' : 'RESET · LOCAL DATA'}
+              </span>
+              <h2 id="clearDataTitle">{isGuest ? '重新开始体验' : '清空本机数据'}</h2>
+              <p>
+                {isGuest
+                  ? '体验数据只保存在这台设备的浏览器里，不会上传到服务器。下次从介绍页再进来，看到的还是你留下的记录；点这里可以清掉它们，回到空白状态。'
+                  : `删除本机浏览器里的全部记录、设置、长期计划与快照，并恢复到${resetTargetLabel}。此操作不可撤销，建议先导出 JSON 备份。`}
+              </p>
+              <button
+                className="settings-danger-button"
+                type="button"
+                onClick={() => setConfirmClearAll(true)}
+              >
+                {isGuest ? '重新开始体验' : '清空本机数据'}
+              </button>
+            </section>
+          )}
 
           <div className="settings-version">
             <span>Persist v0.1.0</span>
@@ -1143,11 +1161,15 @@ export function SettingsPage() {
 
       {confirmClearAll && (
         <ConfirmDialog
-          title="清空本机数据？"
-          description={`本机浏览器里的全部记录、设置、长期计划与快照都会被删除，并恢复到${resetTargetLabel}。此操作无法撤销，建议先导出 JSON 备份。${
-            syncStatus.enabled ? '服务端副本不会被删除，下一轮同步会把记录取回本机。' : ''
-          }`}
-          confirmLabel="确认清空"
+          title={isGuest ? '重新开始体验？' : '清空本机数据？'}
+          description={
+            isGuest
+              ? '会删掉这台浏览器里的全部体验记录（训练、饮食、学习、档案与设置），回到空白状态。此操作无法撤销。'
+              : `本机浏览器里的全部记录、设置、长期计划与快照都会被删除，并恢复到${resetTargetLabel}。此操作无法撤销，建议先导出 JSON 备份。${
+                  syncStatus.enabled ? '服务端副本不会被删除，下一轮同步会把记录取回本机。' : ''
+                }`
+          }
+          confirmLabel={isGuest ? '重新开始' : '确认清空'}
           danger
           onClose={() => setConfirmClearAll(false)}
           onConfirm={clearEverything}

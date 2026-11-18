@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { useMemo, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UIContext, type UIContextValue } from '../context/ui-context'
+import { RuntimeModeContext } from '../context/runtime-mode-context'
+import { getRuntimeModeConfig, type RuntimeMode } from '../lib/runtime-mode'
 import { MockDataContext, type MockDataContextValue } from '../context/mock-data-context'
 import { INITIAL_SETTINGS } from '../data/settings'
 import type { MockSettings } from '../types'
@@ -139,10 +141,12 @@ function Harness({
   initial,
   onUpdate,
   contextOverrides,
+  mode = 'owner',
 }: {
   initial: MockSettings
   onUpdate: (patch: Partial<MockSettings>) => void
   contextOverrides?: Partial<MockDataContextValue>
+  mode?: RuntimeMode
 }) {
   const [settings, setSettings] = useState(initial)
   const value = useMemo(
@@ -160,9 +164,11 @@ function Harness({
   return (
     <MemoryRouter initialEntries={['/settings']}>
       <UIContext.Provider value={UI_VALUE}>
-        <MockDataContext.Provider value={value}>
-          <SettingsPage />
-        </MockDataContext.Provider>
+        <RuntimeModeContext.Provider value={getRuntimeModeConfig(mode)}>
+          <MockDataContext.Provider value={value}>
+            <SettingsPage />
+          </MockDataContext.Provider>
+        </RuntimeModeContext.Provider>
       </UIContext.Provider>
     </MemoryRouter>
   )
@@ -171,10 +177,16 @@ function Harness({
 function renderSettings(
   initial: MockSettings = INITIAL_SETTINGS,
   contextOverrides: Partial<MockDataContextValue> = {},
+  mode: RuntimeMode = 'owner',
 ) {
   const updateSettings = vi.fn()
   render(
-    <Harness initial={initial} onUpdate={updateSettings} contextOverrides={contextOverrides} />,
+    <Harness
+      initial={initial}
+      onUpdate={updateSettings}
+      contextOverrides={contextOverrides}
+      mode={mode}
+    />,
   )
   return { updateSettings }
 }
@@ -373,5 +385,56 @@ describe('SettingsPage 同步失败文案（P5-4）', () => {
     })
 
     expect(screen.getByRole('alert')).toHaveTextContent('记录格式不合法')
+  })
+})
+
+/**
+ * P5-5：guest 的数据是持久的（独立 IndexedDB，`persist: true`），从介绍页再进来
+ * 看到的是上次留下的记录。这里锁的是「说法跟行为一致」——不静默清空，但也不许
+ * 用「清空本机数据」这种听起来像清库的措辞；demo 是只读快照，删除按钮只会弹
+ * 「仅可查看」，属于假按钮，干脆不渲染。
+ */
+describe('SettingsPage 危险操作的模式口径', () => {
+  it('guest 说「重新开始体验」，并如实声明数据只留在本机浏览器', () => {
+    renderSettings(INITIAL_SETTINGS, {}, 'guest')
+
+    expect(screen.getByRole('heading', { name: '重新开始体验' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '清空本机数据' })).not.toBeInTheDocument()
+    expect(screen.getByText(/只保存在这台设备的浏览器里，不会上传到服务器/)).toBeInTheDocument()
+  })
+
+  it('guest 确认后走同一条清空链路，并给出「回到空白状态」而不是「恢复空白初始状态」', async () => {
+    const user = userEvent.setup()
+    const clearLocalData = vi.fn(async () => {})
+    const showToast = vi.mocked(UI_VALUE.showToast)
+    showToast.mockClear()
+    renderSettings(INITIAL_SETTINGS, { clearLocalData }, 'guest')
+
+    await user.click(screen.getByRole('button', { name: '重新开始体验' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('重新开始体验？')
+
+    await user.click(screen.getByRole('button', { name: '重新开始' }))
+
+    await waitFor(() => expect(clearLocalData).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('体验数据已清空 · 已回到空白状态'))
+  })
+
+  it('demo 不渲染任何删除按钮', () => {
+    renderSettings(INITIAL_SETTINGS, {}, 'demo')
+
+    expect(screen.queryByRole('heading', { name: '清空本机设置' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '重新开始体验' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '清空本机数据' })).not.toBeInTheDocument()
+  })
+
+  it('owner 保持原文案与确认弹层', async () => {
+    const user = userEvent.setup()
+    renderSettings()
+
+    expect(screen.getByRole('heading', { name: '清空本机设置' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '清空本机数据' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '清空本机数据' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('清空本机数据？')
   })
 })
