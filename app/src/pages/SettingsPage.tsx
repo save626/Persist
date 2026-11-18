@@ -319,7 +319,13 @@ export function SettingsPage() {
     void clearAllLocalData()
       .then(() => {
         setSavedAt('本机数据已清空')
-        showToast(`本机数据已清空 · 已恢复${resetTargetLabel}`)
+        // 同步开着时服务端那份不会被删，下一轮拉取会把记录取回本机：
+        // 不说明白就是一句新的假话（看起来清空了，5 秒后又回来）。
+        showToast(
+          syncStatus.enabled
+            ? `本机数据已清空 · 同步开启中，稍后会从服务器取回`
+            : `本机数据已清空 · 已恢复${resetTargetLabel}`,
+        )
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : '未知错误'
@@ -1138,7 +1144,9 @@ export function SettingsPage() {
       {confirmClearAll && (
         <ConfirmDialog
           title="清空本机数据？"
-          description={`本机浏览器里的全部记录、设置、长期计划与快照都会被删除，并恢复到${resetTargetLabel}。此操作无法撤销，建议先导出 JSON 备份。`}
+          description={`本机浏览器里的全部记录、设置、长期计划与快照都会被删除，并恢复到${resetTargetLabel}。此操作无法撤销，建议先导出 JSON 备份。${
+            syncStatus.enabled ? '服务端副本不会被删除，下一轮同步会把记录取回本机。' : ''
+          }`}
           confirmLabel="确认清空"
           danger
           onClose={() => setConfirmClearAll(false)}
