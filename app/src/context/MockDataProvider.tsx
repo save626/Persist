@@ -359,7 +359,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     setWaterLogState(data.waterLog)
     setStudyRecordsState(data.studyRecords)
     setDietDaysState(data.dietDays)
-    setFitnessSessionState(data.fitnessSession)
+    setFitnessSessionState(data.fitnessSession?.date === today ? data.fitnessSession : null)
     setFitnessHistory(sortFitnessHistoryDesc(data.fitnessHistory))
     setProfileState({ ...data.profile, aiConsent: data.aiConsent })
     setSettings(data.settings)
@@ -368,7 +368,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     setReportsState(data.reports)
     setLongTermPlans(data.longTermPlans ?? [])
     setSnapshot(null)
-  }, [])
+  }, [today])
 
   const replaceMockData = useCallback(
     (data: ImportableMockData) => {

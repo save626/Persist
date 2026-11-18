@@ -87,6 +87,9 @@ function isExercise(value: unknown): value is Exercise {
 function isFitnessSession(value: unknown): value is FitnessSessionState {
   return (
     isRecord(value) &&
+    // 0.3.x 之前的备份没有 `date`；允许缺省，读取时按「过期会话」处理，
+    // 不能让一个可选字段把整份备份判成非法。
+    (value.date === undefined || typeof value.date === 'string') &&
     typeof value.activeTemplateId === 'string' &&
     Boolean(value.activeTemplateId.trim()) &&
     (value.sessionStatus === 'active' || value.sessionStatus === 'completed') &&

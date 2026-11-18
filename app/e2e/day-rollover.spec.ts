@@ -1,4 +1,5 @@
 ﻿import { expect, test } from '@playwright/test'
+import { seedOwnerFixture } from './owner-fixture'
 
 /**
  * 跨日回归：本地只留着「昨天」的饮食台账时，今天仍要能继续登记。
@@ -101,4 +102,62 @@ test('跨日后饮食页仍有四个餐次，记录与 AI 登记都能落库', a
   await expect(page.getByText('0 / 4')).toBeHidden()
 
   expect(pageErrors).toEqual([])
+})
+
+/** 把本地训练会话改写成「昨天已完成」，模拟昨天练完、今天重新打开。 */
+async function moveFitnessSessionToYesterday(
+  page: import('@playwright/test').Page,
+): Promise<string> {
+  return page.evaluate(async (target) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('persist-app', 1)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const record = await new Promise<unknown>((resolve, reject) => {
+        const store = database.transaction('mock-state', 'readonly').objectStore('mock-state')
+        const request = store.get('persist-mock-state')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      if (!record) return 'no-record'
+      const data = (
+        record as { backup: { data: { fitnessSession: Record<string, unknown> | null } } }
+      ).backup.data
+      if (!data.fitnessSession) return 'no-session'
+      data.fitnessSession.date = target
+      data.fitnessSession.sessionStatus = 'completed'
+      await new Promise<void>((resolve, reject) => {
+        const store = database.transaction('mock-state', 'readwrite').objectStore('mock-state')
+        const request = store.put(record)
+        request.onsuccess = () => resolve()
+        request.onerror = () => reject(request.error)
+      })
+      return 'ok'
+    } finally {
+      database.close()
+    }
+  }, localDateKey(-1))
+}
+
+/**
+ * 2026-11-18 反馈：昨天点过「完成训练」，今天没填任何计划，训练页却显示「今日训练已完成」，
+ * 且「完成训练」按钮被禁用，无法开始今天这一次。
+ *
+ * 根因：`FitnessSessionState` 没有日期归属，而 `fitnessSession` 是单个持久化对象，
+ * 跨日没有任何重置。修法是给会话加 `date`，读取时与今天不一致就按「还没开始」处理。
+ */
+test('跨日后训练不会沿用昨天的「已完成」', async ({ page }) => {
+  await seedOwnerFixture(page)
+  await page.goto('/fitness')
+  await expect(page.locator('.head-actions .status')).toContainText('训练中')
+
+  await expect.poll(() => moveFitnessSessionToYesterday(page), { timeout: 10_000 }).toBe('ok')
+  await page.reload()
+
+  // 昨天完成过 ≠ 今天完成过：状态回到「等待记录」，按钮恢复可用。
+  await expect(page.locator('.head-actions .status')).toContainText('等待记录')
+  const completeButton = page.getByRole('button', { name: '完成训练' })
+  await expect(completeButton).toBeEnabled()
 })

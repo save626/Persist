@@ -157,6 +157,7 @@ export function createOwnerFixture(now = new Date()): ImportableMockData {
       },
     ],
     fitnessSession: {
+      date: today,
       activeTemplateId: 'upper-a',
       sessionStatus: 'active',
       elapsedSeconds: 12 * 60 + 48,

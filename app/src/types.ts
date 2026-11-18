@@ -102,6 +102,16 @@ export interface ExerciseTemplate {
 export type SessionStatus = 'active' | 'completed'
 
 export interface FitnessSessionState {
+  /**
+   * 该会话所属的本地日期键（`yyyy-MM-dd`）。
+   *
+   * 训练会话是「今日进行中的状态」，不是历史记录——历史在 `FitnessSessionRecord` 里。
+   * 带上日期是为了让跨日后旧会话自动失效：否则昨天点过「完成训练」后，今天打开会看到
+   * 「今日训练已完成」，按钮被禁用，用户既不能记录也无法取消。
+   *
+   * 旧数据（0.3.x 之前）没有这个字段，读取时一律视为过期。
+   */
+  date?: string
   activeTemplateId: string
   exercises: Exercise[]
   sessionStatus: SessionStatus

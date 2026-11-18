@@ -412,8 +412,9 @@ const FREE_WORKOUT_TEMPLATE: WorkoutTemplate = {
   exercises: [],
 }
 
-function createEmptyFitnessSession(): FitnessSessionState {
+function createEmptyFitnessSession(date: string): FitnessSessionState {
   return {
+    date,
     activeTemplateId: FREE_WORKOUT_TEMPLATE.id,
     exercises: [],
     sessionStatus: 'active',
@@ -422,10 +423,12 @@ function createEmptyFitnessSession(): FitnessSessionState {
 }
 
 function createFitnessSession(
-  template: WorkoutTemplate = WORKOUT_TEMPLATES[0],
+  template: WorkoutTemplate,
+  date: string,
   elapsedSeconds = DEFAULT_ELAPSED_SECONDS,
 ): FitnessSessionState {
   return {
+    date,
     activeTemplateId: template.id,
     exercises: cloneTemplateExercises(template),
     sessionStatus: 'active',
@@ -1343,8 +1346,13 @@ export function FitnessPage() {
     today,
   } = useMockData()
   const newRecord = useNewRecordParam()
-  const initialSession = useMemo(() => createEmptyFitnessSession(), [])
-  const session = fitnessSession ?? initialSession
+  const initialSession = useMemo(() => createEmptyFitnessSession(today), [today])
+  /**
+   * 跨日兜底：本地存储里可能还留着昨天的会话（旧数据甚至没有 `date`）。
+   * 训练会话只对「它所属的那一天」有效，日期不匹配就按「今天还没开始」处理——
+   * 否则昨天点过「完成训练」，今天打开会看到「今日训练已完成」且按钮被禁用。
+   */
+  const session = fitnessSession?.date === today ? fitnessSession : initialSession
   const activeTemplate =
     session.activeTemplateId === FREE_WORKOUT_TEMPLATE.id
       ? FREE_WORKOUT_TEMPLATE
@@ -1679,7 +1687,7 @@ export function FitnessPage() {
       showToast(`当前已使用 ${template.name}`)
       return
     }
-    setFitnessSession(createFitnessSession(template, 0))
+    setFitnessSession(createFitnessSession(template, today, 0))
     setSelectedExerciseId('')
     setPlanItems((items) =>
       items.map((item) =>

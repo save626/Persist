@@ -397,6 +397,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
   ]
 
   const fitnessSession: FitnessSessionState = {
+    date: today,
     activeTemplateId: 'upper-a',
     sessionStatus: 'active',
     elapsedSeconds: 32 * 60 + 22,
