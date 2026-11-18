@@ -776,7 +776,13 @@ export function SettingsPage() {
                 <p>关掉就是纯本机；打开后只在你的自建服务器留一份增量副本。</p>
               </div>
               <span
-                className={`settings-service-pill ${syncStatus.enabled ? 'connected' : 'idle'}`}
+                className={`settings-service-pill ${
+                  syncStatus.state === '重试中' || syncStatus.state === '需要处理'
+                    ? 'error'
+                    : syncStatus.enabled
+                      ? 'connected'
+                      : 'idle'
+                }`}
               >
                 <span className="dot" />
                 {syncStatus.state === '待同步' && syncStatus.pending > 0

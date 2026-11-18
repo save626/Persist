@@ -93,6 +93,8 @@ function createStorage(initial: OutboxRecord[] = []) {
 
 interface FakeClientState {
   pushError: Error | null
+  /** 拉取阶段的失败注入：429 常常发生在 pull 上，此时 outbox 是空的，最容易骗出「已同步」。 */
+  pullError: Error | null
   deleteAccountError: Error | null
   pushResults: PushResult[]
   pullBatches: PullEntity[][]
@@ -119,6 +121,7 @@ function createFakeClient(state: FakeClientState) {
       return state.pushResults.shift() ?? { applied: 0, skipped: [], serverRev: 0 }
     }),
     pull: vi.fn(async () => {
+      if (state.pullError) throw state.pullError
       const entities = state.pullBatches.shift() ?? []
       return { entities, nextSince: entities.at(-1)?.rev ?? 0, hasMore: false }
     }),
@@ -133,6 +136,7 @@ function createEngine(overrides: Partial<SyncEngineDeps> = {}) {
   const scheduler = createScheduler()
   const state: FakeClientState = {
     pushError: null,
+    pullError: null,
     deleteAccountError: null,
     pushResults: [],
     pullBatches: [],
@@ -403,6 +407,69 @@ describe('SyncEngine', () => {
 
     expect(engine.status().error).toBeNull()
     expect(engine.status().errorKind).toBeNull()
+  })
+
+  it('拉取阶段 429、队列为空时状态是「重试中」，不再对外宣称「已同步」', async () => {
+    const { engine, state, scheduler } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+
+    // 没有任何本地改动 → pending 为 0，旧逻辑会直接落到「已同步」。
+    state.pullError = new SyncRequestError('rate-limited', '请求过于频繁，请稍后再试。', {
+      status: 429,
+      code: 'rate_limited',
+    })
+    await engine.flush('test')
+
+    const status = engine.status()
+    expect(status.pending).toBe(0)
+    expect(status.errorKind).toBe('rate-limited')
+    expect(status.state).toBe('重试中')
+    expect(scheduler.delays()).toContain(5_000)
+
+    // 退避到点重试成功 → 回到已同步，不留残影。
+    state.pullError = null
+    state.pushResults.push({ applied: 0, skipped: [], serverRev: 3 })
+    await engine.flush('retry')
+    expect(engine.status().state).toBe('已同步')
+  })
+
+  it('401 之后状态是「需要处理」，不会对外宣称已同步', async () => {
+    const { engine, state, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+
+    setData({ ...getData(), waterLog: getData().waterLog.slice(1) })
+    engine.noteDataChange()
+    await tick()
+    state.pushError = new SyncRequestError('unauthorized', '缺少或无效的设备令牌。')
+
+    await engine.flush('test')
+
+    expect(engine.status().needsAttention).toBe(true)
+    expect(engine.status().state).toBe('需要处理')
+  })
+
+  it('手动同步成功时撤掉退避定时器，状态不再停在「重试中」', async () => {
+    const { engine, state, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+
+    setData({ ...getData(), waterLog: getData().waterLog.slice(1) })
+    engine.noteDataChange()
+    await tick()
+    state.pushError = new SyncRequestError('network', '网络不可用，暂时连不上同步服务。')
+    await engine.flush('test')
+    expect(engine.status().state).toBe('重试中')
+
+    // 用户不等退避，直接点「立即同步」并且这次成功：定时器必须同时撤掉，
+    // 否则状态会一直卡在「重试中」，还会多打一次没必要的请求。
+    state.pushError = null
+    state.pushResults.push({ applied: 1, skipped: [], serverRev: 9 })
+    await engine.flush('manual')
+
+    expect(engine.status().pending).toBe(0)
+    expect(engine.status().state).toBe('已同步')
   })
 
   it('401 的分类是 unauthorized，与限流区分开', async () => {

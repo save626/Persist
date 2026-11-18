@@ -43,8 +43,13 @@ import {
 export const SYNC_DEBOUNCE_MS = 5_000
 export const SYNC_SAFETY_INTERVAL_MS = 60_000
 
-/** UI 只认这三种状态；`error` / `syncing` 是叠加信息，不改变主状态。 */
-export type SyncState = '已同步' | '待同步' | '离线' | '未开启'
+/**
+ * UI 只认这五个状态（P5-7 加了后两个）。
+ * `error` / `syncing` 仍是叠加信息，但「上一次尝试失败」已经不能只当叠加信息了：
+ * 队列空着、网络也在，单看 `pending` 会得出「已同步」，而实际上 429 正在退避、
+ * 或令牌已经失效——徽标说「已同步」、旁边文案说「同步失败」，两句话互相打脸。
+ */
+export type SyncState = '已同步' | '待同步' | '离线' | '未开启' | '重试中' | '需要处理'
 
 export interface SyncStatusSnapshot {
   enabled: boolean
@@ -200,6 +205,11 @@ export class SyncEngine {
     let state: SyncState
     if (!enabled) state = '未开启'
     else if (!this.online) state = '离线'
+    // 401 不会自愈，必须先说「需要处理」；否则重试退避中的 429 也会被算成已同步。
+    else if (this.needsAttention) state = '需要处理'
+    else if (this.retryTimer !== null) state = '重试中'
+    // 不可重试的失败（例如本地记录格式不合法），重试永远不会有结果，同样需要用户介入。
+    else if (this.lastError) state = '需要处理'
     else if (pending > 0) state = '待同步'
     else state = '已同步'
     return {
@@ -514,6 +524,11 @@ export class SyncEngine {
       this.meta = { ...this.meta, lastSyncAt: new Date(this.now()).toISOString() }
       await this.saveMeta()
       this.retryAttempt = 0
+      /*
+       * 成功一次就把退避定时器撤掉：手动「立即同步」成功时，之前排的那次重试还没到点，
+       * 留着它会让状态停在「重试中」、并且多打一次无意义的请求。
+       */
+      this.clearRetry()
       this.lastError = null
       this.error = null
       this.errorKind = null

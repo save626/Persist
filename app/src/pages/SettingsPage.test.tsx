@@ -386,6 +386,27 @@ describe('SettingsPage 同步失败文案（P5-4）', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('记录格式不合法')
   })
+
+  /*
+   * P5-7：徽标原先只按 `pending` 推导，队列空着就写「已同步」，旁边文案却说
+   * 「已安排自动重试」/「令牌失效」，两句话互相打脸。这里锁住「失败态不能说已同步」。
+   */
+  it.each(['重试中', '需要处理'] as const)('失败态徽标（%s）标红，不再宣称已同步', (state) => {
+    renderSettings(INITIAL_SETTINGS, {
+      syncStatus: {
+        ...ENABLED_SYNC,
+        state,
+        error: '请求过于频繁，请稍后再试。',
+        errorKind: 'rate-limited',
+      },
+    })
+
+    // 页面里还有一个 AI 卡片的徽标，必须限定在同步卡片内取。
+    const pill = document.querySelector('.settings-sync-card .settings-service-pill')
+    expect(pill).toHaveTextContent(state)
+    expect(pill?.className).toContain('error')
+    expect(pill).not.toHaveTextContent('已同步')
+  })
 })
 
 /**
