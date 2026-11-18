@@ -265,6 +265,67 @@ describe('SyncEngine', () => {
     expect(body?.entities[0]).toMatchObject({ kind: 'water_log', deleted: true })
   })
 
+  /**
+   * 11-18 事故回归：整库导入（导入备份 / 加载演示数据 / 清空本机）把本地实体整体换掉，
+   * 差分会把「基线里有、这一版没有」的实体算成删除并推墓碑，服务端数据被整体清空。
+   * 整库替换必须显式声明，此时只把基线摘干净，不发任何删除。
+   */
+  it('整库替换：suppressRemovals 时不发墓碑，只把消失的实体从基线摘掉', async () => {
+    const { engine, client, state, meta, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+    client.push.mockClear()
+
+    // 整库换成另一份数据：原来的饮水记录一条不剩，同时新增一条学习记录。
+    const imported: ImportableMockData = {
+      ...getData(),
+      waterLog: [],
+      studyRecords: [
+        ...getData().studyRecords,
+        { id: 'study-imported', date: '2026-11-05', category: '英语', durationMin: 30 },
+      ] as ImportableMockData['studyRecords'],
+    }
+    const removedKeys = getData().waterLog.map((entry) => `water_log:${entry.id}`)
+    setData(imported)
+    engine.noteDataChange({ suppressRemovals: true })
+    await tick()
+    state.pushResults.push({ applied: 1, skipped: [], serverRev: 7 })
+    await engine.flush('test')
+
+    const bodies = client.push.mock.calls.flatMap((call) => call[1].entities)
+    expect(bodies.every((entity) => entity.deleted === false)).toBe(true)
+    expect(bodies.map((entity) => entity.id)).toEqual(['study-imported'])
+    // 基线里那几条被摘掉：不会被下一轮差分反复当成本地删除。
+    expect(Object.keys(meta.entityHashes).some((key) => removedKeys.includes(key))).toBe(false)
+    // 游标回到 0，服务端那几条才拉得回来（否则「服务端有、本机没有」会长期存在）。
+    expect(meta.lastPulledRev).toBe(0)
+  })
+
+  it('普通删除仍然发墓碑：抑制只对声明了整库替换的那一轮生效', async () => {
+    const { engine, client, state, getData, setData } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+    client.push.mockClear()
+
+    setData({ ...getData(), waterLog: getData().waterLog.slice(1) })
+    engine.noteDataChange({ suppressRemovals: true })
+    await tick()
+    // 这一轮不算删除、也不推任何东西。
+    expect(client.push).not.toHaveBeenCalled()
+    expect(engine.status().pending).toBe(0)
+
+    // 下一轮不带标记：真正的用户删除照常发墓碑。
+    setData({ ...getData(), waterLog: getData().waterLog.slice(1) })
+    engine.noteDataChange()
+    await tick()
+    state.pushResults.push({ applied: 1, skipped: [], serverRev: 8 })
+    await engine.flush('test')
+
+    const body = client.push.mock.calls[0]?.[1]
+    expect(body?.entities).toHaveLength(1)
+    expect(body?.entities[0]).toMatchObject({ kind: 'water_log', deleted: true })
+  })
+
   it('pull 回来的新数据会合并进本地（LWW），不会再生成本地变更', async () => {
     const { engine, client, state, applyData, getData } = createEngine()
     await engine.init()

@@ -386,9 +386,17 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     setSnapshot(null)
   }, [])
 
+  /**
+   * 整库替换标记：导入备份、加载演示数据、清空本机都属于「一次换掉整个数据集」。
+   * 这类动作不该让同步引擎把「基线里有、这一版没有」的实体当成用户删除，
+   * 否则服务端会被整体清空（11-18 事故）。标记只对下一次差分生效，用完即清。
+   */
+  const suppressRemovalsRef = useRef(false)
+
   const replaceMockData = useCallback(
     (data: ImportableMockData) => {
       if (blockReadOnly()) return
+      suppressRemovalsRef.current = true
       applyMockData(data)
     },
     [applyMockData, blockReadOnly],
@@ -409,6 +417,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     }
     await clearPersistedState({ dbName: runtime.storageDbName })
     const nextInitialData = createRuntimeInitialData(runtime.mode)
+    suppressRemovalsRef.current = true
     applyMockData(nextInitialData)
     // 同步刷新 pagehide 补写用的镜像，避免「清空后立刻关页面」把旧数据又写回去。
     latestStateRef.current = { data: nextInitialData, snapshot: null }
@@ -630,7 +639,9 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       metaStorage: createSyncStore(),
       queueStorage: createSyncStore(),
       getData: () => latestStateRef.current?.data ?? createRuntimeInitialData(runtime.mode),
-      applyData: (data) => replaceMockData(data),
+      // 远端数据落库走 applyMockData，不走 replaceMockData：后者带「不产生删除」标记，
+      // 而应用服务端墓碑恰恰是真正的删除，不能被抑制。
+      applyData: (data) => applyMockData(data),
       onChange: (status) => setSyncStatus(status),
       isOnline: () => (typeof navigator === 'undefined' ? true : navigator.onLine),
     })
@@ -651,15 +662,18 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       engine.stop()
       if (syncEngineRef.current === engine) syncEngineRef.current = null
     }
-  }, [replaceMockData, runtime.mode, runtime.sync])
+  }, [applyMockData, runtime.mode, runtime.sync])
 
   /**
    * 本地数据变化时通知同步引擎：它自己算差分并在 5 秒后合并推送。
    * 同步关闭时这里只做一次早退，不产生任何请求。
+   * 整库替换（导入/演示数据/清空本机）后第一次差分不产生删除，见 replaceMockData。
    */
   useEffect(() => {
     if (!hydrated) return
-    syncEngineRef.current?.noteDataChange()
+    const suppressRemovals = suppressRemovalsRef.current
+    suppressRemovalsRef.current = false
+    syncEngineRef.current?.noteDataChange({ suppressRemovals })
   }, [hydrated, persistableData])
 
   /** 交互后防抖写入，把连续操作合并成一次事务；严格模式重复执行也只是多写一次同样的数据。 */

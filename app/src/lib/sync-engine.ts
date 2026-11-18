@@ -372,25 +372,32 @@ export class SyncEngine {
    *
    * 顺序：先落 outbox，再推进本地基线。中途被打断最多重复发送（服务端按 opId 幂等），
    * 不会出现「基线说已同步、实际根本没发出去」的静默丢数据。
+   *
+   * `suppressRemovals` 只给「整库替换本地数据」用（导入备份 / 加载演示数据 / 清空本机）：
+   * 这类动作一次换掉整个数据集，基线里那些 id 只是「这一版没有」，不代表用户要删。
+   * 若照常发墓碑，服务端会被整体清空 —— 11-18 的事故就是这么来的。
+   * 抑制时把对应 key 从基线与时间索引里摘掉：服务端那份保持不动，下次拉取还能回到本机。
    */
-  noteDataChange(): void {
+  noteDataChange(options?: { suppressRemovals?: boolean }): void {
     if (!this.meta.enabled || !this.meta.token) return
     if (this.accountDeleting) return
     if (this.applyingRemote) return
 
     const entities = collectLocalEntities(this.deps.getData())
     const diff = diffLocalEntities(entities, this.meta.entityHashes)
-    if (diff.changed.length === 0 && diff.removed.length === 0) return
+    const forgotten = options?.suppressRemovals ? diff.removed : []
+    const removed = options?.suppressRemovals ? [] : diff.removed
+    if (diff.changed.length === 0 && removed.length === 0 && forgotten.length === 0) return
 
     const now = this.now()
     const candidates: EntityCandidate[] = [
       ...toCandidates(diff.changed, now),
-      ...removedCandidates(diff.removed, now),
+      ...removedCandidates(removed, now),
     ]
 
     this.noteChain = this.noteChain
       .then(async () => {
-        await this.queue.enqueue(candidates, now)
+        if (candidates.length > 0) await this.queue.enqueue(candidates, now)
         const entityHashes = { ...this.meta.entityHashes }
         const entityTimes = { ...this.meta.entityTimes }
         for (const candidate of candidates) {
@@ -400,7 +407,15 @@ export class SyncEngine {
           if (hash) entityHashes[key] = hash
           else delete entityHashes[key]
         }
-        this.meta = { ...this.meta, entityHashes, entityTimes }
+        // 被「忘掉」的实体：只从本地基线里移除，不向服务端发任何东西。
+        for (const key of forgotten) {
+          delete entityHashes[key]
+          delete entityTimes[key]
+        }
+        // 服务端那份没被删，但它的 rev 已经落在游标后面了；不回到 0 就再也不会被拉回来，
+        // 客户端会长期停在一个「服务端有、本机没有」的分叉状态。
+        const lastPulledRev = forgotten.length > 0 ? 0 : this.meta.lastPulledRev
+        this.meta = { ...this.meta, entityHashes, entityTimes, lastPulledRev }
         await this.saveMeta()
       })
       .catch(() => {
