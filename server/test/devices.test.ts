@@ -92,6 +92,37 @@ describe('POST /api/v1/devices', () => {
     }
   })
 
+  it('账号总额上限：满额后拒绝新注册，但恢复码换机仍可用', async () => {
+    const { app, db } = setup({ PERSIST_REGISTRATION_MAX_ACCOUNTS: '1' })
+    try {
+      const first = await register(app)
+      const refused = await app.inject({ method: 'POST', url: '/api/v1/devices', payload: {} })
+      expect(refused.statusCode).toBe(409)
+      expect(refused.json<{ error: { code: string } }>().error.code).toBe('registration_closed')
+
+      // 同一账号凭恢复码换新设备不受上限影响——否则上限一开就把自己锁在门外。
+      const restored = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: first.recoveryCode, label: 'tablet' },
+      })
+      expect(restored.statusCode).toBe(200)
+      expect(restored.json<{ userId: string }>().userId).toBe(first.userId)
+    } finally {
+      await close(app, db)
+    }
+  })
+
+  it('默认不限制（PERSIST_REGISTRATION_MAX_ACCOUNTS 未配置时行为不变）', async () => {
+    const { app, db } = setup()
+    try {
+      await register(app)
+      await register(app)
+    } finally {
+      await close(app, db)
+    }
+  })
+
   it('拒绝非法请求体', async () => {
     const { app, db } = setup()
     try {

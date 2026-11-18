@@ -116,7 +116,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     limiter: syncLimiter,
     now,
   })
-  registerDeviceRoutes(app, { db: db.db, limiter: syncLimiter, now })
+  registerDeviceRoutes(app, { db: db.db, config: options.config, limiter: syncLimiter, now })
   registerExportRoutes(app, { db: db.db, limiter: syncLimiter, now })
   registerSyncRoutes(app, { db: db.db, limiter: syncLimiter, now })
 

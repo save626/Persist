@@ -9,6 +9,8 @@ import {
 } from '@persist/shared/contract/sync'
 import { recordAuditEvent } from '../audit/audit-log.js'
 import { registerAccount, restoreAccount, revokeDevice } from '../sync/accounts.js'
+import { countActiveUsers } from '../db/repositories/devices.js'
+import type { ServerConfig } from '../config.js'
 import { enforceRateLimit, requireDevice } from './guards.js'
 import type { FastifyInstance } from 'fastify'
 
@@ -23,6 +25,7 @@ import type { FastifyInstance } from 'fastify'
 
 export interface AccountRouteOptions {
   db: Db
+  config: ServerConfig
   limiter: RateLimiter
   now: () => number
 }
@@ -32,6 +35,25 @@ const NO_STORE = 'no-store'
 export function registerDeviceRoutes(app: FastifyInstance, options: AccountRouteOptions): void {
   app.post('/api/v1/devices', async (request, reply) => {
     if (!enforceRateLimit(options.limiter, request, reply)) return reply
+
+    // 账号总额上限（默认 0 = 不限）。放在参数校验之前：满额时不必先解析请求体。
+    // 只在「新注册」这一条路上拦，`/devices/restore`（凭恢复码换机）与已有设备不受影响。
+    const maxAccounts = options.config.registrationMaxAccounts
+    if (maxAccounts > 0) {
+      const active = countActiveUsers(options.db)
+      if (active >= maxAccounts) {
+        request.log.warn({ active, maxAccounts }, 'device registration refused: account cap reached')
+        return reply
+          .header('cache-control', NO_STORE)
+          .code(409)
+          .send(
+            errorBody(
+              'registration_closed',
+              `本服务最多允许 ${maxAccounts} 个账号，当前已满。用恢复码在本机登录，或联系管理员。`,
+            ),
+          )
+      }
+    }
 
     const parsed = parseDeviceRegisterBody(request.body)
     if (!parsed.ok) {

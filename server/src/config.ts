@@ -49,6 +49,15 @@ export interface ServerConfig {
    */
   aiDailyTokens: number
   /**
+   * 允许存在的 active 账号总数上限（`0` = 不限制）。
+   *
+   * 为什么需要它：`POST /api/v1/devices` 是开放注册，原先只按 IP 限流。陌生人可以
+   * 免费注册账号，把仅供本人使用的模型额度（`analysis:global` 的日上限）占满，
+   * 或把库里塞满垃圾账号。生产取一个小值（3），留出「手机 + 平板 + 一次重装」的余量；
+   * 满额后新注册返回 409，已有账号与恢复码换机不受影响。
+   */
+  registrationMaxAccounts: number
+  /**
    * `ai_calls` 审计保留天数（P0-4）。`0` = 不清理（无限保留）。
    *
    * 注意这里的 `0` 与配额的两个 `0` 语义相反：配额是「0 = 关掉限制」，这里是「0 = 关掉清理」。
@@ -165,6 +174,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     aiKeys: parseAiKeys(env.PERSIST_AI_KEYS),
     aiDailyLimit: readInt(env, 'PERSIST_AI_DAILY_LIMIT', 100, 0, 100_000),
     aiDailyTokens: readInt(env, 'PERSIST_AI_DAILY_TOKENS', 200_000, 0, 100_000_000),
+    registrationMaxAccounts: readInt(env, 'PERSIST_REGISTRATION_MAX_ACCOUNTS', 0, 0, 1_000),
     aiAuditKeepDays: readInt(
       env,
       'PERSIST_AI_AUDIT_KEEP_DAYS',
@@ -241,6 +251,9 @@ export function describeConfig(config: ServerConfig) {
     syncRateLimit: `${config.syncRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     analysisRateLimit: `${config.analysisRateLimitMax}/${Math.round(config.rateLimitWindowMs / 1000)}s`,
     corsOrigins: config.allowedOrigins,
+    // 注册上限：`off` 表示开放注册（任何人都能建账号），不是「没人能注册」。
+    registration:
+      config.registrationMaxAccounts > 0 ? `max:${config.registrationMaxAccounts}` : 'off',
     dailyBrief: `${config.dailyBriefEnabled ? 'on' : 'off'}@${config.dailyBriefAt}`,
   }
 }
