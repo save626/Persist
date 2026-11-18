@@ -69,7 +69,13 @@ export interface MockDataContextValue {
   resetSettings: () => void
   aiConsent: boolean
   setAiConsent: (enabled: boolean) => void
+  /** 「今天」的晚间复盘；昨天填的那份不暴露，免得今天页显示已完成。 */
   eveningReview: EveningReviewPayload | null
+  /**
+   * 内存里最近一次填写的复盘，可能属于昨天（带 `date`）。
+   * 仅用于导出/快照这类「不能丢用户写过的内容」的场景；页面展示请用 `eveningReview`。
+   */
+  latestEveningReview: EveningReviewPayload | null
   setEveningReview: Dispatch<SetStateAction<EveningReviewPayload | null>>
   reports: ReportRecord[]
   setReports: Dispatch<SetStateAction<ReportRecord[]>>

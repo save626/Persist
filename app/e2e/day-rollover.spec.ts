@@ -161,3 +161,96 @@ test('跨日后训练不会沿用昨天的「已完成」', async ({ page }) => 
   const completeButton = page.getByRole('button', { name: '完成训练' })
   await expect(completeButton).toBeEnabled()
 })
+
+/** 把本地复盘改成「昨天填的」，模拟昨天收过尾、今天重新打开。 */
+async function moveEveningReviewTo(
+  page: import('@playwright/test').Page,
+  dateKey: string,
+): Promise<string> {
+  return page.evaluate(async (target) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('persist-app', 1)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const record = await new Promise<unknown>((resolve, reject) => {
+        const store = database.transaction('mock-state', 'readonly').objectStore('mock-state')
+        const request = store.get('persist-mock-state')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      if (!record) return 'no-record'
+      const data = (record as { backup: { data: { eveningReview: { date?: string } | null } } })
+        .backup.data
+      if (!data.eveningReview) return 'no-review'
+      data.eveningReview.date = target
+      await new Promise<void>((resolve, reject) => {
+        const store = database.transaction('mock-state', 'readwrite').objectStore('mock-state')
+        const request = store.put(record)
+        request.onsuccess = () => resolve()
+        request.onerror = () => reject(request.error)
+      })
+      return 'ok'
+    } finally {
+      database.close()
+    }
+  }, dateKey)
+}
+
+/**
+ * 与训练会话同源的跨日问题：`eveningReview` 也是单个持久化对象。
+ * 昨天填完复盘后，今天打开会看到「今天的复盘已经记录」并显示昨天的精力与备注，
+ * 复盘弹层还会把昨天的内容当默认值预填。
+ *
+ * 修法：复盘带 `date`，读取侧只认「今天」的那一份。
+ */
+test('跨日后晚间复盘不会沿用昨天的内容', async ({ page }) => {
+  await seedOwnerFixture(page)
+  await page.goto('/')
+
+  const review = page.locator('.review')
+  await expect(review.locator('#reviewTitle')).toContainText('今天的记录，已经足够开始复盘。')
+
+  // 今天真实填一次：精力 4 / 状态「专注度不错」/ 一句备注。
+  await review.getByRole('button', { name: '结束今日' }).click()
+  const sheet = page.getByRole('dialog', { name: '结束今日' })
+  await expect(sheet).toBeVisible()
+  await sheet.getByRole('button', { name: '4' }).click()
+  await sheet.getByLabel('整体状态').selectOption('专注度不错')
+  await sheet.getByLabel('今日备注').fill('跨日回归：昨天留下的复盘')
+  await sheet.getByRole('button', { name: '保存复盘' }).click()
+
+  await expect(review.locator('#reviewTitle')).toContainText('今天的复盘已经记录。')
+  await expect(review).toContainText('精力 4 / 5 · 专注度不错')
+
+  // 等防抖写盘落进 IndexedDB，再把这份复盘挪到昨天。
+  await expect.poll(() => moveEveningReviewTo(page, localDateKey(-1)), { timeout: 10_000 }).toBe('ok')
+
+  await page.reload()
+  // 昨天填过 ≠ 今天填过：文案回到「可以开始复盘」，按钮回到「结束今日」，
+  // 昨天的备注不能出现在今天的卡片里。
+  await expect(review.locator('#reviewTitle')).toContainText('今天的记录，已经足够开始复盘。')
+  await expect(review.getByRole('button', { name: '结束今日' })).toBeVisible()
+  await expect(review).not.toContainText('跨日回归：昨天留下的复盘')
+  await expect(review).not.toContainText('精力 4 / 5')
+})
+
+/**
+ * 跨日的另一半：`today` 原先只在 Provider 挂载时算一次。
+ * PWA / APK 常驻后台跨过 0 点后回到前台，整页仍停留在昨天——
+ * 今天页会把昨天的计划、饮水、饮食切片继续当成「今天」。
+ *
+ * 这里不 reload，直接把时钟推过午夜，验证日期标签跟着推进。
+ */
+test('页面常驻跨过 0 点后，「今天」自动推进到新的一天', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-18T23:58:00') })
+  await page.goto('/')
+
+  const eyebrow = page.locator('.head .eyebrow')
+  await expect(eyebrow).toContainText('2026年11月18日')
+
+  await page.clock.fastForward('03:00')
+
+  await expect(eyebrow).toContainText('2026年11月19日')
+})

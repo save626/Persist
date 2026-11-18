@@ -84,7 +84,8 @@ export function SettingsPage() {
     resetSettings,
     aiConsent,
     setAiConsent,
-    eveningReview,
+    // 导出要带上「最近一次」的复盘，包括昨天填的那份：备份不能因为跨日丢用户写过的内容。
+    latestEveningReview,
     reports,
     longTermPlans,
     snapshot,
@@ -217,7 +218,7 @@ export function SettingsPage() {
         profile,
         settings,
         aiConsent,
-        eveningReview,
+        eveningReview: latestEveningReview,
         reports,
         longTermPlans,
       })

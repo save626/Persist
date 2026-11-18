@@ -149,6 +149,7 @@ function buildContextValue(overrides: Partial<MockDataContextValue> = {}): MockD
     aiConsent: true,
     setAiConsent: vi.fn(),
     eveningReview: null,
+    latestEveningReview: null,
     setEveningReview: vi.fn(),
     reports: [buildLocalReport()],
     setReports: vi.fn(),

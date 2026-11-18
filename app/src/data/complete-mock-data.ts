@@ -545,6 +545,7 @@ export function createCompleteMockData(now = new Date()): ImportableMockData {
   }
 
   const eveningReview: EveningReviewPayload = {
+    date: today,
     energy: 4,
     state: '专注度不错',
     note: '训练、饮食和学习记录都已覆盖，准备收尾。',

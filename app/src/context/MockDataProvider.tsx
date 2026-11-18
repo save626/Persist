@@ -78,7 +78,13 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   const runtime = useRuntimeMode()
   const { showToast } = useUI()
   /** 演示数据的日期随打开日期平移；AI 内容仍固定为部署前预生成版本。 */
-  const [today] = useState(() => todayDateKey())
+  const [today, setToday] = useState(() => todayDateKey())
+  /**
+   * 最新「今天」的同步副本：`applyMockData` 与几个 setter 需要读当前日期，
+   * 但不能把它们放进依赖里——否则跨日会让水合 effect 重跑一次，
+   * 用磁盘上的旧数据覆盖内存里还没落盘的改动。
+   */
+  const todayRef = useRef(today)
   const [initialData] = useState(() => createRuntimeInitialData(runtime.mode))
 
   const [goals, setGoals] = useState<Goal[]>(initialData.goals)
@@ -164,10 +170,17 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     [blockReadOnly],
   )
 
+  /**
+   * 复盘写入统一盖上「今天」：调用方（复盘弹层）只给精力/状态/备注，
+   * 日期在这里补齐，避免某个入口忘记带日期、写完立刻被读取侧当作过期数据丢掉。
+   */
   const setEveningReview = useCallback(
     (action: React.SetStateAction<EveningReviewPayload | null>) => {
       if (blockReadOnly()) return
-      setEveningReviewState(action)
+      setEveningReviewState((current) => {
+        const next = typeof action === 'function' ? action(current) : action
+        return next ? { ...next, date: todayRef.current } : null
+      })
     },
     [blockReadOnly],
   )
@@ -354,21 +367,24 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   )
 
   const applyMockData = useCallback((data: ImportableMockData) => {
+    const todayKey = todayRef.current
     setGoals(data.goals)
     setPlanItemsState(data.planItems)
     setWaterLogState(data.waterLog)
     setStudyRecordsState(data.studyRecords)
     setDietDaysState(data.dietDays)
-    setFitnessSessionState(data.fitnessSession?.date === today ? data.fitnessSession : null)
+    setFitnessSessionState(data.fitnessSession?.date === todayKey ? data.fitnessSession : null)
     setFitnessHistory(sortFitnessHistoryDesc(data.fitnessHistory))
     setProfileState({ ...data.profile, aiConsent: data.aiConsent })
     setSettings(data.settings)
     setAiConsentState(data.aiConsent)
+    // 复盘原样留在内存里（内容属于昨天也值得保留到最后一次覆盖），
+    // 「是不是今天的」由下面暴露给页面的派生值判断。
     setEveningReviewState(data.eveningReview)
     setReportsState(data.reports)
     setLongTermPlans(data.longTermPlans ?? [])
     setSnapshot(null)
-  }, [today])
+  }, [])
 
   const replaceMockData = useCallback(
     (data: ImportableMockData) => {
@@ -538,6 +554,36 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     }
   }, [applyMockData, runtime.persist, runtime.storageDbName])
 
+  /**
+   * 跨日自愈：`today` 是「本次会话的今天」，只在挂载时算一次。
+   * PWA / APK 常驻后台跨过 0 点后再回到前台，若不推进 `today`，
+   * 今天页会把昨天的计划、饮水、饮食切片继续当成「今天」显示。
+   * 定时器负责前台长时间挂着的情况（后台会被节流，故同时监听可见性变化与聚焦）。
+   */
+  useEffect(() => {
+    const syncToday = () => {
+      const next = todayDateKey()
+      if (next === todayRef.current) return
+      todayRef.current = next
+      setToday(next)
+      // 训练会话是「今天这一次」的草稿：跨日后旧草稿不再可用，
+      // 保留它只会让「完成训练」按钮继续禁用（归档记录已在 fitnessHistory 里）。
+      setFitnessSessionState((current) => (current && current.date !== next ? null : current))
+    }
+    syncToday()
+    const timer = window.setInterval(syncToday, 60_000)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') syncToday()
+    }
+    window.addEventListener('focus', syncToday)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', syncToday)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [])
+
   /** 待持久化的切片与备份 0.3.0 的 data 完全一致：本地存储、导出文件、导入校验同构。 */
   const persistableData = useMemo<ImportableMockData>(
     () => ({
@@ -660,6 +706,15 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   )
   const lastWaterMilliliters = todayWaterLog.at(-1)?.milliliters ?? null
 
+  /**
+   * 只把「今天」的复盘暴露给页面：昨天填过的复盘留在内存与磁盘里，
+   * 但今天读到的必须是 `null`，否则今天页会显示「今天的复盘已经记录」。
+   */
+  const todayEveningReview = useMemo(
+    () => (eveningReview?.date === today ? eveningReview : null),
+    [eveningReview, today],
+  )
+
   const value = useMemo(
     () => ({
       goals,
@@ -698,7 +753,10 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       resetSettings,
       aiConsent,
       setAiConsent,
-      eveningReview,
+      /** 「今天」的复盘；昨天的复盘不暴露（否则今天页会显示已完成）。 */
+      eveningReview: todayEveningReview,
+      /** 原始复盘（可能属于昨天），只给导出/快照用，展示请用上面那个。 */
+      latestEveningReview: eveningReview,
       setEveningReview,
       reports,
       setReports,
@@ -739,6 +797,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       dietDays,
       enableSync,
       eveningReview,
+      todayEveningReview,
       fitnessHistory,
       fitnessSession,
       addGoal,

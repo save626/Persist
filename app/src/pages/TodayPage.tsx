@@ -24,12 +24,17 @@ const DEMO_TARGETS = {
   studyMinutes: 90,
 } as const
 
-function todayLabel() {
-  const date = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
-    .format(new Date())
+/**
+ * 日期键 → 「2026年11月18日 · 星期三」。
+ * 用本地时区的正午构造日期，避免 `new Date('YYYY-MM-DD')` 被当成 UTC 而串日。
+ */
+function formatDateLabel(dateKey: string) {
+  const date = new Date(`${dateKey}T12:00:00`)
+  const label = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+    .format(date)
     .replace(/\s/g, '')
-  const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(new Date())
-  return `${date} · ${weekday}`
+  const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(date)
+  return `${label} · ${weekday}`
 }
 
 function dateInputValue(date = new Date()) {
@@ -263,6 +268,7 @@ export function TodayPage() {
     aiConsent,
     eveningReview,
     setEveningReview,
+    today,
   } = useMockData()
   const { openQuickRecord, showToast } = useUI()
   const runtime = useRuntimeMode()
@@ -285,12 +291,12 @@ export function TodayPage() {
   const planProgress = planItems.length ? (doneCount / planItems.length) * 100 : 0
   const waterProgress = isDemo ? Math.min(100, (waterLiters / DEMO_TARGETS.waterLiters) * 100) : 0
   const waterDisplayLiters = (Math.round(waterLiters * 10) / 10).toFixed(1)
-  const [dateLabel] = useState(() => todayLabel())
-  const [calendar] = useState(() => {
-    const today = dateInputValue()
-    const week = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date()
-      date.setHours(12, 0, 0, 0)
+  /** 日期标签与七日历都跟着上下文里的「今天」走：跨日后自动推到新的一天。 */
+  const dateLabel = useMemo(() => formatDateLabel(today), [today])
+  const week = useMemo(() => {
+    const base = new Date(`${today}T12:00:00`)
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(base)
       date.setDate(date.getDate() - (6 - index))
       const dateKey = dateInputValue(date)
       return {
@@ -299,9 +305,7 @@ export function TodayPage() {
         isToday: dateKey === today,
       }
     })
-    return { today, week }
-  })
-  const { today, week } = calendar
+  }, [today])
   const todayMeals = useMemo(() => meals.filter((meal) => meal.entries.length > 0), [meals])
   const todayStudyRecords = useMemo(
     () => studyRecords.filter((record) => record.date === today),

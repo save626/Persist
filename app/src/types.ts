@@ -196,6 +196,16 @@ export interface FitnessSessionRecord {
 }
 
 export interface EveningReviewPayload {
+  /**
+   * 复盘所属的本地日期键（`yyyy-MM-dd`）。
+   *
+   * 复盘是「今天这一天」的收尾，不是历史档案——单对象持久化，不按月归档。
+   * 带上日期是为了让跨日后旧复盘自动失效：否则昨天填完复盘，今天打开会看到
+   * 「今天的复盘已经记录」并显示昨天的精力与备注。
+   *
+   * 旧数据（0.3.x 之前）没有这个字段，读取时一律视为过期。
+   */
+  date?: string
   energy: number
   state: string
   note: string
