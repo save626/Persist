@@ -44,6 +44,7 @@ const ENTITY_TABLES = [
   'water_logs',
   'goals',
   'long_term_plans',
+  'reports',
 ] as const
 
 function countRows(db: Db, table: string, userId: string): number {
@@ -101,6 +102,7 @@ export function deleteAccount(options: DeleteAccountOptions): AccountDeleteRespo
       waterLogs: countRows(options.db, 'water_logs', options.userId),
       goals: countRows(options.db, 'goals', options.userId),
       longTermPlans: countRows(options.db, 'long_term_plans', options.userId),
+      reports: countRows(options.db, 'reports', options.userId),
       analysisReports: countRows(options.db, 'analysis_reports', options.userId),
       jobRuns: countRows(options.db, 'job_runs', options.userId),
       syncOps: countRows(options.db, 'sync_ops', options.userId),

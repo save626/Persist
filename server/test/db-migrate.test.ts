@@ -54,7 +54,7 @@ describe('migrate', () => {
     }
   })
 
-  it('建出全部表：身份 / 单行 / 六类记录 + 计划 / 报告与任务 / AI 配额与审计 / 迁移记账', () => {
+  it('建出全部表：身份 / 单行 / 六类记录 + 计划 / 报告与任务 / AI 配额与审计 / 本机报告 / 迁移记账', () => {
     const db = fresh()
     try {
       migrate(db)
@@ -71,6 +71,7 @@ describe('migrate', () => {
         'long_term_plans',
         'plan_items',
         'profiles',
+        'reports',
         'schema_migrations',
         'settings',
         'study_records',
@@ -115,6 +116,7 @@ describe('migrate', () => {
         'water_logs',
         'goals',
         'long_term_plans',
+        'reports',
       ]) {
         expect(indexes).toContain(`idx_${table}_pull`)
       }
@@ -125,6 +127,7 @@ describe('migrate', () => {
         'diet_entries',
         'water_logs',
         'goals',
+        'reports',
       ]) {
         expect(indexes).toContain(`idx_${table}_user_date`)
       }

@@ -15,6 +15,14 @@ export const ENTITY_KINDS = [
   'water_log',
   'goal',
   'long_term_plan',
+  /**
+   * 本机「历史报告」：用户点「生成今日简报」后在设备上留下的记录。
+   *
+   * 2026-11-18 补入。此前它被明确排除在同步之外（服务端没有对应表），代价是
+   * 「换机 / 清空本机 / 误导入」都会让这些报告永久消失，而它们既不可复算、
+   * 也不在 `analysis_reports`（服务端综合分析归档）里，没有任何副本。
+   */
+  'report',
 ] as const
 
 export type EntityKind = (typeof ENTITY_KINDS)[number]

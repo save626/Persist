@@ -170,6 +170,11 @@ const STUDY_CATEGORIES = ['english', 'math'] as const
 const SESSION_STATUSES = ['active', 'completed'] as const
 const PLAN_KINDS = ['default', 'food', 'water', 'study'] as const
 const PLAN_STATUSES = ['draft', 'active', 'archived'] as const
+/**
+ * 报告来源：`ai` 模型生成、`rules` 规则降级、`mock` 本地 Mock 规则、`prebuilt` 预生成。
+ * 旧记录可能没有这个字段，所以列允许为空，不强填默认值——伪造来源比留空更糟。
+ */
+const REPORT_ORIGINS = ['ai', 'rules', 'mock', 'prebuilt'] as const
 
 export interface FitnessTotals {
   totalSets: number
@@ -335,6 +340,18 @@ const ENTITY_DEFINITIONS: Record<EntityKind, EntityDefinition> = {
         name: 'status',
         read: (data) => readEnum(data, 'status', PLAN_STATUSES, { fallback: 'draft' }),
       },
+    ],
+  },
+  report: {
+    table: 'reports',
+    singleRow: false,
+    columns: [
+      // 报告按日期归档（「历史报告」列表按它倒序）；没有日期的报告无法排序，直接拒收。
+      { name: 'date', read: (data) => readDate(data, 'date', { required: true }) },
+      { name: 'type', read: (data) => readString(data, 'type', { required: true, maxLength: 40 }) },
+      { name: 'status', read: (data) => readString(data, 'status', { maxLength: 40 }) },
+      // 来源留空是合法的（旧记录没有该字段），但填了就必须是已知值。
+      { name: 'origin', read: (data) => readEnum(data, 'origin', REPORT_ORIGINS) },
     ],
   },
 }

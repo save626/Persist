@@ -220,6 +220,9 @@ export function buildAccountExport(
   const waterLog = sortRecords(loadList(db, userId, 'water_logs'), ['date', 'time'])
   const dietDays = buildDietDays(loadList(db, userId, 'diet_entries'))
   const longTermPlans = sortRecords(loadList(db, userId, 'long_term_plans'), ['createdAt', 'title'])
+  // 2026-11-18 v5 起本机报告也同步上来，导出就不再固定给空数组了。
+  // 报告是用户自己生成的正文，属于业务数据；`analysis_reports` 仍不导出（那是服务端归档）。
+  const reports = sortRecords(loadList(db, userId, 'reports'), ['date', 'id'])
 
   const data: PersistExportData = {
     goals,
@@ -233,7 +236,7 @@ export function buildAccountExport(
     settings,
     aiConsent: profile.aiConsent === true,
     eveningReview: null,
-    reports: [],
+    reports,
     longTermPlans,
   }
 

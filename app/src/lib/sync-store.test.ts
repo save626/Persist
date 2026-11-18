@@ -90,7 +90,9 @@ describe('outbox 记录归一化', () => {
   })
 
   it('未知 kind、缺 updatedAt 的记录直接丢弃', () => {
-    expect(normalizeOutboxRecord({ kind: 'report', entityId: 'r1', updatedAt: 1 })).toBeNull()
+    // 用真正不在 ENTITY_KINDS 里的 kind：`report` 自 2026-11-18 起已是合法实体，
+    // 再拿它当「未知」的例子会让这条断言失去意义。
+    expect(normalizeOutboxRecord({ kind: 'snapshot', entityId: 'r1', updatedAt: 1 })).toBeNull()
     expect(normalizeOutboxRecord({ kind: 'goal', entityId: 'g1' })).toBeNull()
     expect(normalizeOutboxRecord(null)).toBeNull()
   })

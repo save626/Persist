@@ -33,7 +33,7 @@ function pulled(overrides: Partial<PullEntity> & Pick<PullEntity, 'kind' | 'data
 }
 
 describe('collectLocalEntities', () => {
-  it('把 8 个可同步切片摊平成实体，并跳过报告/进行中会话', () => {
+  it('把可同步切片摊平成实体，报告也已纳入（进行中会话仍跳过）', () => {
     const data = sampleData()
     const entities = collectLocalEntities(data)
     const kinds = entities.map((entity) => entity.kind)
@@ -44,9 +44,10 @@ describe('collectLocalEntities', () => {
     expect(kinds.filter((kind) => kind === 'plan_item')).toHaveLength(data.planItems.length)
     expect(kinds.filter((kind) => kind === 'water_log')).toHaveLength(data.waterLog.length)
     expect(kinds.filter((kind) => kind === 'study_record')).toHaveLength(data.studyRecords.length)
-    // 每个食物条目一条实体；报告、进行中训练不参与同步。
+    // 每个食物条目一条实体；进行中训练不参与同步。
     expect(kinds.filter((kind) => kind === 'diet_entry')).toHaveLength(8)
-    expect(kinds).not.toContain('report')
+    // 2026-11-18 起本机历史报告也同步：否则换机 / 清空就永久丢失。
+    expect(kinds.filter((kind) => kind === 'report')).toHaveLength(data.reports.length)
     expect(entities.every((entity) => entity.id.length > 0)).toBe(true)
     const keys = new Set(entities.map((entity) => entityKey(entity.kind, entity.id)))
     expect(keys.size).toBe(entities.length)
@@ -308,6 +309,52 @@ describe('applyPulledEntities', () => {
     const merged = applyPulledEntities(data, tombstones, {}, NOW_MS)
 
     expect(merged.data.dietDays.find((day) => day.date === date)).toBeUndefined()
+  })
+  it('报告 pull 回来按日期倒序落位；墓碑删掉本地那份；坏记录不写进本地', () => {
+    const data = sampleData()
+    const fresh: PullEntity = pulled({
+      kind: 'report',
+      id: 'report-daily-20990101',
+      data: {
+        id: 'report-daily-20990101',
+        type: '今日简报',
+        title: '服务端回来的报告',
+        date: '2099-01-01',
+        period: '今日',
+        summary: '摘要',
+        status: '已生成',
+        metric: [{ label: '训练', value: '1', detail: '次' }],
+        conclusions: [],
+        actions: [],
+        evidence: [],
+        origin: 'rules',
+      },
+      updatedAt: NOW_MS + 5_000,
+    })
+    const broken: PullEntity = pulled({
+      kind: 'report',
+      id: 'report-broken',
+      data: { id: 'report-broken', title: '缺字段' },
+      updatedAt: NOW_MS + 6_000,
+    })
+    const target = data.reports[0]
+    const merged = applyPulledEntities(data, [fresh, broken], {}, NOW_MS)
+
+    expect(merged.applied).toBe(1)
+    expect(merged.skipped).toBe(1)
+    // 列表按日期倒序：2099 的新报告必须排在最前，不能被追加到末尾。
+    expect(merged.data.reports[0]?.id).toBe('report-daily-20990101')
+    expect(merged.data.reports.some((report) => report.id === 'report-broken')).toBe(false)
+    expect(merged.hashes[entityKey('report', 'report-daily-20990101')]).toBeDefined()
+
+    // 服务端删掉的那份（墓碑）本地也要消失。
+    const removed = applyPulledEntities(
+      merged.data,
+      [pulled({ kind: 'report', id: target.id, data: null, deleted: true, updatedAt: NOW_MS + 9 })],
+      merged.times,
+      NOW_MS,
+    )
+    expect(removed.data.reports.some((report) => report.id === target.id)).toBe(false)
   })
 })
 

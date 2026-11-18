@@ -6,6 +6,7 @@ import type {
   MockSettings,
   PlanItem,
   ProfileData,
+  ReportRecord,
 } from '../types'
 import { INITIAL_MEALS } from '../data/diet'
 import {
@@ -14,6 +15,7 @@ import {
   isGoalRecord,
   isLongTermPlan,
   isPlanItem,
+  isReportRecord,
   isStudyRecord,
   isWaterLogEntry,
 } from './mock-data-transfer'
@@ -88,12 +90,16 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
- * 把本地 11 个切片摊平成同步实体。
+ * 把本地切片摊平成同步实体。
  *
- * 不在 v1 同步范围的字段（明确不上传，见 P4 方案 §9.2）：
- * - `reports` / `snapshot` / `eveningReview`（服务端 v1 没有对应表）；
+ * 不在同步范围的字段：
+ * - `snapshot` / `eveningReview`（服务端 v1 没有对应表）；
  * - 进行中的 `fitnessSession`（易变的临时态，完成后才归档成 `fitnessHistory`）；
  * - 提醒的开关状态在 `settings.reminders` 里，作为设置的一部分整体同步。
+ *
+ * `reports` 自 2026-11-18（服务端 v5）起纳入同步。此前它被排除在外，代价是换机、
+ * 清空本机或误导入都会让用户手动生成的历史简报永久消失——它既不可复算，
+ * 也和 `analysis_reports`（服务端综合分析归档）不是一回事，后者不包含它。
  */
 export function collectLocalEntities(data: ImportableMockData): LocalEntity[] {
   const entities: LocalEntity[] = []
@@ -139,6 +145,9 @@ export function collectLocalEntities(data: ImportableMockData): LocalEntity[] {
   }
   for (const plan of data.longTermPlans ?? []) {
     entities.push({ kind: 'long_term_plan', id: plan.id, data: asRecord(plan) ?? {} })
+  }
+  for (const report of data.reports ?? []) {
+    entities.push({ kind: 'report', id: report.id, data: asRecord(report) ?? {} })
   }
 
   return entities
@@ -213,6 +222,8 @@ function matchesRecordShape(kind: EntityKind, payload: Record<string, unknown>):
       return isDietEntryRecord(payload)
     case 'long_term_plan':
       return isLongTermPlan(payload)
+    case 'report':
+      return isReportRecord(payload)
     default:
       return true
   }
@@ -257,6 +268,11 @@ function removeDietEntry(dietDays: DietDay[], entryId: string): DietDay[] {
       })),
     }))
     .filter((day) => day.meals.some((meal) => meal.entries.length > 0))
+}
+
+/** 历史报告按日期倒序：与「生成后 prepend」的本地顺序一致，pull 回来也不会把列表打乱。 */
+function sortReports(list: ReportRecord[]): ReportRecord[] {
+  return list.slice().sort((left, right) => right.date.localeCompare(left.date))
 }
 
 export interface ApplyPulledResult {
@@ -424,6 +440,18 @@ export function applyPulledEntities(
           next = { ...next, longTermPlans: removeById(plans, id) }
         } else if (payload) {
           next = { ...next, longTermPlans: upsertById(plans, payload as never) }
+        } else {
+          skipped += 1
+          continue
+        }
+        applied += 1
+        break
+      }
+      case 'report': {
+        if (entity.deleted) {
+          next = { ...next, reports: removeById(next.reports, id) }
+        } else if (payload && isReportRecord(payload)) {
+          next = { ...next, reports: sortReports(upsertById(next.reports, payload)) }
         } else {
           skipped += 1
           continue

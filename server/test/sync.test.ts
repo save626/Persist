@@ -188,6 +188,63 @@ describe('POST /api/v1/sync/push', () => {
     }
   })
 
+  it('本机报告（v5）能推上去再拉回来，缺 date 的报告被拒收', async () => {
+    const env = setup()
+    try {
+      const account = await register(env.app)
+      const report = {
+        kind: 'report',
+        id: 'report-daily-1794900000000',
+        updatedAt: 1_600,
+        data: {
+          id: 'report-daily-1794900000000',
+          type: '今日简报',
+          title: '今天的记录，已经足够开始复盘',
+          date: '2026-11-18',
+          period: '今日',
+          summary: '摘要',
+          status: '已生成',
+          metric: [{ label: '训练', value: '1', detail: '次' }],
+          conclusions: ['结论'],
+          actions: ['动作'],
+          evidence: ['依据'],
+          origin: 'ai',
+        },
+      }
+      const noDate = {
+        kind: 'report',
+        id: 'report-daily-broken',
+        updatedAt: 1_601,
+        data: { id: 'report-daily-broken', type: '今日简报', title: '缺日期' },
+      }
+
+      const response = await push(env.app, account.token, 'op-report', [report, noDate])
+      expect(response.statusCode).toBe(200)
+      const result = response.json()
+      expect(result.applied).toBe(1)
+      expect(result.skipped).toEqual([
+        expect.objectContaining({ kind: 'report', id: 'report-daily-broken', reason: 'invalid' }),
+      ])
+
+      const page = (await pull(env.app, account.token)).json()
+      expect(page.entities).toHaveLength(1)
+      expect(page.entities[0]).toMatchObject({
+        kind: 'report',
+        id: 'report-daily-1794900000000',
+        deleted: false,
+      })
+      // 正文原样回传：报告不可复算，少一个字段本地就渲染不出来。
+      expect(page.entities[0].data).toMatchObject({
+        date: '2026-11-18',
+        title: '今天的记录，已经足够开始复盘',
+        conclusions: ['结论'],
+        origin: 'ai',
+      })
+    } finally {
+      await close(env)
+    }
+  })
+
   it('删除写成墓碑，pull 读到 deleted 且不带 payload', async () => {
     const env = setup()
     try {

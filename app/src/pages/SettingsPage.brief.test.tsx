@@ -31,6 +31,7 @@ const ACCOUNT_DELETE_RESULT: Awaited<ReturnType<MockDataContextValue['deleteServ
     waterLogs: 0,
     goals: 0,
     longTermPlans: 0,
+    reports: 0,
     analysisReports: 0,
     jobRuns: 0,
     syncOps: 1,

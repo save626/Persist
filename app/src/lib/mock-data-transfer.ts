@@ -202,7 +202,11 @@ function isMeal(value: unknown): value is Meal {
   )
 }
 
-function isReport(value: unknown): value is ReportRecord {
+/**
+ * 报告的落库形状校验。备份导入与同步 pull 共用同一套判据：
+ * 任何一条通不过校验的记录都不能写进本地存储，否则下次启动整份存档会被判为损坏。
+ */
+export function isReportRecord(value: unknown): value is ReportRecord {
   return (
     hasStrings(value, ['id', 'type', 'title', 'date', 'period', 'summary', 'status']) &&
     Array.isArray(value.metric) &&
@@ -556,7 +560,7 @@ export function parseMockBackupValue(payload: unknown, now: Date = new Date()): 
   }
 
   // 空账号的服务端导出同样合法；报告切片只要数组形状正确即可，允许为空。
-  const reports = requireArray(data.reports, '报告历史', isReport)
+  const reports = requireArray(data.reports, '报告历史', isReportRecord)
 
   // 版本号（0.3.0 / 0.2.0 / 0.1.0 / 缺失）不做门禁：备份真正的契约是 data 的字段形状，
   // 由下面的字段级校验兜底；未知版本也先按同一套规则尽量读入。

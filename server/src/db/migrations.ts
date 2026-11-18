@@ -21,6 +21,10 @@ import type { Db } from './driver.js'
  * 与 `ai_calls` 的区别：这张表有 `user_id`，所以**删账号时要把该用户的 `user_id` 置空**
  * 而不是删行——事件本身（某个时间有人删了一个账号、删掉几台设备）仍是运维事实，
  * 但不再指向具体账号。它同样不记正文，`detail_json` 只放计数与文件名这类必要字段。
+ *
+ * v5（2026-11-18）：本机「历史报告」纳入同步。此前它被明确排除在外，代价是换机 /
+ * 清空本机 / 误导入都会让这些报告永久消失，而它们既不可复算也没有别的副本。
+ * 只新增 `reports` 表；`analysis_reports`（服务端综合分析归档）保持不变。
  */
 
 export interface Migration {
@@ -30,7 +34,7 @@ export interface Migration {
 }
 
 /** 当前代码期望的 schema 版本；`/api/health` 会带出去，方便对比线上库。 */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 const PULL_COLUMNS = `
   payload_json TEXT NOT NULL,
@@ -261,6 +265,30 @@ export const MIGRATIONS: Migration[] = [
       // 保留期清理按 created_at 扫；「这个账号做过什么」走 (user_id, created_at)。
       'CREATE INDEX idx_audit_log_created_at ON audit_log(created_at)',
       'CREATE INDEX idx_audit_log_user_created ON audit_log(user_id, created_at)',
+    ],
+  },
+  {
+    version: 5,
+    name: 'local_reports',
+    statements: [
+      /**
+       * 本机「历史报告」（用户点「生成今日简报」留下的记录）此前**完全不上云**，
+       * 换机、清空本机、误导入都会让它永久消失，且没有别的副本：
+       * `analysis_reports` 存的是服务端综合分析归档，两者内容与留存策略都不同。
+       *
+       * 这里只补同步表，不动 `analysis_reports`；两者 id 空间不重叠（本地是
+       * `report-daily-*` / `report-*`，归档是 uuid），前端也不做合并展示。
+       */
+      entityTable(
+        'reports',
+        `date         TEXT NOT NULL,
+  type         TEXT,
+  status       TEXT,
+  origin       TEXT,`,
+      ),
+      pullIndex('reports'),
+      // 报告按日期取：前端「历史报告」列表按 date 倒序，聚合侧也只读这一列。
+      dateIndex('reports', 'date'),
     ],
   },
 ]

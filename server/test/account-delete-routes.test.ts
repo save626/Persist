@@ -212,6 +212,26 @@ function seedAccount(env: Env, account: Account): void {
     updatedAt: 108,
     data: { id: `ltp_${account.userId}`, title: '长期计划', status: 'active' },
   })
+  // 2026-11-18 v5：本机「历史报告」也走同步，删账号时要一起清掉。
+  upsertEntity(db, account.userId, {
+    kind: 'report',
+    id: `report_${account.userId}`,
+    updatedAt: 109,
+    data: {
+      id: `report_${account.userId}`,
+      type: '今日简报',
+      title: '今天的记录，已经足够开始复盘',
+      date: TODAY,
+      period: '今日',
+      summary: '摘要',
+      status: '已生成',
+      metric: [{ label: '训练', value: '1', detail: '次' }],
+      conclusions: [],
+      actions: [],
+      evidence: [],
+      origin: 'rules',
+    },
+  })
   db.prepare(
     `INSERT INTO analysis_reports
       (id, user_id, type, range_days, data_rev, origin, model, start_date, end_date,
@@ -307,6 +327,7 @@ describe('DELETE /api/v1/account', () => {
         waterLogs: 1,
         goals: 1,
         longTermPlans: 1,
+        reports: 1,
         analysisReports: 1,
         jobRuns: 1,
         syncOps: 2,
@@ -325,6 +346,7 @@ describe('DELETE /api/v1/account', () => {
       'water_logs',
       'goals',
       'long_term_plans',
+      'reports',
       'analysis_reports',
       'job_runs',
       'sync_ops',

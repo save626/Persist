@@ -20,6 +20,8 @@ export interface AccountDeletionCounts {
   waterLogs: number
   goals: number
   longTermPlans: number
+  /** 本机「历史报告」同步上来的条数（2026-11-18 v5 起）。 */
+  reports: number
   analysisReports: number
   jobRuns: number
   syncOps: number
