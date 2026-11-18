@@ -3,7 +3,9 @@ import { createHash } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import { buildApp } from '../src/app.js'
 import { AiError, type AiClient } from '../src/ai/deepseek.js'
+import { listRecentAiCalls } from '../src/ai/ai-audit.js'
 import { loadConfig } from '../src/config.js'
+import { openPersistDatabase } from '../src/db/index.js'
 import type { ChatRequest } from '../src/contract.js'
 
 const profile = {
@@ -337,6 +339,106 @@ describe('POST /api/chat 的跨源响应头', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('access-control-allow-origin')).toBeNull()
       await response.text()
+    })
+  })
+})
+
+/**
+ * 连通性探针（`{ probe: true }`）：给设置页的「测试服务端连接」用。
+ *
+ * 它存在的理由只有一个——健康检查测不到 SSE 这条路上的坑（P5-9 就是 CORS 头在
+ * hijack 之后丢失）。所以下面这几条断言的重点是：探针必须与真实对话同走
+ * 「凭据门 + 跨域 + 裸流」，又不能产生任何真实成本（模型、配额、审计）。
+ */
+describe('POST /api/chat 的连通性探针', () => {
+  const key = 'psa_chat_probe-test-000000000000000000'
+  const keysEnv = `k1:${createHash('sha256').update(key, 'utf8').digest('hex')}`
+
+  function postProbe(baseUrl: string, headers: Record<string, string> = {}) {
+    return fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ probe: true }),
+    })
+  }
+
+  it('返回 stage + done，且不打模型、不占配额、不写审计', async () => {
+    let calls = 0
+    const ai = fakeAi({
+      async *streamChat() {
+        calls += 1
+        yield '不该出现'
+      },
+      async completeJson() {
+        calls += 1
+        return {}
+      },
+    })
+    const db = openPersistDatabase({ path: ':memory:' })
+    const config = loadConfig({
+      DEEPSEEK_API_KEY: 'sk-test',
+      RATE_LIMIT_MAX: '100',
+      // 配额只给 1 次：探针若偷偷预占，紧跟着的真实对话就会 429。
+      PERSIST_AI_DAILY_LIMIT: '1',
+      PERSIST_AI_GATE: 'enforce',
+      PERSIST_AI_KEYS: keysEnv,
+    } as unknown as NodeJS.ProcessEnv)
+    const app = buildApp({ config, ai, db })
+    await app.listen({ host: '127.0.0.1', port: 0 })
+    const address = app.server.address() as AddressInfo | null
+    if (!address) throw new Error('测试服务没有监听地址')
+    const baseUrl = `http://127.0.0.1:${address.port}`
+
+    try {
+      const response = await postProbe(baseUrl, { authorization: `Bearer ${key}` })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('text/event-stream')
+      const events = parseEvents(await response.text()) as { type: string }[]
+      expect(events.map((event) => event.type)).toEqual(['stage', 'done'])
+      expect(calls).toBe(0)
+      expect(listRecentAiCalls(db.db)).toHaveLength(0)
+
+      // 探针之后真实对话仍然有额度：证明探针没有预占日配额。
+      const chat = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        body: JSON.stringify(request),
+      })
+      expect(chat.status).toBe(200)
+      await chat.text()
+    } finally {
+      await app.close()
+      db.db.close()
+    }
+  })
+
+  it('跨源时同样回写 allow-origin：它测的就是这条路上的头', async () => {
+    await withServer(fakeAi(), {}, async (baseUrl) => {
+      const response = await postProbe(baseUrl, { origin: 'https://localhost' })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('access-control-allow-origin')).toBe('https://localhost')
+      await response.text()
+    })
+  })
+
+  it('凭据不通过时仍是 401，与真实对话同一个响应体', async () => {
+    await withServer(
+      fakeAi(),
+      { PERSIST_AI_GATE: 'enforce', PERSIST_AI_KEYS: keysEnv },
+      async (baseUrl) => {
+        const probe = await postProbe(baseUrl)
+        const real = await postChat(baseUrl, request)
+        expect(probe.status).toBe(401)
+        expect(await probe.text()).toBe(await real.text())
+      },
+    )
+  })
+
+  it('没配模型密钥时给 503：探针不谎报「一切正常」', async () => {
+    await withServer(fakeAi(), { DEEPSEEK_API_KEY: '' }, async (baseUrl) => {
+      const response = await postProbe(baseUrl)
+      expect(response.status).toBe(503)
+      expect(await response.text()).toContain('ai_not_configured')
     })
   })
 })

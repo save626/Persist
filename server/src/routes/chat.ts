@@ -8,7 +8,8 @@ import { errorBody, parseChatRequest, type ChatStreamEvent } from '../contract.j
 import type { Db } from '../db/driver.js'
 import type { RateLimiter } from '../rate-limit.js'
 import { enforceAiGate, enforceAiQuota } from './guards.js'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { ServerResponse } from 'node:http'
 
 /**
  * POST /api/chat —— 与 app/src/lib/chat-types.ts 的 ChatEvent 流一一对应。
@@ -30,6 +31,55 @@ const SSE_HEADERS: Record<string, string> = {
 
 const FALLBACK_MESSAGE = '模型服务暂时不可用，请稍后重试；也可以继续使用本地 Mock 对话。'
 
+/**
+ * 连通性探针：请求体里带 `probe: true` 就是探针，不传 `turns`，也不碰模型。
+ *
+ * 为什么需要它：设置页那个「测试服务端连接」原来只打 `GET /api/health`，而 P5-9 的
+ * 故障恰恰出在 `/api/chat` 独有的路径上（SSE 的 `hijack` + 裸 `writeHead` 丢了 CORS 头）。
+ * 健康检查一路 200，真机对话却一个字节都读不到——只测健康检查等于没测。
+ *
+ * 为什么不用真实对话来测：真实对话要打两次模型、占一次日配额、还可能撞上 IP 限流。
+ * 一个「测试」按钮会被反复点，成本必须为零：探针只走鉴权 + 跨域 + 裸流这三段，
+ * 证明「浏览器此刻能从这个部署读到 SSE 帧」，模型是否可用由 `ai` 字段单独回答。
+ */
+const PROBE_FIELD = 'probe'
+
+function isProbeBody(body: unknown): boolean {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    !Array.isArray(body) &&
+    (body as Record<string, unknown>)[PROBE_FIELD] === true
+  )
+}
+
+/**
+ * 打开 SSE 裸流（hijack + 补回 CORS 头）。
+ *
+ * 真实对话与探针都必须走这里。P5-9 的教训是：CORS 头由 onRequest 钩子写进 Fastify
+ * 的回复头表，而 hijack 之后 onSend 不再执行、`writeHead` 又只发传进去的那几个头，
+ * 于是头全丢。谁要自己再写一份 `writeHead`，谁就会再丢一次——所以只留这一个入口。
+ */
+function openSseStream(reply: FastifyReply): ServerResponse {
+  reply.hijack()
+  const response = reply.raw
+  const headers: Record<string, string> = { ...SSE_HEADERS }
+  for (const name of ['access-control-allow-origin', 'vary']) {
+    const value = reply.getHeader(name)
+    if (typeof value === 'string' && value.length > 0) headers[name] = value
+  }
+  response.writeHead(200, headers)
+  return response
+}
+
+/** 探针的回包：与真实对话同形的两帧，前端只要读到 `done` 就算链路通。 */
+function answerProbe(reply: FastifyReply): void {
+  const response = openSseStream(reply)
+  response.write(`data: ${JSON.stringify({ type: 'stage', stage: 'collect' })}\n\n`)
+  response.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+  response.end()
+}
+
 export interface ChatRouteOptions {
   config: ServerConfig
   ai: AiClient
@@ -43,16 +93,17 @@ export interface ChatRouteOptions {
 export function registerChatRoute(app: FastifyInstance, options: ChatRouteOptions): void {
   const heartbeatMs = options.heartbeatMs ?? 15_000
 
-  app.post('/api/chat', async (request, reply) => {
-    const parsed = parseChatRequest(request.body, options.config)
-    if (!parsed.ok) {
-      return reply.code(400).send(errorBody('invalid_request', parsed.message))
-    }
-
+  /**
+   * 真实对话与探针共用的前置门：部署前提 → 凭据 → IP 限流。
+   * 探针也要过这三关，否则「测试通过」就证明不了真实对话能用——它想验证的正是这一段。
+   * 返回 gate 表示可以继续；返回 null 表示响应已经写好，调用方直接 `return reply`。
+   */
+  const preflight = (request: FastifyRequest, reply: FastifyReply) => {
     if (!options.config.deepseekApiKey) {
-      return reply
+      reply
         .code(503)
         .send(errorBody('ai_not_configured', '服务端尚未配置模型密钥，请使用本地 Mock 对话。'))
+      return null
     }
 
     // 调用者凭据门（P0）。位置刻意在 Key 检查之后：没配 Key 的部署不应该对任何人返回
@@ -65,13 +116,37 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
       reply,
       now: options.now,
     })
-    if (!gate) return reply
+    if (!gate) return null
 
     const decision = options.limiter.take(request.ip)
     if (!decision.allowed) {
-      reply.header('retry-after', String(Math.max(1, Math.ceil(decision.retryAfterMs / 1_000))))
-      return reply.code(429).send(errorBody('rate_limited', '请求过于频繁，请稍后再试。'))
+      reply
+        .header('retry-after', String(Math.max(1, Math.ceil(decision.retryAfterMs / 1_000))))
+        .code(429)
+        .send(errorBody('rate_limited', '请求过于频繁，请稍后再试。'))
+      return null
     }
+
+    return { gate }
+  }
+
+  app.post('/api/chat', async (request, reply) => {
+    // 探针没有业务请求体，因此在解析之前分流；它到此为止就结束，
+    // 不占日配额、不打模型、不写 ai_calls（否则「测一下」会污染用量账本）。
+    if (isProbeBody(request.body)) {
+      if (!preflight(request, reply)) return reply
+      answerProbe(reply)
+      return
+    }
+
+    const parsed = parseChatRequest(request.body, options.config)
+    if (!parsed.ok) {
+      return reply.code(400).send(errorBody('invalid_request', parsed.message))
+    }
+
+    const opened = preflight(request, reply)
+    if (!opened) return reply
+    const { gate } = opened
 
     // 日配额（P0 Step 2）。放在 IP 限流之后：短时突发先被限流挡住，避免一个脚本
     // 用光整天的额度；预占的额度失败不退还。
@@ -101,19 +176,7 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
       tokens.completion += usage.completionTokens
     }
 
-    reply.hijack()
-    const response = reply.raw
-    // CORS 不能靠 reply.header 带过来：onRequest 钩子把 access-control-* 写进 Fastify
-    // 的回复头表，而 hijack 之后 onSend 不再执行，这些头永远发不出去。移动端 WebView
-    // 的 origin 是 https://localhost、接口在另一个源上，缺 access-control-allow-origin
-    // 会被浏览器判成跨源失败（TypeError: Failed to fetch），整条对话流一个字节都读不到。
-    // 同源的 web 前端不受影响，所以这个洞只在 APK 里露出来——把钩子已算好的值搬到裸响应上。
-    const hijackedHeaders: Record<string, string> = { ...SSE_HEADERS }
-    for (const name of ['access-control-allow-origin', 'vary']) {
-      const value = reply.getHeader(name)
-      if (typeof value === 'string' && value.length > 0) hijackedHeaders[name] = value
-    }
-    response.writeHead(200, hijackedHeaders)
+    const response = openSseStream(reply)
 
     const abort = new AbortController()
     let closed = false

@@ -10,6 +10,7 @@ import { MockDataContext, type MockDataContextValue } from '../context/mock-data
 import { INITIAL_SETTINGS } from '../data/settings'
 import type { MockSettings } from '../types'
 import type { SyncErrorKind } from '../lib/sync-client'
+import { resetAiRuntimeCredential, setAiRuntimeCredential } from '../lib/ai-credential'
 import { SettingsPage } from './SettingsPage'
 
 const UI_VALUE: UIContextValue = {
@@ -43,7 +44,12 @@ const ACCOUNT_DELETE_RESULT: Awaited<ReturnType<MockDataContextValue['deleteServ
 }
 
 // vitest 未开启 globals，RTL 的自动清理不会生效，这里显式清理避免用例间 DOM 叠加。
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  // 设备令牌是模块级状态，用例之间必须清掉，否则「有凭据 / 没凭据」会互相污染。
+  resetAiRuntimeCredential()
+})
 
 function buildContextValue(
   settings: MockSettings,
@@ -457,5 +463,99 @@ describe('SettingsPage 危险操作的模式口径', () => {
 
     await user.click(screen.getByRole('button', { name: '清空本机数据' }))
     expect(screen.getByRole('alertdialog')).toHaveTextContent('清空本机数据？')
+  })
+})
+
+/**
+ * 「测试服务端连接」必须把对话链路一起测。
+ *
+ * P5-9 的教训：健康检查 200、真机对话 `Failed to fetch`，而按钮那时显示「正常」。
+ * 所以这里的断言不是「按钮能不能变绿」，而是「绿之前有没有真的走过 /api/chat」。
+ */
+describe('SettingsPage 服务端连接检查', () => {
+  const HEALTH_OK = { status: 'ok', service: 'persist-server', ai: 'deepseek', db: 'ok' }
+
+  function stubServer(chat: () => Response | Promise<Response>) {
+    const calls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        calls.push(url)
+        if (url.endsWith('/api/chat')) return chat()
+        return new Response(JSON.stringify(HEALTH_OK), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }),
+    )
+    return calls
+  }
+
+  function sse(frames: string[]) {
+    return new Response(frames.map((frame) => `data: ${frame}\n\n`).join(''), {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+    })
+  }
+
+  it('owner 下健康检查与对话探针都过，才说「服务端在线」', async () => {
+    const user = userEvent.setup()
+    setAiRuntimeCredential(`pst_${'a'.repeat(43)}`)
+    const calls = stubServer(() => sse(['{"type":"stage","stage":"collect"}', '{"type":"done"}']))
+    renderSettings()
+
+    await user.click(screen.getByRole('button', { name: '测试服务端连接' }))
+
+    await waitFor(() => expect(screen.getByText(/对话链路可用/)).toBeInTheDocument())
+    expect(screen.getByText('服务端在线')).toBeInTheDocument()
+    expect(calls.some((url) => url.endsWith('/api/chat'))).toBe(true)
+  })
+
+  it('带着凭据却被拒（401）时给「对话链路异常」，而不是显示一切正常', async () => {
+    const user = userEvent.setup()
+    setAiRuntimeCredential(`pst_${'b'.repeat(43)}`)
+    stubServer(
+      () =>
+        new Response(JSON.stringify({ error: { code: 'ai_unauthorized' } }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    )
+    renderSettings()
+
+    await user.click(screen.getByRole('button', { name: '测试服务端连接' }))
+
+    await waitFor(() => expect(screen.getByText('对话链路异常')).toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent('401')
+    expect(screen.getByRole('alert')).toHaveTextContent('静默退回')
+  })
+
+  it('本来就没凭据时给「待绑定账号」，不要把「还没注册」报成故障', async () => {
+    const user = userEvent.setup()
+    stubServer(
+      () =>
+        new Response(JSON.stringify({ error: { code: 'ai_unauthorized' } }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    )
+    renderSettings()
+
+    await user.click(screen.getByRole('button', { name: '测试服务端连接' }))
+
+    await waitFor(() => expect(screen.getByText('待绑定账号')).toBeInTheDocument())
+    expect(screen.getByText(/还没有可用的 AI 凭据/)).toBeInTheDocument()
+  })
+
+  it('demo 不测对话链路：那种模式下不调服务端 AI，401 是预期而不是故障', async () => {
+    const user = userEvent.setup()
+    const calls = stubServer(() => sse(['{"type":"done"}']))
+    renderSettings(INITIAL_SETTINGS, {}, 'demo')
+
+    await user.click(screen.getByRole('button', { name: '测试服务端连接' }))
+
+    await waitFor(() => expect(screen.getByText(/不调用服务端对话/)).toBeInTheDocument())
+    expect(calls.some((url) => url.endsWith('/api/chat'))).toBe(false)
   })
 })

@@ -183,22 +183,33 @@ export function SettingsPage() {
   }
 
   /**
-   * 真的打一次 `/api/health`。
+   * 真的打一次 `/api/health`，并在健康检查通过后接着打一次 `/api/chat` 探针。
    *
    * 改之前这里是个 `setTimeout(950)` 之后无条件成功的占位：不发请求，却显示
    * 「服务端代理可用」。一个永远通过的测试比没有测试更糟——它会让「连不上服务端」
-   * 这种真问题看起来像已经排除过了。现在按健康检查的四种结局分别给话术，
+   * 这种真问题看起来像已经排除过了。现在按健康检查的几种结局分别给话术，
    * 见 `lib/server-health.ts`。
+   *
+   * 第二阶段（探针）是 P5-9 之后加的：那次的故障是 `/api/chat` 的 SSE 丢了 CORS 头，
+   * 健康检查 200、真机对话 `Failed to fetch`，客户端又静默回退——按钮当时显示「正常」，
+   * 而实际上对话根本用不了。所以只要这个模式真的会调服务端 AI，就必须把聊天链路一起测；
+   * 探针不打模型、不占配额，可以随便点。
    */
   const testConnection = async () => {
     if (aiState === 'testing') return
     setAiState('testing')
     setAiHealth(null)
-    const health = await checkServerHealth()
+    const health = await checkServerHealth({ checkChat: runtime.ai.chat })
     setAiHealth(health)
     // `connected` / `error` 只是 CSS 用的两档，真实区别由 `aiHealth.kind` 决定文案。
     setAiState(health.kind === 'ready' ? 'connected' : 'error')
-    showToast(health.kind === 'ready' ? '服务端连接正常' : '连接检查未通过，原因见下方')
+    showToast(
+      health.kind === 'ready'
+        ? '服务端连接正常'
+        : health.kind === 'chat-no-credential'
+          ? '服务端连通 · 这台设备还没有 AI 凭据'
+          : '连接检查未通过，原因见下方',
+    )
   }
 
   /** 徽标文案按健康检查的结局分档；未点过按钮时是「未测试」，不是「待配置」——密钥不在这个页面上配。 */
@@ -211,9 +222,13 @@ export function SettingsPage() {
           ? '模型未配置'
           : aiHealth?.kind === 'degraded'
             ? '服务端降级'
-            : aiHealth
-              ? '连接失败'
-              : '未测试'
+            : aiHealth?.kind === 'chat-no-credential'
+              ? '待绑定账号'
+              : aiHealth?.kind === 'chat-failed'
+                ? '对话链路异常'
+                : aiHealth
+                  ? '连接失败'
+                  : '未测试'
 
   /**
    * 导出本机备份。
@@ -274,9 +289,7 @@ export function SettingsPage() {
         replaceMockData(data)
         setSavedAt('已导入备份')
         const planCount = data.longTermPlans?.length ?? 0
-        showToast(
-          `备份已导入 · ${countMockRecords(data)} 条记录（含 ${planCount} 个长期计划）`,
-        )
+        showToast(`备份已导入 · ${countMockRecords(data)} 条记录（含 ${planCount} 个长期计划）`)
       } else {
         const records = parseStudyCsv(text)
         appendStudyRecords(records)
@@ -1242,8 +1255,8 @@ export function SettingsPage() {
             <div className="info-sheet-block">
               <h3>服务端只留 30 天调用记录</h3>
               <p>
-                每次 AI 调用会在你的自建服务器留下一条记录：时间、接口、模型、结果、token
-                用量与 IP 哈希。不保存请求内容，也不保存生成的文字；记录保留 30
+                每次 AI 调用会在你的自建服务器留下一条记录：时间、接口、模型、结果、token 用量与 IP
+                哈希。不保存请求内容，也不保存生成的文字；记录保留 30
                 天后自动删除，要长期留证只能改服务端配置。
               </p>
             </div>
