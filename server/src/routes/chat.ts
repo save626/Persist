@@ -103,7 +103,17 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
 
     reply.hijack()
     const response = reply.raw
-    response.writeHead(200, SSE_HEADERS)
+    // CORS 不能靠 reply.header 带过来：onRequest 钩子把 access-control-* 写进 Fastify
+    // 的回复头表，而 hijack 之后 onSend 不再执行，这些头永远发不出去。移动端 WebView
+    // 的 origin 是 https://localhost、接口在另一个源上，缺 access-control-allow-origin
+    // 会被浏览器判成跨源失败（TypeError: Failed to fetch），整条对话流一个字节都读不到。
+    // 同源的 web 前端不受影响，所以这个洞只在 APK 里露出来——把钩子已算好的值搬到裸响应上。
+    const hijackedHeaders: Record<string, string> = { ...SSE_HEADERS }
+    for (const name of ['access-control-allow-origin', 'vary']) {
+      const value = reply.getHeader(name)
+      if (typeof value === 'string' && value.length > 0) hijackedHeaders[name] = value
+    }
+    response.writeHead(200, hijackedHeaders)
 
     const abort = new AbortController()
     let closed = false

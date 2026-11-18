@@ -303,3 +303,40 @@ describe('AI 凭据门（/api/chat）', () => {
     )
   })
 })
+
+/**
+ * SSE 走的是 `reply.hijack()` + 裸 `writeHead`，Fastify 的 onSend 钩子不再执行，
+ * 所以 onRequest 里用 `reply.header()` 设的 CORS 头压根发不出去。移动端 WebView 的
+ * origin 是 `https://localhost`、接口在另一个源上，缺这个头浏览器就直接
+ * `TypeError: Failed to fetch`——同源的 web 前端看不出来，只有 APK 里是死的。
+ */
+describe('POST /api/chat 的跨源响应头', () => {
+  it('hijack 之后仍回写 allow-origin，且流保持完整', async () => {
+    await withServer(fakeAi(), {}, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://localhost' },
+        body: JSON.stringify(request),
+      })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('access-control-allow-origin')).toBe('https://localhost')
+      expect(response.headers.get('vary')).toContain('Origin')
+      const text = await response.text()
+      expect(text).toContain('"type":"done"')
+      expect(text).toContain('先按每周 3 次安排。')
+    })
+  })
+
+  it('来源不在白名单时不回写 allow-origin', async () => {
+    await withServer(fakeAi(), {}, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+        body: JSON.stringify(request),
+      })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('access-control-allow-origin')).toBeNull()
+      await response.text()
+    })
+  })
+})
