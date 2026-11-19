@@ -113,6 +113,24 @@ html.js .copy.ready .word{opacity:1}
 .enter:focus-visible{box-shadow:inset 0 0 0 2px rgba(150,195,255,.62)}
 .sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
+/* ---------- 6.1 备案信息页脚 ----------
+   独立于 .stage（fixed），保证无 JS 降级态下备案信息依然可见。
+   容器不吃点击（点击任意处进入仍然生效），只有备案号链接可点。 */
+.foot{
+  position:fixed;left:0;right:0;bottom:0;z-index:5;
+  padding:0 16px calc(10px + env(safe-area-inset-bottom,0px));
+  text-align:center;font-size:11px;line-height:1.8;letter-spacing:.06em;
+  color:rgba(214,229,247,.42);pointer-events:none;
+}
+.foot a{
+  color:rgba(214,229,247,.62);pointer-events:auto;text-decoration:none;
+  border-bottom:1px solid rgba(214,229,247,.26);padding-bottom:1px;
+  transition:color .2s,border-color .2s;
+}
+.foot a:hover{color:rgba(232,242,255,.94);border-bottom-color:rgba(232,242,255,.58)}
+.site-info-sep{margin:0 8px;color:rgba(214,229,247,.26)}
+.site-info-pending{color:rgba(214,229,247,.34)}
+
 /* 进入首页 */
 .stage{transition:opacity 360ms ease,transform 360ms ease}
 .stage.leaving{opacity:0;transform:scale(1.03)}
@@ -186,6 +204,10 @@ html.no-js .stage{display:none}
 
   <a class="enter" id="enter" href="home.html"><span class="sr">进入 Persist 首页</span></a>
 </div>
+
+<footer class="foot">
+  <span class="site-info"><!--site-info--><span class="site-info-pending">备案信息待下发</span><!--/site-info--></span>
+</footer>
 
 <div class="nojs">
   <div style="font-size:34px;letter-spacing:.06em">Hello world</div>

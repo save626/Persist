@@ -208,6 +208,40 @@ svg {
   margin-top: 1px;
   color: var(--green);
 }
+/* 网站合规信息（ICP / 公安备案号）。仅 web 产物渲染，备案号未下发时不出现。
+   放在主内容区底部而不是侧边栏：窄屏（≤900px）侧边栏是 display:none，
+   放那里手机用户就看不到备案号，而备案要求是「页面底部可见」。 */
+.site-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  justify-content: center;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 26px 0 4px;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+.site-info a {
+  color: var(--muted);
+  border-bottom: 1px solid var(--line2);
+  padding-bottom: 1px;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+.site-info a:hover {
+  color: var(--deep);
+  border-bottom-color: var(--deep);
+}
+.site-info-sep {
+  margin: 0 6px;
+  color: var(--line2);
+}
 .profile {
   display: flex;
   align-items: center;

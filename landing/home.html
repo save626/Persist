@@ -431,6 +431,17 @@
     font-size:12px;color:var(--faint);letter-spacing:.02em;
     display:flex;flex-wrap:wrap;gap:10px 20px;justify-content:space-between;
   }
+  /* 合规信息行：ICP / 公安备案号。独立成行，避免挤进 foot-line 的两栏布局。 */
+  .foot-compliance{
+    margin-top:10px;font-size:12px;color:var(--faint);letter-spacing:.02em;line-height:1.9;
+  }
+  .foot-compliance a{
+    color:var(--soft);border-bottom:1px solid var(--line2);padding-bottom:1px;
+    transition:color .2s,border-color .2s;
+  }
+  .foot-compliance a:hover{color:var(--accent-ink);border-bottom-color:var(--accent-ink)}
+  .site-info-sep{margin:0 8px;color:var(--line2)}
+  .site-info-pending{color:var(--faint)}
 
   /* ---------- 14. 提示条 ---------- */
   .toast{
@@ -933,6 +944,9 @@
     <div class="foot-line">
       <span>© 2026 Persist</span>
       <span>记录优先留在你的设备上</span>
+    </div>
+    <div class="foot-compliance">
+      <span class="site-info"><!--site-info--><span class="site-info-pending">备案信息待下发</span><!--/site-info--></span>
     </div>
   </div>
 </footer>

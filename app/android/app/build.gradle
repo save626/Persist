@@ -1,5 +1,27 @@
 apply plugin: 'com.android.application'
 
+// 明文流量开关由 API 基址的协议推导，与 app/capacitor.config.ts 保持同一套规则、
+// 读同一个 app/.env.mobile.local。
+//
+// 为什么必须推导而不能各写一份：AndroidManifest.xml 里的
+// android:usesCleartextTraffic 与 Capacitor 的 server.cleartext 若不一致，
+// 会出现「基址还是 http:// 但明文被关掉」——构建照常成功，真机上所有 /api
+// 请求静默失败（API 28+ 默认禁止明文）。反过来（https 基址 + 允许明文）只是
+// 不够干净，不会坏。推导让前者不可能发生。
+//
+// 规则：基址是 https:// → 不允许明文；否则允许。改规则时两处必须一起改。
+def apiBaseUrl = ''
+// rootProject 是 app/android，向上两级会越过 app/ 落到仓库根目录；
+// 目标是 app/.env.mobile.local，即向上一级。
+def mobileEnvFile = rootProject.file('../.env.mobile.local')
+if (mobileEnvFile.exists()) {
+    apiBaseUrl = mobileEnvFile.readLines()
+        .collect { it.replaceFirst(/#.*$/, '').trim() }
+        .find { it.startsWith('VITE_PERSIST_API_BASE_URL=') }
+        ?.split('=', 2)?.last()?.trim() ?: ''
+}
+def allowCleartext = !(apiBaseUrl ==~ /(?i)https:\/\/.*/)
+
 android {
     namespace = "com.save626.persist"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -10,6 +32,8 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // 供 AndroidManifest.xml 的 android:usesCleartextTraffic="${allowCleartext}" 使用。
+        manifestPlaceholders = [allowCleartext: allowCleartext.toString()]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

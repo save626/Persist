@@ -7,6 +7,7 @@ import { useRuntimeMode } from '../context/runtime-mode-context'
 import { BrandMark } from './BrandMark'
 import { Icon, IconSprite, type IconName } from './Icon'
 import { QuickRecordSheet } from './QuickRecordSheet'
+import { SiteInfoFooter } from './SiteInfoFooter'
 import { cn } from '../lib/cn'
 
 const NAV_ITEMS: Array<{ to: string; label: string; icon: IconName; title: string }> = [
@@ -115,6 +116,7 @@ export function AppShell() {
         <div className="page">
           <Outlet />
         </div>
+        {isPublicWeb && <SiteInfoFooter />}
       </main>
 
       <nav className="bottom-nav" aria-label="移动端主导航">

@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
+    <!--
+        android:usesCleartextTraffic 由 build.gradle 从 app/.env.mobile.local
+        的 VITE_PERSIST_API_BASE_URL 协议推导（https → false），与
+        app/capacitor.config.ts 的 server.cleartext 同一套规则。
+
+        tools:replace 是必需的：cap sync 会按 server.cleartext 重新生成
+        capacitor-cordova-android-plugins 的 manifest，那份是库 manifest。
+        若它在旧配置下残留 usesCleartextTraffic="true"，而本 manifest 算出
+        "false"，manifest merger 会因属性冲突直接构建失败。声明 replace 后
+        以本 manifest（应用级）为准，构建不会因库 manifest 的陈旧值而挂掉。
+    -->
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -8,7 +20,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="${allowCleartext}"
+        tools:replace="android:usesCleartextTraffic">
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"

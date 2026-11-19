@@ -1,8 +1,11 @@
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
+import { parseSiteInfo } from '../deploy/scripts/site-info-core.mjs'
 
 export default defineConfig(({ mode }) => {
   // AI 接口凭据（P0）只允许存在于 mobile 构建，也就是 app/.env.mobile.local。
@@ -17,8 +20,20 @@ export default defineConfig(({ mode }) => {
     )
   }
 
+  // 网站合规信息（ICP / 公安备案号）。唯一来源是 deploy/site-info.json，
+  // 与静态落地页用的是同一份数据、同一套校验——备案号下发后只改那一个 JSON。
+  // 校验不通过直接中止构建，避免把编造的备案号发到线上。
+  const siteInfo = parseSiteInfo(
+    JSON.parse(
+      readFileSync(resolve(import.meta.dirname, '..', 'deploy', 'site-info.json'), 'utf8'),
+    ),
+  )
+
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      __SITE_INFO__: JSON.stringify(siteInfo),
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
