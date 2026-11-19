@@ -90,7 +90,7 @@
 - 入口与构建：网页 `npm run build` 只接受 demo / guest，无参数、非法参数或 owner 一律回落 guest；web 解析层不能返回 owner。移动端 `npm run build:mobile` 输出 `app/dist-mobile`，默认 owner。demo / guest 查询参数写入 `sessionStorage`，产品内跳转和刷新继续沿用。
 - demo / guest 不创建同步引擎，`/api/v1/*` 同步与分析接口不请求；guest 的聊天、晨间简报、报告和服务端综合分析均为 Mock。
 - demo / guest 的全部 AI 面板只读本机预生成内容或本地 Mock，不请求 `/api/health`、`/api/report`、`/api/chat` 或 `/api/v1/*`；owner 移动端才允许真实 AI。
-- 桌面落地页与产品介绍首页由另一 Agent 负责；本仓库只保证入口路由与跳转后的运行模式。2026-11-11 已部署 `/` → `/home.html` → `/app/?mode=demo|guest`，桌面不提供 owner / 真实 AI 入口。
+- 桌面落地页与产品介绍首页的视觉**自 2026-11-19 起开放重新设计**（交接见 `docs/网站设计层交接-2026-11-19.md`）；本仓库只保证入口路由与跳转后的运行模式。2026-11-11 已部署 `/` → `/home.html` → `/app/?mode=demo|guest`，桌面不提供 owner / 真实 AI 入口。
 
 ---
 

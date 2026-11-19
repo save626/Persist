@@ -7,6 +7,10 @@
 # 注意：eol=lf 会让工作区也保持 LF；文本文件一律禁止 CRLF 提交。
 * text=auto eol=lf
 
+# Windows 批处理必须是 CRLF：gradlew.bat 含 label/goto，LF 会让 cmd 解析出错
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
 # 二进制文件不参与行尾转换
 *.png binary
 *.jpg binary
