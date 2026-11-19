@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Persist · 社交分享卡预览（本地）</title>
+<!--
+  用途：让「社交分享卡（OG）」在本地直接可见 —— 不用等备案号、不用等域名上线。
+
+  零外部请求：卡面用相对路径 ../assets/og-card.png（就是线上那一张，逐字节一致），
+  变体用相对路径 preview/*.png，不引 webfont / CDN / 外链图片。
+
+  三块内容：
+    1. 最终对外卡面（1200×630 原图）
+    2. 三种平台的卡片模拟（微信 / X / Facebook）—— 平台真实抓取逻辑的近似还原
+    3. OG 元数据表 + 变体对照 + 「现在为什么抓不到」的说明
+
+  注意：本页只是「长什么样」的预览。社交平台真正的卡片由爬虫抓取 og:image 决定，
+  在域名解析并上线前，任何爬虫都抓不到 https://wpersist.top/assets/og-card.png，
+  所以真实分享卡片要等备案号下发后才会在微信/X 里出现。
+-->
+<style>
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --fg: #1d1d1f;
+    --muted: #6e7378;
+    --faint: #86868b;
+    --line: #e5e5ea;
+    --accent: #0071e3;
+    --accent-soft: #eef6fe;
+    --ok: #1d8a4a;
+    --warn: #a8620a;
+    --warn-soft: #fff6e6;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 72px; }
+
+  header.page-head { margin-bottom: 28px; }
+
+  h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 8px; }
+
+  .lede { color: var(--muted); font-size: 15px; margin: 0; max-width: 70ch; }
+
+  .crumbs {
+    font-size: 13px; color: var(--faint); margin: 0 0 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  section { margin: 36px 0 0; }
+
+  h2 {
+    font-size: 15px; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--faint); margin: 0 0 14px; font-weight: 600;
+  }
+
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px;
+  }
+
+  /* ---------- 状态条 ---------- */
+  .status { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+  .status-card {
+    border-radius: 12px; padding: 16px 18px; font-size: 14px; line-height: 1.65;
+    border: 1px solid var(--line); background: var(--card);
+  }
+  .status-card.ok   { background: #f2fbf5; border-color: #cdebd7; }
+  .status-card.wait { background: var(--warn-soft); border-color: #f0dcb4; }
+  .status-card b { display: block; margin-bottom: 4px; font-size: 14px; }
+  .status-card.ok b   { color: var(--ok); }
+  .status-card.wait b { color: var(--warn); }
+  .status-card code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px; background: rgba(0,0,0,.05); padding: 1px 5px; border-radius: 4px;
+  }
+
+  /* ---------- 卡面 ---------- */
+  .cardshot {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px;
+  }
+  .cardshot .shot {
+    position: relative; overflow: hidden; border-radius: 8px;
+    border: 1px solid var(--line); background: #fff;
+  }
+  .cardshot .shot img {
+    display: block; width: 100%; height: auto; background: #fff;
+  }
+  /* 中心 630×630 安全区（微信 1:1 裁切的取景框） */
+  .safezone {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 52.5%; height: 100%; pointer-events: none;
+    border-left: 1px dashed rgba(207, 34, 46, .55);
+    border-right: 1px dashed rgba(207, 34, 46, .55);
+    background: rgba(207, 34, 46, .05);
+  }
+  .safezone::after {
+    content: "微信 1:1 取景框（630×630）";
+    position: absolute; left: 6px; top: 6px;
+    font-size: 11px; color: #cf222e; background: rgba(255,255,255,.85);
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .shot-meta {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px;
+    font-size: 12.5px; color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .shot-meta b { color: var(--fg); font-weight: 600; }
+
+  /* 微信 1:1 裁切实拍 */
+  .wechat-real { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .square {
+    position: relative; width: 200px; height: 200px; overflow: hidden;
+    border-radius: 6px; border: 1px solid var(--line); background: #fff; flex: none;
+  }
+  .square img { position: absolute; width: 381px; height: 200px; left: -90.5px; top: 0; }
+  .square-cap {
+    font-size: 11.5px; color: var(--faint); margin-top: 6px; text-align: center; width: 200px;
+  }
+
+  /* ---------- 平台卡片模拟 ---------- */
+  .sims { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+  .sim { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .sim-head {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--faint);
+    margin-bottom: 12px; letter-spacing: .03em;
+  }
+  .sim-head .dotlogo {
+    width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+  }
+
+  /* 微信：左缩略图 + 右标题/域名 */
+  .wx { display: flex; gap: 10px; align-items: center; }
+  .wx img { width: 62px; height: 62px; object-fit: cover; border-radius: 4px; background: #fff; border: 1px solid var(--line); }
+  .wx .wx-title { font-size: 14px; color: #191919; margin-bottom: 3px; }
+  .wx .wx-domain { font-size: 11.5px; color: #7a7a7a; }
+
+  /* X / Facebook：大图卡片 */
+  .lg img {
+    display: block; width: 100%; height: auto; border-radius: 12px 12px 0 0;
+    background: #fff; border: 1px solid var(--line); border-bottom: 0;
+  }
+  .lg .lg-body { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; padding: 10px 12px 12px; background: #fff; }
+  .lg .lg-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .lg .lg-desc { font-size: 12.5px; color: #536471; }
+  .lg .lg-domain { font-size: 11.5px; color: #536471; margin-top: 6px; }
+
+  /* ---------- 元数据表 ---------- */
+  table.meta { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.meta th, table.meta td {
+    text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top;
+  }
+  table.meta th {
+    color: var(--faint); font-weight: 500; width: 210px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px;
+  }
+  table.meta td { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+  table.meta tr:last-child th, table.meta tr:last-child td { border-bottom: 0; }
+
+  /* ---------- 变体对照 ---------- */
+  .variants { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .variant { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .variant img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); background: #fff; }
+  .variant .vname { font-size: 12.5px; margin-top: 9px; color: var(--muted); }
+  .variant .vname b { color: var(--fg); }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 980px;
+    background: var(--accent-soft); color: var(--accent); margin-left: 6px; font-weight: 600;
+  }
+  .pill.off { background: #f0f0f2; color: var(--faint); }
+
+  /* ---------- 说明块 ---------- */
+  .note { font-size: 14px; color: var(--muted); }
+  .note ol, .note ul { margin: 8px 0 0; padding-left: 22px; }
+  .note li { margin: 4px 0; }
+  .note code, .cmd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px;
+    background: rgba(0,0,0,.05); padding: 1px 6px; border-radius: 5px;
+  }
+  pre.cmd {
+    padding: 12px 14px; border-radius: 10px; overflow-x: auto; line-height: 1.7;
+    background: #1d1d1f; color: #e8e8ed; font-size: 12.5px; margin: 10px 0 0;
+  }
+
+  footer.page-foot {
+    margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--faint);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <p class="crumbs">D:\Persist\landing\og\preview.html</p>
+    <h1>社交分享卡（OG）本地预览</h1>
+    <p class="lede">
+      这一页就是「Persist 被分享到微信 / X / Facebook 时对方看到的那张卡片」。
+      卡面用的是 <code>landing/assets/og-card.png</code>——与生产服务器上
+      <code>/var/www/persist/assets/og-card.png</code> 逐字节一致的那一张，不是示意图。
+    </p>
+  </header>
+
+  <section>
+    <h2>当前状态</h2>
+    <div class="status">
+      <div class="status-card ok">
+        <b>✅ 现在就能看到</b>
+        卡面本身已定稿、已渲染、已部署生产（1200×630 / 44 459 B / PNG）。
+        本页与 <code>landing/assets/og-card.png</code> 显示的就是线上那一张。
+      </div>
+      <div class="status-card wait">
+        <b>⏳ 现在看不到（真实平台抓取）</b>
+        微信 / X 的卡片由爬虫抓取 <code>https://wpersist.top/assets/og-card.png</code> 生成。
+        域名未解析、备案号未下发，爬虫<b>物理上抓不到</b>这张图——这与「页面本身也不该对外」是同一道闸门，属预期行为。
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>1 · 最终对外卡面</h2>
+    <div class="cardshot">
+      <div class="shot">
+        <img src="../assets/og-card.png" width="1200" height="630" alt="Persist 社交分享卡：同一天，看清自己。">
+        <div class="safezone"></div>
+      </div>
+      <div class="shot-meta">
+        <span><b>尺寸</b> 1200 × 630</span>
+        <span><b>大小</b> 44 459 B</span>
+        <span><b>格式</b> image/png</span>
+        <span><b>变体</b> A（左文右线）× 浅色</span>
+        <span><b>线上路径</b> /assets/og-card.png</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>1b · 微信的 1:1 裁切实拍（当前卡面的真实弱点）</h2>
+    <div class="panel">
+      <div class="wechat-real">
+        <div>
+          <div class="square"><img src="../assets/og-card.png" alt=""></div>
+          <div class="square-cap">微信聊天列表里的方图</div>
+        </div>
+        <div class="note" style="flex:1; min-width:280px;">
+          <p style="margin-top:0;">
+            微信把 <code>og:image</code> 裁成 <b>1:1 且取中心区域</b>（横图会裁掉左右两边），
+            右边这张就是本卡面被裁后的真实样子。
+          </p>
+          <p>
+            当前是<b>左文右线</b>构图，主标题「同一天，看清自己。」落在 x=80 起，
+            而 630 宽的取景框从 x=285 开始 —— <b>标题被切掉大半</b>，方图里只剩大片留白与右半段折线。
+            X / Facebook / LinkedIn 全宽显示时没有这个问题，<b>只有微信会这样</b>。
+          </p>
+          <p style="margin-bottom:0;">
+            常见解法：把标题 / Logo 收进<b>中心 630×630 安全区</b>（上图红色虚线框），
+            或另出一张 1:1 方图专门给微信（微信只取 <code>og:image</code> 的第一张）。
+            这属于<b>待你拍板的视觉决策</b>，本轮没有擅自改卡面。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · 平台卡片模拟</h2>
+    <div class="sims">
+
+      <div class="sim">
+        <div class="sim-head">
+          <span class="dotlogo" style="background:#07c160;">微</span>
+          微信 · 聊天窗口链接卡片
+        </div>
+        <div class="wx">
+          <div class="square" style="width:62px; height:62px;">
+            <img src="../assets/og-card.png" alt="" style="width:118.3px; height:62px; left:-28.1px;">
+          </div>
+          <div>
+            <div class="wx-title">Persist · 同一天，看清自己</div>
+            <div class="wx-domain">wpersist.top</div>
+          </div>
+        </div>
+        <div class="note" style="margin-top:12px; font-size:12.5px;">
+          缩略图按微信规则做了 <b>1:1 中心裁切</b>，所以方图里看不到主标题（见 §1b）。
+          卡片标题与描述由 <code>og:title</code> / <code>og:description</code> 提供，不依赖图里的字。
+        </div>
+      </div>
+
+      <div class="sim">
+        <div class="sim-head">
+          <span class="dotlogo" style="background:#000;">X</span>
+          X (Twitter) · summary_large_image
+        </div>
+        <div class="lg">
+          <img src="../assets/og-card.png" alt="">
+          <div class="lg-body">
+            <div class="lg-title">Persist · 同一天，看清自己</div>
+            <div class="lg-desc">把每一天记下来，让 AI 告诉你规律。在线演示的数据只留在你自己的浏览器里，不上传服务器。</div>
+            <div class="lg-domain">wpersist.top</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sim">
+        <div class="sim-head">
+          <span class="dotlogo" style="background:#1877f2;">f</span>
+          Facebook · 链接预览
+        </div>
+        <div class="lg">
+          <img src="../assets/og-card.png" alt="">
+          <div class="lg-body">
+            <div class="lg-title">Persist · 同一天，看清自己</div>
+            <div class="lg-desc">把每一天记下来，让 AI 告诉你规律。在线演示的数据只留在你自己的浏览器里，不上传服务器。</div>
+            <div class="lg-domain">W PERSIST.TOP</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="note" style="margin-top:14px;">
+      三种卡片共用<b>同一张图与同一组文案</b>：<code>og:title</code> / <code>og:description</code> / <code>og:image</code>
+      一处改动，三个平台同时变，不存在「微信一套说法、X 另一套说法」。
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · OG 元数据（两页一致）</h2>
+    <div class="panel">
+      <table class="meta">
+        <tbody>
+          <tr><th>og:type</th><td>website</td></tr>
+          <tr><th>og:site_name</th><td>Persist</td></tr>
+          <tr><th>og:locale</th><td>zh_CN</td></tr>
+          <tr><th>og:title</th><td>Persist · 同一天，看清自己</td></tr>
+          <tr><th>og:description</th><td>把每一天记下来，让 AI 告诉你规律。在线演示的数据只留在你自己的浏览器里，不上传服务器。</td></tr>
+          <tr><th>og:url</th><td>https://wpersist.top/ （介绍页为 /home.html）</td></tr>
+          <tr><th>og:image</th><td>https://wpersist.top/assets/og-card.png</td></tr>
+          <tr><th>og:image:type</th><td>image/png</td></tr>
+          <tr><th>og:image:width / height</th><td>1200 / 630</td></tr>
+          <tr><th>og:image:alt</th><td>Persist · 同一天，看清自己。健身、饮食、学习记在一处，晚上让 AI 把数字写成一段人话。</td></tr>
+          <tr><th>twitter:card</th><td>summary_large_image</td></tr>
+          <tr><th>twitter:title / description / image</th><td>与 og:* 同源</td></tr>
+          <tr><th>canonical</th><td>https://wpersist.top/ （介绍页为 /home.html）</td></tr>
+          <tr><th>备案号</th><td>卡面与 head 内均<b>无</b>备案编号 —— 尚未下发，绝不编造</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 · 四个变体对照</h2>
+    <div class="variants">
+      <div class="variant">
+        <img src="preview/a-light.png" alt="变体 A 浅色">
+        <div class="vname"><b>A × 浅色</b><span class="pill">已选用</span><br>左文右线，线上版</div>
+      </div>
+      <div class="variant">
+        <img src="preview/a-dark.png" alt="变体 A 深色">
+        <div class="vname"><b>A × 深色</b><span class="pill off">备用</span><br>同一构图，深色底</div>
+      </div>
+      <div class="variant">
+        <img src="preview/b-light.png" alt="变体 B 浅色">
+        <div class="vname"><b>B × 浅色</b><span class="pill off">备用</span><br>居中构图，主标题过大</div>
+      </div>
+      <div class="variant">
+        <img src="preview/b-dark.png" alt="变体 B 深色">
+        <div class="vname"><b>B × 深色</b><span class="pill off">备用</span><br>居中构图，深色底</div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:12px;">
+      选用 <b>A × 浅色</b>：A 的左文右线构图比 B 的居中构图平衡（B 的主标题字号过大、副标题在 22ch 宽度内换行难看）；
+      浅色在微信 / Twitter / Facebook 的默认卡片底色上更自然。改文案后重跑
+      <code>node scripts/render-og-card.mjs</code>，再把新图复制到 <code>landing/assets/og-card.png</code>。
+    </div>
+  </section>
+
+  <section>
+    <h2>5 · 怎么在真实平台验证</h2>
+    <div class="panel note">
+      <b>域名上线后（备案号下发当天）</b>，分享卡会立刻生效，不需要额外操作。可用：
+      <ol>
+        <li>微信里把 <code>https://wpersist.top/</code> 粘进聊天框，看是否出现图文卡片；</li>
+        <li>用第三方调试工具（opengraph.xyz 等）粘贴域名，查看爬虫实际抓到的 <code>og:image</code>；</li>
+        <li>直接打开 <code>https://wpersist.top/assets/og-card.png</code>，应返回 200 / <code>image/png</code>。</li>
+      </ol>
+
+      <b>本机随时可跑的自检</b>（只读，不改任何文件）：
+      <pre class="cmd">node scripts/check-og-meta.mjs                      # 校验两页的 og/twitter 标签与卡面尺寸
+node scripts/check-og-meta.mjs --url https://wpersist.top/  # 校验线上页面并 HEAD 图片（域名上线后用）</pre>
+
+      <b>改卡面后重渲染</b>：
+      <pre class="cmd">node scripts/render-og-card.mjs          # 渲染 4 个变体到 landing/og/preview/
+copy landing/og/preview/a-light.png landing/assets/og-card.png   # 同步最终产物</pre>
+    </div>
+  </section>
+
+  <footer class="page-foot">
+    Persist · 本地预览页 · 零外部请求 · 卡面与生产一致（1200×630 / 44 459 B / PNG）
+  </footer>
+
+</div>
+</body>
+</html>
