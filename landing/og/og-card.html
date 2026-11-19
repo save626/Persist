@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-variant="a" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Persist · OG 分享卡设计源（1200×630）</title>
+<!--
+  用途：生成 1200×630 社交分享卡（og:image / twitter:image）。
+  这是【设计源】，不是站点页面；复制 token 与落地页 landing/index.html 一致，
+  但独立成文件，避免落页面体积继续增长。
+
+  渲染（无外部请求，纯 file://）：
+    msedge.exe --headless=new --disable-gpu --hide-scrollbars
+      --force-device-scale-factor=1 --window-size=1200,630
+      --virtual-time-budget=1200
+      --user-data-dir=".edge-profile-og"
+      --screenshot="landing/og/preview/a-light.png"
+      "file:///D:/Persist/landing/og/og-card.html?v=a&theme=light"
+
+  参数：?v=a|b   ?theme=light|dark
+  文案：标题 / 副标题 / 底部右侧全部为占位，等用户给文案后替换 .ph 内容并删除 badge。
+-->
+<style>
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+            "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI",
+            system-ui, sans-serif;
+    --bg: #ffffff;
+    --fg: #0b0d10;
+    --muted: #6e7378;
+    --faint: #9aa0a6;
+    --line: #e7e9ec;
+    --accent: #0071e3;
+    --accent-soft: #eef6fe;
+    --shadow: 0 2px 24px rgba(0, 0, 0, .06);
+  }
+
+  html[data-theme="dark"] {
+    --bg: #000000;
+    --fg: #f5f5f7;
+    --muted: #8e8e93;
+    --faint: #6e6e73;
+    --line: #1f1f22;
+    --accent: #2997ff;
+    --accent-soft: #0d2133;
+    --shadow: 0 2px 24px rgba(0, 0, 0, .5);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 安全边距：四周 72–80px，避开各平台分享卡的裁切区 */
+  .stage {
+    position: relative;
+    width: 1200px;
+    height: 630px;
+    padding: 72px 80px 64px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- 顶栏：品牌 + 占位标记 ---------- */
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 24px;
+    font-weight: 650;
+    letter-spacing: -.01em;
+  }
+
+  .brand-mark { width: 34px; height: 34px; }
+
+  .badge {
+    font-size: 15px;
+    letter-spacing: .04em;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 980px;
+    padding: 7px 16px;
+    white-space: nowrap;
+  }
+
+  /* ---------- 占位文本样式：一眼看出是待填 ---------- */
+  .ph {
+    position: relative;
+    color: var(--faint);
+    border-bottom: 1px dashed var(--faint);
+    border-bottom-color: color-mix(in srgb, var(--faint) 55%, transparent);
+    padding-bottom: 2px;
+  }
+
+  .ph-note {
+    display: block;
+    font-size: 14px;
+    letter-spacing: .06em;
+    color: var(--faint);
+    margin-top: 14px;
+  }
+
+  /* ---------- 变体 A：左文右线 ---------- */
+  .va .main {
+    display: flex;
+    align-items: center;
+    gap: 56px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .va .col-text { width: 620px; flex: none; }
+
+  .va .col-art { flex: 1; min-width: 0; display: flex; justify-content: flex-end; }
+
+  .eyebrow {
+    font-size: 20px;
+    letter-spacing: .08em;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .va h1 {
+    font-size: 68px;
+    line-height: 1.16;
+    letter-spacing: -.032em;
+    font-weight: 700;
+    margin: 20px 0 0;
+  }
+
+  .va .sub {
+    font-size: 26px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin: 24px 0 0;
+    max-width: 24ch;
+  }
+
+  /* ---------- 变体 B：居中构图 ---------- */
+  .vb .mid {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 0;
+    padding-bottom: 34px; /* 让「一条线」母题与页脚分隔线保持呼吸 */
+  }
+
+  .vb h1 {
+    font-size: 82px;
+    line-height: 1.14;
+    letter-spacing: -.034em;
+    font-weight: 700;
+    margin: 22px 0 0;
+  }
+
+  .vb .sub {
+    font-size: 28px;
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 26px 0 0;
+    max-width: 22ch;
+  }
+
+  .vb .art { margin-top: 26px; }
+
+  /* ---------- 底栏 ---------- */
+  .foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    font-size: 19px;
+    color: var(--muted);
+  }
+
+  .foot .lock { color: var(--fg); font-weight: 600; }
+
+  .dot { fill: var(--accent); }
+
+  /* 变体切换：同一份文件渲染两张 */
+  .vb { display: none; }
+  html[data-variant="b"] .va { display: none; }
+  html[data-variant="b"] .vb { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="stage va" data-block="a">
+  <header class="top">
+    <span class="brand">
+      <svg class="brand-mark" viewBox="0 0 34 34" aria-hidden="true" fill="none">
+        <rect x=".8" y=".8" width="32.4" height="32.4" rx="9.5" stroke="var(--line)" stroke-width="1.6"/>
+        <path d="M8 21.6 L13.6 15.2 L18.6 18 L24.4 11.2" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="24.4" cy="11.2" r="2.1" class="dot"/>
+      </svg>
+      Persist
+    </span>
+    <span class="badge">本地优先 · 不上传服务器</span>
+  </header>
+
+  <div class="main">
+    <div class="col-text">
+      <p class="eyebrow">个人记录与 AI 复盘</p>
+      <h1>同一天，<br>看清自己。</h1>
+      <p class="sub">健身、饮食、学习记在一处，晚上让 AI 把数字写成一段人话。</p>
+    </div>
+
+    <div class="col-art">
+      <svg viewBox="0 0 430 300" width="430" height="300" fill="none" aria-hidden="true">
+        <!-- 一条线母题：与落地页 hero 同构 -->
+        <path d="M18 262 H412" stroke="var(--line)" stroke-width="1"/>
+        <path d="M42 216 L104 176 L166 196 L228 132 L290 152 L352 74 L400 92"
+              stroke="var(--fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="42"  cy="216" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
+        <circle cx="104" cy="176" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
+        <circle cx="166" cy="196" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
+        <circle cx="228" cy="132" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
+        <circle cx="290" cy="152" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
+        <circle cx="352" cy="74"  r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
+        <circle cx="400" cy="92"  r="6.5" class="dot"/>
+      </svg>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span class="lock">Persist ・ 记录，同一天</span>
+    <span>wpersist.top</span>
+  </footer>
+</div>
+
+<div class="stage vb" data-block="b">
+  <header class="top">
+    <span class="brand">
+      <svg class="brand-mark" viewBox="0 0 34 34" aria-hidden="true" fill="none">
+        <rect x=".8" y=".8" width="32.4" height="32.4" rx="9.5" stroke="var(--line)" stroke-width="1.6"/>
+        <path d="M8 21.6 L13.6 15.2 L18.6 18 L24.4 11.2" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="24.4" cy="11.2" r="2.1" class="dot"/>
+      </svg>
+      Persist
+    </span>
+    <span class="badge">本地优先 · 不上传服务器</span>
+  </header>
+
+  <div class="mid">
+    <p class="eyebrow">个人记录与 AI 复盘</p>
+    <h1>同一天，<br>看清自己。</h1>
+    <p class="sub">健身、饮食、学习记在一处，晚上让 AI 把数字写成一段人话。</p>
+
+    <div class="art">
+      <svg viewBox="0 0 760 46" width="760" height="46" fill="none" aria-hidden="true">
+        <path d="M14 26 H746" stroke="var(--line)" stroke-width="1"/>
+        <path d="M14 26 H700" stroke="var(--fg)" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="700" cy="26" r="6.5" class="dot"/>
+        <circle cx="14" cy="26" r="4.5" fill="none" stroke="var(--fg)" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span class="lock">Persist ・ 记录，同一天</span>
+    <span>wpersist.top</span>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var p = new URLSearchParams(location.search);
+    var v = p.get('v') === 'b' ? 'b' : 'a';
+    var t = p.get('theme') === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-variant', v);
+    document.documentElement.setAttribute('data-theme', t);
+
+    // ?selfcheck=1：把几何自检结果写进 DOM，供 --dump-dom 读取（无图像能力时的客观校验）
+    if (p.get('selfcheck') === '1') {
+      var rect = function (el) {
+        var b = el.getBoundingClientRect();
+        return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height),
+                 r: Math.round(b.right), b: Math.round(b.bottom) };
+      };
+      var visible = Array.prototype.filter.call(
+        document.querySelectorAll('.stage'),
+        function (el) { return getComputedStyle(el).display !== 'none'; }
+      )[0];
+      var items = {};
+      var nodes = visible.querySelectorAll('.brand, .badge, .eyebrow, h1, .sub, .foot, .foot > span, svg');
+      Array.prototype.forEach.call(nodes, function (el, i) {
+        var key = (el.getAttribute('class') || el.tagName.toLowerCase()) + '#' + i;
+        var o = rect(el);
+        o.fontSize = getComputedStyle(el).fontSize;
+        o.overflowX = el.scrollWidth - el.clientWidth;
+        items[key] = o;
+      });
+      var h1 = visible.querySelector('h1');
+      var cs = getComputedStyle(h1);
+      var report = {
+        variant: v,
+        theme: t,
+        fonts: document.fonts ? document.fonts.status : 'n/a',
+        stage: rect(visible),
+        docScroll: { w: document.documentElement.scrollWidth, h: document.documentElement.scrollHeight },
+        bodyScroll: { w: document.body.scrollWidth, h: document.body.scrollHeight },
+        h1Lines: Math.round(h1.getBoundingClientRect().height / parseFloat(cs.lineHeight)),
+        items: items
+      };
+      document.body.textContent = '';
+      var pre = document.createElement('pre');
+      pre.id = 'selfcheck';
+      pre.textContent = JSON.stringify(report, null, 1);
+      document.body.appendChild(pre);
+    }
+  })();
+</script>
+
+</body>
+</html>
