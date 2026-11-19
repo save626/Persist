@@ -1,0 +1,28 @@
+# 统一行尾：强制 LF入库 + 工作区 LF
+#
+# 为什么需要：PortableGit 默认为 core.autocrlf=true，LF 文件在 checkout 时会被
+# 转成 CRLF，导致工作区与索引行尾不一致，Prettier / ESLint 的 endOfLine:lf
+# 检查随之报错。本仓库统一使用 LF（历史文件已全部为 LF）。
+#
+# 注意：eol=lf 会让工作区也保持 LF；文本文件一律禁止 CRLF 提交。
+* text=auto eol=lf
+
+# 二进制文件不参与行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp3 binary
+*.mp4 binary
+*.apk binary
+*.aab binary
+*.keystore binary
+*.jks binary
+*.zip binary
+*.gz binary
