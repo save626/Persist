@@ -1,14 +1,18 @@
 # P4 数据层与 AI 综合分析设计方案（终态架构）
 
-> 2026-11-13 14d 真机删除验收增补：Android WebView 联网状态改由 `@capacitor/network` 8.0.1 驱动，真机验证在线可点、飞行模式禁用、恢复网络后重新启用。用户授权后删除生产 `12` 组整库快照（`24` 个文件）与 `3` 个账号（`2` 个旧账号 + 当前同步账号），手机端本地数据同步清空；最终生产 `users=0 / devices=0 / analysis_reports=0 / backup_files=0`，`persist-server` 与 `persist-backup.timer` 均 active，临时安全备份已销毁。
-
-> 版本：v1.5（2026-11-13 更新实施状态）
-> 2026-11-11 增补：owner 移动端的健身「训练观察」、饮食「今日观察」、学习「学习观察」已接入真实 `/api/report`，复用现有 DeepSeek 代理、契约净化、限流和本地回退；demo / guest 仍为零 `/api/*`，demo 的 AI 内容继续使用部署前预生成快照；「AI 热量登记」不做模型调用，链路保持不变。
-> 状态：**步骤 11（数据历史化）、步骤 12（账号 + 增量同步）、步骤 13（AI 综合分析）已实施，服务端 2026-11-06 已部署到生产；步骤 14 的 14a 已在生产启用，14b / 14c / 14d 与备份列表 / 手动创建 HTTP 端点均已于 2026-11-10 部署到生产**。2026-11-10 新增 `owner / demo / guest` 运行模式：owner 保留完整真实 AI 与同步，demo 的 AI 内容全部为部署前预生成快照，部署后只读且零 `/api/*`，guest 全 Mock；web 构建已禁止 owner，mobile `build:mobile` 包默认 owner。上述运行模式、14d 前端入口与 owner 三张观察卡已包含在 `ec8f16f`，web 与后端已于 2026-11-11 部署；demo / guest 与日期 / 时间选择器已双端验收，owner 三张观察卡与 14d 删除流程已于 2026-11-13 完成真机验收。
-> 实施记录：步骤 11 = 11a/11b/11c（2026-11-04，`schemaVersion` 2 + 备份 0.3.0）；步骤 12 = 12a–12f（2026-11-05，`ca02250` / `6fe6b3d` / `c6a65fd` / `9abd8bb` / `f09c3da` + 12f 收尾），**本机完成并推送；服务端 2026-11-06、前端产物 2026-11-07 均已部署到生产**。2026-11-11 前端入口切换为 `/` 落地页 → `/home.html` 介绍首页 → `/app/` demo / guest，`/api/*` 契约不变（见 `docs/部署与服务器现状.md` §6.1）。各节状态标记见 §15 对照表。
-> 决策来源：用户在「本地组装摘要上传（路线 1）」与「本地优先 + 服务端可检索副本（路线 2）」之间选定**路线 2 作为终态方向**，本文件即为该方向的落地方案。
-> 关系：本文件是 `HANDOFF.md` §13.4「P4」的展开，也是对 `docs/Persist-项目开发规划.md` 旧版（v1.2 §7，2026-11-04 已被重写为 v2.0）在服务端与数据层的收敛稿；与 `HANDOFF.md` 冲突时以源码与 `HANDOFF.md` 为准，本文件负责「终态怎么走」。
-> 读者：下一位接手的开发者（含 AI 会话）。读完本文件应能直接拆任务，不需要再做架构决策（§18 列出的少数待确认项除外）。
+> **状态：全部实施完毕并已部署生产。** 本文自 2026-11-19 起转为**终态设计参考**——
+> 数据模型（DDL）、同步协议、事实包契约、隐私边界这些「唯一来源」保留；
+> 逐步骤实施流水与验收记录已删除（证据在 git 历史与 [`HANDOFF.md`](../HANDOFF.md)）。
+>
+> 版本：v2.0（2026-11-19 精简：删除实施流水，保留终态设计）
+>
+> 决策来源：用户在「本地组装摘要上传（路线 1）」与「本地优先 + 服务端可检索副本（路线 2）」之间选定
+> **路线 2 作为终态方向**，本文件即为该方向的落地方案。
+>
+> 关系：本文是终态数据层与契约的**唯一来源**；现状与待办看 [`HANDOFF.md`](../HANDOFF.md)；
+> 与源码冲突时以源码为准。
+>
+> 读者：读完本文件应能直接改数据层或同步协议，不需要再做架构决策。
 
 ---
 
@@ -155,7 +159,7 @@
 
 - 单文件 **SQLite**，路径 `/var/lib/persist/persist.sqlite`，`journal_mode=WAL`、`foreign_keys=ON`、`busy_timeout=5000`、`synchronous=NORMAL`。
 - 明确不用 MySQL / MariaDB / PostgreSQL / Redis：单用户、单进程、数据量（十年逐日记录 ≈ 数十万行）远未到 SQLite 上限；2C2G 上少一个守护进程、少一套备份与调优。
-- 驱动已拍板：**A. 升级服务器 Node 到 22 LTS，用内置 `node:sqlite`**（2026-11-05 决策，见 §18-1）。零 native 依赖，2C2G 上没有编译工具链也能装；`engines` 定为 `>=22.5`（`node:sqlite` 自该版本起可用）；代价是服务器 Node 版本升级——**已放到步骤 10 与域名/HTTPS 一起做**，在升级完成前步骤 12 的代码不部署，线上继续跑步骤 9 的 Node 20 版本。
+- 驱动已拍板：**A. 升级服务器 Node 到 22 LTS，用内置 `node:sqlite`**（2026-11-05 决策，已落地）。零 native 依赖，2C2G 上没有编译工具链也能装；`engines` 定为 `>=22.5`（`node:sqlite` 自该版本起可用）；代价是服务器 Node 版本升级——**已放到步骤 10 与域名/HTTPS 一起做**，在升级完成前步骤 12 的代码不部署，线上继续跑步骤 9 的 Node 20 版本。
 - 备选 B（Node 20 + `better-sqlite3`）**已放弃**：需要预编译二进制或 `gcc-c++/make/python3` 本地编译，2C2G 上不划算。
 - 本机 Node v22.19.0 已实测可用 `node:sqlite`（会打印 `ExperimentalWarning: SQLite is an experimental feature`，属预期，启动脚本不拦截）。**repository 层只使用一小撮公共 API（`prepare/run/all/get/exec/transaction`），驱动差异收敛在 `server/src/db/driver.ts` 一个文件**，将来若需换驱动只改这里。
 - 结论已落到契约：`server/package.json` 的 `engines` 已是 `>=22.5`，`server/package-lock.json` 同步；部署文档已注明升级步骤（`docs/部署与服务器现状.md` §5 规则 6、§6 待办）。
@@ -354,11 +358,6 @@ CREATE INDEX idx_sync_rev          ON study_records (rev); -- 各实体都有 (u
 - 健身页历史列表、饮食页（若加按日浏览）、报告页的数据来源变化会改变文案与列表内容 → 8d 完成后必须重跑 `npm run visual:check` 并经用户桌面端 + 移动端验收，再更新 `design/*.png` 基线。
 - 不改 5 项主导航、不新增一级路由；历史浏览放在各页内的既有面板/sheet 里，避免视觉基线全面扩散。
 
-### 6.3 验收标准（8d）—— ✅ 已全部通过（2026-11-04，11a/11b/11c 收尾）
-
-- [x] `schemaVersion: 2` 落库；v1 记录可无损迁移；旧备份可导入。
-- [x] 完成一次训练 → 刷新页面 → 历史列表出现该记录（不再出现 `history-1` 演示行）。
-- [x] 记录饮食/饮水/计划后跨日（改系统日期或用测试注入日期）仍能按日读取，报告窗口能取到多日数据。
 - [x] 单元测试覆盖迁移与历史归档；E2E 覆盖「记录 → 历史出现」；视觉基线重跑并验收。
 
 ---
@@ -370,7 +369,7 @@ CREATE INDEX idx_sync_rev          ON study_records (rev); -- 各实体都有 (u
 - 首次开启同步：`POST /api/v1/devices` → 返回 `{ userId, deviceId, token, recoveryCode }`；**token 与恢复码只在这一次响应里出现**，服务端只存 `sha256` 哈希。客户端把 token 存 IndexedDB（单独库/单独列），恢复码提示用户抄下（可复制），设置页可再次查看（本地保存的副本，不是从服务端取回）。
 - 第二台设备 / 重装：`POST /api/v1/devices/restore { recoveryCode }` → 签发新 token（**已定：恢复码固定不变，不轮换**——用户只需抄一次，若响应丢失也不会让已抄下的码作废；换设备只轮换 token）。
 - 吊销：`POST /api/v1/devices/revoke`（吊销当前或指定设备），服务端写 `revoked_at`；吊销后该 token 一律 401。
-- 说明：不做邮箱/手机号注册（避免短信、实名、密码找回全套复杂度）；这是**个人自用工具的账号**，不是互联网账号体系。风险与替代见 §17。
+- 说明：不做邮箱/手机号注册（避免短信、实名、密码找回全套复杂度）；这是**个人自用工具的账号**，不是互联网账号体系。风险与替代见 §14。
 
 ### 7.2 同步协议
 
@@ -425,14 +424,6 @@ POST /api/v1/sync/bootstrap
 
 `MockDataProvider` 只增加一个「记录已变更」的通知（现有写路径已集中），不在每个页面里散落同步调用。
 
-### 7.4 验收标准（P4a）—— ✅ 本机 19/19 通过（2026-11-05，12f 收尾；临时验证脚本已删除，证据见 `HANDOFF.md` §18.1 12f 行）
-
-- [x] 断网 → 记录 → 联网 → 数据出现在服务端（用 `node:sqlite` 直查库文件核对），本地无任何阻塞。
-- [x] 两台浏览器用同一恢复码绑定 → 任一设备写入 → 另一设备 pull 后可见；删除会同步为墓碑。
-- [x] 冲突：同一实体两台设备分别改，`updatedAt` 新者胜，旧者被 `skipped` 且本地回填。
-- [x] 重复 push（同一 opId 重试）不产生重复行。
-- [x] 未带 token / token 被吊销 → 401；错误 token 不泄露任何数据；日志无正文。
-- [x] 关掉同步后不再发请求，本地功能完整。
 - [x] （12f 新增）pull 时形状不合规 / body id 与信封 id 不一致的实体计 `skipped`，不写本地存档。
 
 ---
@@ -527,13 +518,6 @@ interface ReportContentV2 {
 - **定时**：可选「每日简报」（默认关闭，设置页开关 + 时间默认 21:00 Asia/Shanghai）。实现为服务端进程内定时器：每分钟检查一次「今天是否已生成」，任务表（`audit_log` 或独立 `jobs` 表）记录执行时间，重启不重复执行；失败重试 1 次后放弃并写审计。单进程假设，不做作业队列。
 - **前端 ReportsPage**：请求 `/api/v1/analysis/reports`；成功渲染 `content.analysis` 段落 + `metrics`；失败按错误码分类：网络/离线 → 8c 本地报告（标注「本地生成 · Mock 报告」）；403 → 提示去档案页开启授权；502/503 → 显示「服务端分析暂不可用」并提供重试，**不回退成看似 AI 的本地内容**（除非用户点「使用本地报告」）。报告列表合并本地缓存与服务端归档，标注来源。
 
-### 8.5 验收标准（P4b）—— ✅ 已本机验证（2026-11-05，13a–13d 收尾）
-
-- [x] 30 天窗口事实包字段齐全、数字与手工 SQL 一致（快照测试固定 fixture）。
-- [x] 真实 Key 生成一次报告：`analysis` 2–5 段，**全文无自行推算的数字**（人工核对 + 白名单校验）。
-- [x] 同一数据版本二次请求命中缓存（`cached: true`，无模型调用）；新增一条记录后再请求重新生成。
-- [x] 未授权 `diet` 时事实包与报告均不出现饮食内容。
-- [x] 无 Key / 超时 → `origin: "rules"`，报告可用且如实标注；契约非法 → 502，前端显示真实错误。
 - [x] 断网 → 前端回退本地 8c 报告并标注；恢复后不自动覆盖用户已读内容。
 
 ---
@@ -588,7 +572,7 @@ interface ReportContentV2 {
 
 约定：`/api/v1` 全部 JSON（无 SSE）；错误体 `{ error: { code, message } }`；限流继续按 IP（`RATE_LIMIT_*`），分析接口单独更严（建议 6 次 / 300 s）；请求体上限 8 MB（bootstrap 用），其余 256 KB；分析请求超时 25 s（90 天可放宽到 40 s，Nginx `proxy_read_timeout` 同步放宽）。
 
-> 备份端点状态（2026-11-10）：`GET/POST /api/v1/backups`、恢复 / 导出 / 删除端点均已在本机实现并验证，并**于 2026-11-10 部署到生产**；生产 health 200 / schema 2，未鉴权请求均为 401。
+> 备份端点状态：`GET/POST /api/v1/backups`、恢复 / 导出 / 删除端点均已在本机实现并验证，并**已部署到生产**（2026-11-10）；未鉴权请求均为 401。
 
 ---
 
@@ -654,7 +638,7 @@ DAILY_BRIEF_AT=21:00
 - **删除（14d 已于 2026-11-10 部署到生产）**：`DELETE /api/v1/account` 只接受 `{ "confirm": true }`；缺失 / false 返回 `422 confirmation_required`，类型错误返回 `422 invalid_request`。确认后在一个 `BEGIN IMMEDIATE` 事务内硬删除当前账号的 `profiles` / `settings` / 七类业务实体（含墓碑）/ `analysis_reports` / `job_runs` / `sync_ops` / `devices` / `users` 行，事务失败整体回滚。成功后清理备份目录中规范命名的 `.sqlite` 与 `.sha256`；非规范 / 无关文件不碰。若还有其他 active 账号且存在整库快照，返回 `409 account_delete_blocked`，因为整库快照无法按账号安全局部裁剪。成功日志只记事件、时间与计数，不含用户 ID / 令牌 / 正文；数据库级 `audit_log` 表仍未实现。**前端删除入口已提交 `ec8f16f` 并随 2026-11-11 web 包部署；2026-11-13 真机验收通过**：设置页先删除服务端账号，成功后清空本机数据；服务端失败不清空本机，并有确认弹窗与离线禁用；Android WebView 的联网状态改由 `@capacitor/network` 8.0.1 驱动，已在真机验证在线可点、飞行模式禁用、恢复网络后重新启用。真机验收实际删除两个旧账号、`12` 组整库快照和当前账号；生产复核 `users=0 / devices=0 / analysis_reports=0 / backup_files=0`，手机端今日、健身、饮食、学习、AI 报告均为空白态。
 - **离线兜底**：即使服务端全丢，客户端 IndexedDB + JSON 导出仍可恢复；这是「本地优先」的底线。
 
-- **生产部署与复验（2026-11-10）**：切换停机 501 ms；`/opt/persist-next/server/dist` 46 文件、`shared/dist` 16 文件，Node v22.19.0，生产依赖 49 包 / 0 漏洞；health 200 / schema 2；`GET/POST /api/v1/backups`、恢复、导出、删账号 5 条路径未鉴权均为 401；部署后 `persist-backup.service` 实跑成功（229376 B / `integrity:"ok"`）。未用生产真实账号执行已鉴权恢复 / 导出 / 删除演练，避免改动生产数据。
+- **生产部署与复验（2026-11-10）**：`GET/POST /api/v1/backups`、恢复、导出、删账号 5 条路径未鉴权均为 401；部署后 `persist-backup.service` 实跑成功（`integrity:"ok"`）。已鉴权的恢复 / 导出 / 删除演练于 2026-11-17 用真实账号走通（见 `HANDOFF.md` §5.2）。
 
 ---
 
@@ -675,55 +659,7 @@ DAILY_BRIEF_AT=21:00
 
 ---
 
-## 14. 测试与验收策略
-
-### 14.1 服务端（`server/test/`）—— 当前 234 条 / 27 个文件
-
-- **repository / migration** ✅ 已落地：`:memory:` SQLite；迁移幂等、`sync_seq` 单调、LWW、墓碑、pull 游标、幂等 op（`db-driver` 5 / `db-migrate` 7 / `db-repositories` 16 条）。
-- **鉴权与限流** ✅ 同步部分已落地：无 token、吊销 token、恢复码换 token、同步接口独立限流（`devices` 10 / `sync` 16 条）。
-- **facts builder** ✅ 步骤 13 已落地：fixture 注入 7/30/90 天数据（含缺失模块、空窗口、授权关闭、跨月、时钟乱序），快照断言；数字与手写 SQL 对照。
-- **报告** ✅ 步骤 13 已落地：净化白名单、缓存命中/失效、rules 降级、403/409/422/502/503 分支。
-- **报告类型提示词** ✅ 2026-11-11：`server/test/report-prompts.test.ts` 对「训练建议 / 饮食观察 / 学习观察」做参数化校验，确保每类观察都带专属提示词，不会退化成泛化「今日简报」。owner 三张今日观察卡复用 `/api/report`，demo / guest 保持零 `/api/*`；「AI 热量登记」仍为前端本地解析，不调用模型。
-- **备份 / 恢复 / 导出 / 删除** ✅ 14a（快照 sha256、保留瀑布）与 14b（恢复预览、二次确认、schema / 账号校验、原子替换与失败回滚）已落地并有单测；14c 导出路由覆盖鉴权、账号隔离、软删除排除、空账号、0.3.0 形状、响应头与敏感字段排除（4 条）；14d 删除路由 7 条，覆盖确认门禁、全表删除、凭据失效、多账号隔离、整库快照保护、规范文件清理与事务回滚；备份列表 / 手动创建新增 7 条，覆盖鉴权、规范文件过滤与排序、路径脱敏、manual 固定 reason、旁车、同秒 409 与内存库 409。
-
-### 14.2 客户端（`app`）—— 当前 app 单测 364 条 / 30 个文件
-
-- **迁移** ✅ 步骤 11：v1 → v2（训练历史归档、日期补齐、演示数据不入库）；备份 0.1.0/0.2.0 → 0.3.0 导入。\n- **迁移** ✅ 2026-11-12：v2 → v3，按精确样例指纹清理旧版 owner 演示数据；迁移与读取时都会复查，保留用户后来新增或修改的记录，并清空命中的旧快照。
-- **同步层** ✅ 步骤 12d/12f：outbox 幂等、批次合并、LWW 合并、墓碑移除、形状守卫与失败标记；用 mock fetch，不连真实服务端（`sync-*` 共 62 条）。
-- **设置页** ✅ 步骤 12e：同步区块（开关、恢复码、最后同步、吊销）；关闭后不再请求；另有 2 条 E2E 用 mock `/api/v1/**` 覆盖。
-- **报告页** ✅ 步骤 13 已落地：四态（服务端 AI / 服务端规则 / 本地降级 / 错误）；标注文案。
-
-### 14.3 E2E 与真实联调
-
-- 2026-11-12 运行模式与观察卡回归：`app/e2e/runtime-modes.spec.ts` 4 条 × 2 项目 = 8 次，覆盖 owner 无业务占位空白初始状态、demo 预置数据 + 预生成 AI 快照 + 零 `/api/*`、guest 空白数据 + 零 AI 请求、独立 IndexedDB 与会话模式保持；`app/e2e/ai-observations.spec.ts` 1 条 × 2 项目验证 owner 三张观察卡分别只发送对应来源摘要。全套 E2E 为 **130/132 次执行（11 文件，2.6 m）**。
-
-- Playwright 保持「无真实后端」隔离（`PERSIST_API_TARGET=http://127.0.0.1:9`）；新增用例只覆盖离线态与降级文案。
-- 真实后端联调沿用现有手工流程：本机起 `server` + 临时 Key（不入库、用完删除），验证注册 → push → facts → 报告 → 缓存 → 备份 → 恢复 → 删除全链路；真实 Key 上线前轮换。
-- 视觉：8d、P4a（设置页新增区块）、P4b（报告页结构变化）各重跑 `visual:check` 并需用户双端验收后更新基线。
-
-### 14.4 验收总门槛（每步结束时报告，不连做）
-
-- 类型检查 0 错、Oxlint 无新增 error、单元测试全绿、构建成功、E2E 全绿（与基线一致或更好）。
-- 文档同步（`HANDOFF.md` / `docs/部署与服务器现状.md` / `README.md` / 本文件）。
-- 一次一个提交主题（`feat:` / `docs:`）；**步骤 12/13 已于 2026-11-05 推送，服务端 2026-11-06、前端 2026-11-07 均已部署到生产 IP 直连环境**。14b、14c、14d 与备份列表 / 手动创建 HTTP 端点已于 2026-11-10 部署到生产；运行模式、owner 三张观察卡、14d 前端入口与统一日期 / 时间选择器已随 `ec8f16f` 于 2026-11-11 部署 web；部署后备份实跑 `integrity:"ok"`。
-
----
-
-## 15. 实施计划（拆分到可验收的步骤）
-
-| 步骤          | 内容                          | 主要改动                                                                                                                                                             | 验收要点      | 依赖                              | 状态                                                                                                                                                                                                                                                                                                                                   |
-| ------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **11（8d）**  | 数据历史化（前端）            | `types.ts`、`persist-state.ts` v2 迁移、`MockDataProvider`、`FitnessPage` 历史列表、饮食/饮水/计划按日、备份 0.3.0                                                   | §6.3          | 无（可与备案等待并行）            | ✅ 2026-11-04                                                                                                                                                                                                                                                                                                                          |
-| **12（P4a）** | 账号 + 增量同步               | `server/src/db/*`（驱动/repo/migrate）、`/api/v1/devices*`、`/api/v1/sync/*`、客户端 `sync-*`、设置页同步区块                                                        | §7.4          | 11 + Node 版本决策（§18-1，已定） | ✅ 2026-11-05 本机完成并推送；**服务端 2026-11-06、前端同步卡片 2026-11-07 均已部署**                                                                                                                                                                                                                                                  |
-| **13（P4b）** | 服务端聚合 + AI 综合分析      | facts builder、`ANALYSIS_SYSTEM_PROMPT`、`/api/v1/analysis/*`、`/api/v1/reports*`、报告页改造、缓存与可选定时                                                        | §8.5          | 12                                | ✅ 2026-11-05 本机完成并验证、已推送；**服务端 2026-11-06、前端综合分析块 2026-11-07 均已部署**（13a–13d）                                                                                                                                                                                                                             |
-| **14（P4c）** | 备份/恢复/导出/删除           | `/api/v1/backups*`、`/api/v1/export`、`DELETE /api/v1/account`、定时备份、隐私区块文案                                                                               | §12           | 12                                | 🟢 14a–14d 服务端能力已在生产启用 ✅ 2026-11-07／14b ✅ 2026-11-09（`821eabb`，2026-11-10 已部署）／14c ✅ 2026-11-10（2026-11-10 已部署）／14d ✅ 2026-11-10（`ca10b42`，2026-11-10 已部署；前端入口已随 `ec8f16f` 于 2026-11-11 部署，2026-11-13 真机删除验收通过）／备份列表与手动创建 ✅ 2026-11-10（`c309001`，2026-11-10 已部署） |
-| 9 / 10        | 部署与域名（2026-11-06 拆分） | 部署 8c 版本 ✅ → 步骤 10 A 段（升 Node 22 + 建库目录 + 备份 + 部署步骤 12/13 + 前端产物，**不等备案号**）→ 步骤 10 B 段（域名 + 443 + 证书 + 页脚备案号，等备案号） | HANDOFF §13.3 | 备案号**仅**卡 B 段               | 9 ✅ 2026-11-04；10 A 段第 1–10 项 ✅（SSH 仅密钥 + fail2ban、删除安全组 3389，2026-11-10 外部复验通过）；10 B 段 ⬜ 等备案号                                                                                                                                                                                                          |
-
-说明：11–14 均可在服务器未部署时本地开发（SQLite 本地文件、单测 `:memory:`）；真正影响线上的是步骤 9 之后的每次发布。**步骤 12/13 的服务端已于 2026-11-06 随步骤 10 A 段部署**（服务器升到 Node v22.19.0，`node:sqlite` 可用）——这一步**不需要备案号**。
-
----
-
-## 16. 风险与对策
+## 14. 风险与对策
 
 | 风险                                               | 影响           | 对策                                                                                                                                                  |
 | -------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -741,11 +677,11 @@ DAILY_BRIEF_AT=21:00
 
 ---
 
-## 17. 与现有文档 / 契约的对照
+## 15. 与现有文档 / 契约的对照
 
 | 现有内容                                                                                                         | 本方案的处理                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HANDOFF.md` §13.4 P4 四步拆分                                                                                   | 本文件是其实施级展开（§15），备份恢复对应步骤 14                                                                                                                                                                                                                                                                                                     |
+| `HANDOFF.md`（现状与待办）                                                                                     | 本文件是终态数据层与契约的唯一来源；HANDOFF 管现状、待办与风险                                                                                                                                                                                                                                                                            |
 | 旧规划（`docs/Persist-项目开发规划.md` **v1.2**，2026-11-04 已重写为 v2.0）§7.1 Dexie / Drizzle / Docker Compose | v1.2 的原方向已废弃；实际为原生 IndexedDB、无 Docker、无 ORM（SQLite 直写 SQL），本方案维持该偏离并写明原因                                                                                                                                                                                                                                          |
 | 旧规划 §7.5 同步预设计（UUID / `updatedAt` / `deletedAt` / `serverRevision` / Outbox）                           | 本方案落地并补齐：`rev` 游标、opId 幂等、bootstrap、墓碑保留期、LWW 细节                                                                                                                                                                                                                                                                             |
 | 旧规划 §7.6 `/api/v1/...` 建议 API                                                                               | 本方案的 §10 是其收敛版（删除未采用的端点，补 devices/backups/export/account）                                                                                                                                                                                                                                                                       |
@@ -756,7 +692,7 @@ DAILY_BRIEF_AT=21:00
 
 ---
 
-## 18. 待用户确认（实施前逐条拍板，未确认不写代码）
+## 16. 待确认项
 
 1. **服务器 Node 版本策略**：~~升级 Node 22 LTS 用内置 `node:sqlite`／保留 Node 20 + `better-sqlite3`／升级 Node 24 后再确认~~ → **已定（2026-11-05）：Node 22 LTS + 内置 `node:sqlite`**（`engines >= 22.5`）。服务器已于 2026-11-06 部署 Node v22.19.0，步骤 12/13 已在生产启用。
 2. **同步默认值**：~~安装后是否弹一次「开启云端同步」引导；还是完全手动开启~~ → **已定（2026-11-05）：默认关闭**，不弹引导；首次进入设置页可一键开启（开启时展示「数据副本会存到自建服务器」的说明再确认）。
@@ -768,65 +704,6 @@ DAILY_BRIEF_AT=21:00
 
 ---
 
-## 19. 附录：本方案新增/改动的文件清单（✅ = 已落地，⬜ = 待实施）
-
-```text
-server/src/db/driver.ts          ✅ Db 抽象（prepare/run/all/get/exec/transaction/reopen；只读校验；node:sqlite）
-server/src/db/backup.ts          ✅ 14a 快照 / sha256 / 保留瀑布
-server/src/db/restore.ts         ✅ 14b 恢复预览 / 校验 / 原子替换 / 回滚
-server/src/db/migrations.ts      ✅ schema_migrations + DDL（schema v1，14 张表）
-server/src/db/entities.ts        ✅ 实体 kind → 表/列映射、字段校验
-server/src/db/repositories/*.ts  ✅ entities / sync-seq / sync-ops / devices 的 SQL
-server/src/db/index.ts           ✅ openPersistDatabase()（建目录、开库、迁移）
-server/src/auth.ts               ✅ 设备令牌 / 恢复码生成、规范化、只存哈希
-server/src/routes/guards.ts      ✅ /api/v1 限流与设备鉴权前置
-server/src/routes/devices.ts     ✅ 注册 / 恢复 / 吊销
-server/src/routes/sync.ts        ✅ bootstrap / push / pull
-server/src/sync/accounts.ts      ✅ 注册 / 恢复 / 吊销业务动作
-server/src/sync/service.ts       ✅ 认证、push 幂等、bootstrap 事务、pull 整形
-shared/src/contract/sync.ts      ✅ 同步契约（@persist/shared，12c）
-shared/src/contract/report.ts    ✅ 报告 / 三张观察卡共享契约（2026-11-11）
-shared/src/contract/backup.ts    ✅ 14 备份列表 / 手动创建 / 恢复契约
-shared/src/contract/export.ts    ✅ 14c 导出信封 / 下载文件名契约
-shared/src/contract/account.ts   ✅ 14d 删除请求 / 响应 / 计数契约
-server/src/export/account-export.ts ✅ 14c 账号业务行 → 0.3.0 备份形状
-server/src/routes/export.ts      ✅ 14c GET /api/v1/export
-server/test/export-routes.test.ts ✅ 14c 路由测试 4 条
-server/src/account/delete-account.ts ✅ 14d 事务硬删除 / 快照清理 / 多账号快照保护
-server/src/routes/account.ts      ✅ 14d DELETE /api/v1/account
-server/test/account-delete-routes.test.ts ✅ 14d 路由测试 7 条
-shared/src/contract/entities.ts  ✅ 实体契约
-shared/src/contract/parse.ts     ✅ 契约解析/校验
-app/src/lib/sync-contract.ts     ✅ 前端契约唯一入口（转出共享包）
-app/src/lib/sync-client.ts       ✅ 同步 HTTP 客户端
-app/src/lib/sync-queue.ts        ✅ outbox 入队/合并/批次
-app/src/lib/sync-store.ts        ✅ token / lastPulledRev / outbox / 状态（persist-sync）
-app/src/lib/sync-entities.ts     ✅ 切片摊平 / diff / pull 合并 + 形状守卫
-app/src/lib/sync-engine.ts       ✅ bootstrap / 防抖增量 / 兜底轮询 / 三态
-app/src/pages/SettingsPage.tsx   ✅ 「数据同步」卡片（12e）+ 14d 删除入口联网门禁
-app/src/lib/network-status.ts    ✅ Capacitor Network / 浏览器 online 事件统一状态
-app/src/lib/network-status.test.tsx ✅ 网络状态 hook 测试
-app/src/lib/history*.ts          ✅ 8d 历史归档工具
-app/src/types.ts                 ✅ 8d 历史结构 + 报告 v2 类型（步骤 13）
-app/src/lib/persist-state.ts     ✅ schemaVersion 3 + 迁移（含旧 owner 样例清理）
-app/src/lib/mock-data-transfer.ts ✅ 备份 0.3.0
-app/src/pages/FitnessPage.tsx    ✅ 历史列表改真实数据
-server/src/routes/analysis.ts    ✅ facts / reports（步骤 13）
-server/src/analysis/facts.ts     ✅ 事实包构建（纯函数 + SQL）
-server/src/analysis/rules.ts     ✅ 规则降级模板
-server/src/ai/analysis.ts        ✅ 调用模型 + v2 净化 + schema 校验
-server/src/ai/prompts.ts         ✅ ANALYSIS_SYSTEM_PROMPT + 报告类型专属提示词
-server/test/report-prompts.test.ts ✅ 训练 / 饮食 / 学习观察提示词测试
-app/src/lib/use-ai-observation.ts ✅ owner 三张观察卡真实 AI 请求、缓存与回退
-server/src/routes/backups.ts     ✅ 备份列表 / 手动创建 / 14b 恢复端点（GET/POST /api/v1/backups + POST /api/v1/backups/:id/restore）
-server/test/backup-routes.test.ts ✅ 备份 HTTP 与恢复路由测试（11 条）
-server/src/jobs/*.ts             🟡 每日简报 / 备份已落地；墓碑清理待做
-app/src/pages/ReportsPage.tsx    ✅ 服务端报告渲染 + 降级（步骤 13）
-docs/*.md、README、HANDOFF       每步完成后同步
-```
-
----
-
-## 20. 一句话总结
+## 17. 一句话总结
 
 **先用 8d 把「只有今天」的数据变成「有历史」，再用 P4a 把历史同步成服务端可检索副本，然后用 P4b 让服务端自己算数字、让模型只写分析，最后用 P4c 把备份/导出/删除补齐 —— 这就是「AI 检索我所有数据做综合分析」的终态，而不是继续在前端拼摘要。**

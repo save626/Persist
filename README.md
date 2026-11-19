@@ -3,44 +3,47 @@
 个人自用、长期记录、本地优先的计划与复盘工具：以「今日」为中心，统一记录健身、饮食饮水与学习，并在之后用跨模块数据生成 AI 分析与建议。
 
 - 产品形态：React + Vite 单页应用（五项固定一级导航）+ Fastify 服务端 AI 代理
-- 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本（步骤 12 本机完成；服务端 2026-11-06、前端产物 2026-11-07 均已部署，同步默认关闭）；步骤 13 的服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
-- 规模：八页面可完整点击验收；当前本机为 app 单测 388（32 文件）、server 单测 356（34 文件）、E2E 132 次执行（11 文件，1.7 m），Lint 0 错 0 警告；视觉脚本 126 张页面截图 + 1 张快速记录（21 状态）（demo / guest、日期 / 时间选择器与 owner / guest 空白初始状态已验收）。Android 工程已用 Capacitor 8.6.0 完成 debug APK USB 安装；2026-11-17 重打包的 APK（`4,625,698 B`，SHA-256 `05947976…c8b5`）已覆盖安装到 RMX3800，并完成「凭据门 `enforce` 下真实 AI 可用」的真机闭环。
+- 数据策略：本地优先（浏览器 IndexedDB 是写入权威），服务端只做 AI 代理与可检索的同步副本；服务端综合分析报告只存在服务端归档（365 天），**不回写本机**
+- 对外形态：网站设计层（落地页 / 介绍首页 / OG 分享卡）→ `/app/?mode=demo|guest`；完整产品（含真实 AI）只在作者自有移动端
 
-## 当前阶段（2026-11-17：P0 的 AI 凭据门、双配额与审计保留期已上线——`/api/chat`、`/api/report` 需凭据、每日 100 次 / 20 万 token、`ai_calls` 只留 30 天；数据库级 `audit_log` 记录建设备 / 吊销 / 删账号 / 建快照 / 恢复 / 导出七类动作；前端七个页面已按路由分包（主包 684 → 392 kB）；schema 4；步骤 12/13、14a–14d 与备份 HTTP 端点已在生产启用；落地页、产品介绍首页与 `/app/` 的 demo / guest 入口已部署到生产 IP；完整产品仅作者自有移动端 App；仍 IP 直连、未上线）
+## 当前状态（2026-11-19 实测）
 
-前端产品原型**已完成并通过双端视觉验收，视觉范围冻结**（唯一例外：经用户批准的今日页晨间简报接入真实 AI，`9f9cc71`）：AI 引导建档 → 长期计划草案确认 → 启用/归档闭环已通；AI 建档对话（`POST /api/chat`）、AI 报告文字与今日页晨间简报文字（`POST /api/report`）在「档案页开启 AI 数据授权 + 服务端健康」时走真实 DeepSeek，失败或未授权时回退本地规则/Mock 并如实标注；**报告的指标数字、依据条目与简报 KPI 始终由前端按本地记录确定性生成，模型只写文字**。业务数据全部写入本机 IndexedDB（刷新/重开不丢，有「清空本机数据」入口，导出导入为 0.3.0 备份格式并兼容旧版）：步骤 11（8d）起训练 / 饮食 / 饮水 / 计划按日台账落历史（本地 `schemaVersion` 当前为 3；步骤 11 初始为 2），报告页可按近 7 / 30 / 90 天窗口汇总真实历史。
+八个页面可完整点击验收，前端视觉范围冻结。服务端 AI 边界已完全闭合：凭据门
+（生产 `PERSIST_AI_GATE=enforce`）+ 每日 100 次 / 20 万 token 双配额 + `ai_calls` 审计
+（保留 30 天）+ 数据库级 `audit_log`（七类动作留痕）。
 
-服务端 P3 已完成（8a `9138175` + 8b `b99d3ad` + 8c `bdd4265`），并**于 2026-11-04 以 IP 直连方式部署到阿里云 ECS（Nginx + systemd + 真实 DeepSeek Key）并通过联调验收——仅内部调试，不得对外宣称「已上线」**。P4 已开工：步骤 11（数据历史化）2026-11-04 完成，步骤 12（P4a 账号 + 增量同步，12a–12f）2026-11-05 **本机完成并验收、已推送到 `origin/main`，服务端 2026-11-06 已部署**（服务器已升到 Node v22.19.0，`node:sqlite` 可用）。**步骤 13（P4b 服务端 SQL 聚合 + AI 综合分析）2026-11-05 在本机完成并验证，源码与文档已推送（`41ed92f` / `82ed773` / `40d2bf4` / `7f13727` / `18d5f77` / `5ba4f7e`）、服务端 2026-11-06 + 前端产物 2026-11-07 均已部署**：事实包 v2 → 单次模型调用 → 模型只写文字（数字全来自 SQL 且有白名单校验）；四个 `/api/v1` 接口（分析生成 / 事实包 / 归档列表 / 归档详情）、每日简报 job（默认关闭、进程内调度）、报告归档 365 天保留；前端 `/reports` 新增「服务端综合分析」块、设置页新增「每日简报」卡片。**本机已用真实 DeepSeek Key 验证 chat / report / 综合分析三条链路（2026-11-05）**：分析首次 5.7 s、同参 `cached`、`force` 重生成、正文无英文字段名；联调暴露的「模型偶尔写 6 段导致 502、正文夹带英文字段名」已修（`18d5f77`：内容不合规带原因重试一次）。**该结论只适用于本机；线上已换新版服务端与静态包（仍 IP 直连，未上线）。** 步骤 14 的本机面已补齐：14a 每日备份已在生产启用；14b 恢复、14c 导出、14d 删除账号，以及 `GET/POST /api/v1/backups` 备份列表 / 手动创建端点均已在本机实现并验证，并于 2026-11-10 部署到生产（`c309001`）。14c 的 `GET /api/v1/export` 返回可被客户端 0.3.0 导入的账号级 JSON，并排除凭据、设备信息与分析归档；14d 的 `DELETE /api/v1/account` 只接受显式 `confirm:true`，在单事务中硬删除当前账号的业务行、分析归档、任务、同步台账与设备，并清理规范快照及旁车；多 active 账号且存在整库快照时返回 409，避免误删他人恢复副本。备份 HTTP 端点只暴露稳定 id 与元数据，不返回绝对路径。14d 前端「先删服务端、成功后清本机」入口已随 2026-11-11 web 包部署；真机验收未在本轮记录中确认。域名已购、阿里云备案初审已通过、**备案号未下发**（因此不得宣称已上线，也不能用域名对外提供服务）。Android/P5 已补齐 `app/android/` Capacitor 8.6.0 工程、移动端 API 桥接、USB 安装脚本和服务端 `https://localhost` CORS 白名单；JDK 21.0.13、Android SDK Platform 36、adb 与 debug APK USB 安装均已验证。2026-11-17 已用最新代码重打 debug APK 并覆盖安装到 RMX3800（11:15:15，保留数据），在 `PERSIST_AI_GATE=enforce` 下完成真实 AI 真机闭环（`ai credential check did not pass` 0 条，`POST /api/report` 11 次全 200），并已开启同步（`users=1 / devices=1`，真实数据落库）。
+**基线**：app 单测 452（35 文件）、server 单测 376（35 文件）、lint 0/0、主包 394 kB
+（已分包，无 500 kB 警告）、视觉基线 141 张。
 
-下一步（2026-11-06 更正口径）：**步骤 10 不再整步等备案号**。①**已完成（2026-11-06 / 11-07）**：服务器升 Node 22 LTS（`/opt/node22` v22.19.0）、建 `/var/lib/persist` + systemd `ReadWritePaths`、每日 `VACUUM INTO` 备份（`persist-backup.timer` 每日 03:00）、上传 `shared/dist` + `server/dist` 并部署步骤 12/13、前端产物上传（2026-11-07 14:14）；**未走 3100 端口预演，改为备份先行 + 版本化目录（`/opt/persist-next`）**。②**已完成（2026-11-10）**：SSH 仅密钥 + 禁用密码 + `fail2ban` 已启用并验证；安全组 3389 入方向规则已由用户删除，外部复验为超时不可达，22/80 正常。③**必须等备案号**：域名解析、443、证书、HTTP→HTTPS、页脚备案号、「已上线」表述。④14b / 14c / 14d 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产（停机 501 ms；部署后备份实跑 `integrity:"ok"`）；Nginx 根路径与 `/settings` 均 200，5 条新端点未鉴权请求均 401。逐项拆解见 [`HANDOFF.md`](HANDOFF.md) §13.3 与 [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md) §6。
+**仍为 IP 直连内部调试**：域名未解析、443 未开、**备案号未下发**、Android 仍是 debug
+签名。**不得宣称「已上线」。**
 
-**对外入口（P7）**：网站设计层（桌面落地页 `landing/index.html`、产品介绍首页 `landing/home.html`、OG 分享卡 `landing/assets/og-card.png` + `landing/og/`）**自 2026-11-19 起开放重新设计**，交接入口见 [`docs/网站设计层交接-2026-11-19.md`](docs/网站设计层交接-2026-11-19.md)；本仓库只处理跳转链路与跳转后的运行模式。生产路由为 `/` 落地页 → `/home.html` 产品介绍首页 → `/app/?mode=demo`（查看演示）或 `/app/?mode=guest`（自己体验）。网页域名 / IP 只部署 `npm run build` 产物，`owner` 在网页解析层不可达；无参数、非法参数或 `mode=owner` 一律进入 `guest`。demo 使用完整预置数据且全部 AI 内容均在部署前真实生成并固化，部署后只读、零 `/api/*`；guest 从空白数据开始，全部 AI Mock、零 `/api/*`、同步关闭。作者自有移动端通过 USB 安装 `npm run build:mobile` 生成的 `app/dist-mobile` 包，默认 `owner`，保留完整真实 AI 与同步。owner 首启 / 清空为无业务占位的空白状态（无目标、计划、训练、饮食、学习、档案、报告；饮水基线 0），AI 总授权保留开启，数据来源开关、提醒与每日简报默认关闭；真实 AI 不可用时降级为本地 Mock / 规则并标注来源。2026-11-12 已部署新 web 包 `index-DKsHXSEx.js` 671633 B + `index-BMbKaiLQ.css` 153875 B，web demo / guest 产品的桌面侧栏与窄屏顶栏提供“返回首页”，均回到 `/home.html`，用户已完成双端验收；整体仍未上线。**服务端 AI 边界已于 2026-11-17 补齐**：`/api/chat` 与 `/api/report` 需 `Authorization: Bearer psa_…`（预共享密钥，服务端只存 sha256；`PERSIST_AI_GATE=off|warn|enforce`，生产为 `enforce`），两条路由共用每日 100 次请求配额并写 `ai_calls` 审计，公网无凭据调用一律 `401 ai_unauthorized`；客户端凭据只在 `build:mobile` 时由 `app/.env.mobile.local` 内联，非 mobile 构建检测到该变量会直接失败。**2026-11-17 后续补齐**：token 配额（Step 3，20 万/天）、`ai_calls` 保留期（30 天）、墓碑与 `sync_ops` 保留期、数据库级 `audit_log`、同步失败 401/429 差异化文案、路由分包（主包 684 → 392 kB）均已上线；生产恢复演练已通过。**生成式 AI 专门备案本版不做**（网页端不存在 AI 能力，属个人自用；三条行为前提见交接文档 §11.3），但域名 / 443 / 证书 / 页脚备案号仍未下发，**不得宣称「已上线」**。详见 [`docs/P0-AI接口服务端安全门设计方案.md`](docs/P0-AI接口服务端安全门设计方案.md)、[`docs/项目交接-2026-11-17.md`](docs/项目交接-2026-11-17.md) 与 [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)。
+> 当前进度、待办、风险与开工流程以 [`HANDOFF.md`](HANDOFF.md) 为准（每次开工实测刷新）。
+> 本 README 只做项目门面，不重复状态数字。
 
 ## 文档地图
 
-| 文档                                                                             | 作用                                                                                                                                      | 什么时候读                                                    |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| [`docs/项目交接-2026-11-17.md`](docs/项目交接-2026-11-17.md)                     | **当前进度与任务看板的第一入口**：生产实况、P0 实施记录、测试基线、任务看板、风险与操作边界                                              | 接手第一读物；进度与下一步以它为准                            |
-| [`HANDOFF.md`](HANDOFF.md)                                                       | **长期历史与细节依据**：一页摘要、产品与功能清单、技术架构、契约、路线、风险、变更史                                                      | 需要回溯历史决策与变更时                                      |
-| [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)                   | **项目介绍与长期规划（v2.0）**：愿景与边界、八页功能规划、数据与技术架构、P0–P6 / 步骤 9–15、风险、Backlog、发布验收清单                  | 想先弄清「这个项目是什么、要走到哪」时                        |
-| [`docs/工程约定.md`](docs/工程约定.md)                                           | 技术选型、设计令牌、响应式与可访问性基线、非功能要求、测试门禁、术语                                                                      | 改 UI、加测试、定验收口径前                                   |
-| [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)                   | **对外入口唯一来源**：为什么公开页不做真实 AI、demo / guest / owner 三模式、闸门与 5 屏决策、原型实测数字、上线前占位、M2/M2.5/M0/M1 顺序 | 做对外入口、分享 pilot、准备公开传播时                        |
-| [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)                           | 服务器规格、Nginx/防火墙硬规则、部署命令速查、备案进度与合规口径                                                                          | 做步骤 9 / 10 前                                              |
-| [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md) | P4 终态设计：SQLite 副本、同步协议、事实包契约、隐私边界、步骤 11–14 拆分                                                                 | 做步骤 13/14 前；含若干已拍板项（驱动 node:sqlite）与待确认项 |
-| [`server/README.md`](server/README.md)                                           | API 契约、环境变量、真实 Key 联调注意事项                                                                                                 | 改服务端或联调前                                              |
-| [`app/README.md`](app/README.md)                                                 | 前端脚手架说明、脚本与目录                                                                                                                | 改前端前                                                      |
-
-> 历史文档：`docs/项目现状总览.md`、`HANDOFF-新会话指令.md`、`docs/工程初始化与前端约定.md` 已于 2026-11-04 合并删除；`docs/Persist-项目开发规划.md` 保留并重写为 v2.0（同上表）。需要旧文用 `git show fccce42:<path>` 取回。
+| 文档                                                                | 作用                                                                             | 什么时候读                       |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------- |
+| [`HANDOFF.md`](HANDOFF.md)                                          | **现状与待办的唯一入口**：实测基线、生产实况、铁律、待办、风险、开工与回滚流程     | **接手第一读物**                 |
+| [`docs/网站设计层交接-2026-11-19.md`](docs/网站设计层交接-2026-11-19.md) | 网站设计层（落地页 / 介绍首页 / OG 分享卡）的重新设计交接                         | 做对外入口、分享 pilot 时        |
+| [`docs/部署与服务器现状.md`](docs/部署与服务器现状.md)                | 服务器规格、Nginx 规则、部署命令速查、**备案号下发当天的执行顺序**                 | 做部署、申请证书时              |
+| [`docs/工程约定.md`](docs/工程约定.md)                                | 技术选型、设计令牌、响应式与可访问性基线、非功能要求、测试门禁、术语               | 改 UI、加测试、定验收口径前      |
+| [`docs/Persist-项目开发规划.md`](docs/Persist-项目开发规划.md)        | 项目介绍与长期规划（v2.0）：愿景与边界、八页功能规划、P0–P6 路线、Backlog          | 想弄清「这是什么、要走到哪」时   |
+| [`docs/P4-数据层与AI综合分析设计方案.md`](docs/P4-数据层与AI综合分析设计方案.md) | 终态数据模型：SQLite 副本、同步协议、事实包契约、隐私边界、DDL                     | 改数据层或同步协议时            |
+| [`docs/P0-AI接口服务端安全门设计方案.md`](docs/P0-AI接口服务端安全门设计方案.md) | AI 安全门设计（凭据、配额、审计、失败语义）                                    | 改 AI 边界时                    |
+| [`docs/落地页与入场动画方案.md`](docs/落地页与入场动画方案.md)        | 对外入口为什么这么设计：公开页不做真实 AI、三模式隔离、上线前占位                | 改公开页文案或入口路由时        |
+| `server/README.md` / `app/README.md` / `shared/README.md` / `app/android/README.md` | 代码旁的操作手册：API 契约、脚本、工程约定、Android 构建与 USB 安装 | 动对应目录前                    |
 
 ## 目录
 
 ```text
 app/      React + Vite Web 客户端（web 产物 app/dist，生产挂在 /app/；mobile 产物 app/dist-mobile；app/android 为 Capacitor 8.6.0 Android 工程，USB 安装）
-landing/  对外落地页与产品介绍首页（/ 与 /home.html，由另一 Agent 维护视觉）
-server/   Fastify 服务端：P3 的 /api/health、SSE /api/chat、POST /api/report；步骤 12 的 /api/v1/devices*、/api/v1/sync/* + SQLite；步骤 13 的 /api/v1/analysis/*、/api/v1/reports* + 每日简报 job + 报告归档（12/13 均已部署）；14b 恢复 / 14c 导出 / 14d 删除账号 / 备份列表与手动创建端点已于 2026-11-10 部署到生产
-shared/   跨端共享纯 TS 契约（`@persist/shared`）：同步实体与接口契约（步骤 12c）、综合分析契约（步骤 13），前后端同源，`shared/dist` 已 gitignore
-design/   视觉基线与截图（21 状态 × 6 视口 = 126 张页面截图 + 1 张快速记录，由 visual:check 生成）
-docs/     工程约定、部署现状、P4 设计方案
+landing/  对外落地页、产品介绍首页与 OG 分享卡（/ 与 /home.html）
+server/   Fastify 服务端：AI 代理、/api/v1/* 账号与同步、综合分析归档、备份恢复导出删除、每日简报 job
+shared/   跨端共享纯 TS 契约（@persist/shared）：同步契约与综合分析契约，前后端同源
+design/   视觉基线与截图（141 张，由 visual:check 生成）
+docs/     工程约定、部署现状、方案与交接文档
 ```
 
 ## 快速开始
@@ -65,38 +68,57 @@ npm run android:usb                # 构建、同步并通过 USB 安装 debug A
 ```powershell
 npm run lint
 npm run typecheck
-npm test               # 388 条 / 32 个文件
-npx playwright test    # 66 用例 × 2 项目 = 132 次执行，11 个文件
+npm test
+npx playwright test
 npm run build
-npm run visual:check   # 126 张页面截图 + 1 张快速记录 → design/；需先起无 Key 后端，改布局/弹层时跑
+npm run visual:check   # → design/；需先起无 Key 后端，改布局/弹层时跑
 ```
 
-> `app/` 与 `server/` 的 `predev` / `prebuild` / `pretypecheck` / `pretest` 等钩子会自动执行 `npm run shared:build`（编译 `shared/src` → `shared/dist`），一般不需要手动跑。
+> `app/` 与 `server/` 的 `predev` / `prebuild` / `pretypecheck` / `pretest` 等钩子会自动执行
+> `npm run shared:build`（编译 `shared/src` → `shared/dist`），一般不需要手动跑。
 
-服务端（详见 [`server/README.md`](server/README.md)；**步骤 12 起要求 Node ≥ 22.5**，内置 `node:sqlite`，本机数据落 `server/data/persist.sqlite`，可用 `DB_PATH` 覆盖）：
+服务端（详见 [`server/README.md`](server/README.md)；**步骤 12 起要求 Node ≥ 22.5**，
+内置 `node:sqlite`，本机数据落 `server/data/persist.sqlite`，可用 `DB_PATH` 覆盖）：
 
 ```powershell
 cd D:\Persist\server
 npm install --no-audit --no-fund --cache "D:\Persist\server\.npm-cache"
-npm run typecheck && npm test && npm run build   # 356 条 / 34 个文件
+npm run typecheck && npm test && npm run build
 Copy-Item .env.example .env    # 本机联调才填 DEEPSEEK_API_KEY；.env 不入库、用完即删
-node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；脚本不自动读 .env，带 Key 必须加 --env-file，否则 /api/chat、/api/report 返回 503
+node --env-file=.env dist/index.js   # 默认 127.0.0.1:3000；带 Key 必须加 --env-file，否则 /api/chat、/api/report 返回 503
 ```
 
-> Key 只允许存在于服务端环境变量（生产放 `/etc/persist/server.env`，600）。真实 Key 曾出现在开发对话中，**上线前必须轮换**。
+> Key 只允许存在于服务端环境变量（生产放 `/etc/persist/server.env`，600）。真实 Key 曾出现在
+> 开发对话中，**上线前必须轮换**。
 >
-> 步骤 13 新增 5 个分析与简报相关变量：`ANALYSIS_RATE_LIMIT_MAX`（默认 6 次 / 5 分钟，独立于 chat/report 的限流器）、`ANALYSIS_TIMEOUT_MS`（45000）、`ANALYSIS_MAX_TOKENS`（2600）、`DAILY_BRIEF_ENABLED`（false）、`DAILY_BRIEF_AT`（21:00）；默认值与注释见 [`server/.env.example`](server/.env.example)，行为说明见 [`server/README.md`](server/README.md)。
+> P0 变量：`PERSIST_AI_GATE`（`off`/`warn`/`enforce`，默认 `off`）、`PERSIST_AI_KEYS`
+> （`k1:<sha256hex>`，空 = fail-closed）、`PERSIST_AI_DAILY_LIMIT`（默认 100 次/天，
+> `0` 关闭）、`PERSIST_AI_DAILY_TOKENS`（默认 200000 token/天，`0` 关闭）、
+> `PERSIST_AI_AUDIT_KEEP_DAYS`（默认 30 天，`0` = **不清理**，与配额的 `0` 语义相反）。
+> 客户端侧对应 `VITE_PERSIST_AI_KEY`，**只允许写在 `app/.env.mobile.local`**，
+> 写进 `.env` / `.env.local` / `.env.production*` 会被 web 构建硬拦截。
 >
-> 2026-11-17 新增 5 个 P0 变量：`PERSIST_AI_GATE`（`off` / `warn` / `enforce`，默认 `off`）、`PERSIST_AI_KEYS`（`k1:<sha256hex>[,k2:<sha256hex>]`，空 = fail-closed）、`PERSIST_AI_DAILY_LIMIT`（默认 `100` 次/天，`0` 关闭这一维）、`PERSIST_AI_DAILY_TOKENS`（默认 `200000` token/天，`0` 关闭这一维）、`PERSIST_AI_AUDIT_KEEP_DAYS`（`ai_calls` 保留天数，默认 `30`，`0` = **不清理**，与配额的 `0` 语义相反）；客户端侧对应 `VITE_PERSIST_AI_KEY`，**只允许写在 `app/.env.mobile.local`**，写进 `.env` / `.env.local` / `.env.production*` 会被 web 构建硬拦截。
+> 分析与简报变量：`ANALYSIS_RATE_LIMIT_MAX`（默认 6 次/5 分钟，独立于 chat/report 限流器）、
+> `ANALYSIS_TIMEOUT_MS`（45000）、`ANALYSIS_MAX_TOKENS`（2600）、`DAILY_BRIEF_ENABLED`（false）、
+> `DAILY_BRIEF_AT`（21:00）。默认值与注释见 [`server/.env.example`](server/.env.example)。
 
 ## 视觉与交互基线
 
-`design/home-v3-countdown.html`：灰白 + 低饱和浅蓝，一级导航固定五项（今日 / 健身 / 饮食 / 学习 / AI 报告），重要目标倒计时为两个独立目标。长期计划页 `/plans` **不占主导航**，从档案页「AI 建档」、今日页「长期计划 →」或直链进入。
+`design/home-v3-countdown.html`：灰白 + 低饱和浅蓝，一级导航固定五项（今日 / 健身 / 饮食 /
+学习 / AI 报告），重要目标倒计时为两个独立目标。长期计划页 `/plans` **不占主导航**，从档案页
+「AI 建档」、今日页「长期计划 →」或直链进入。
 
 ## 数据保存在哪里
 
-业务数据保存在**当前浏览器**的 IndexedDB（数据库 `persist-app`，单条记录 `persist-mock-state`）：刷新、关标签页、重开浏览器都不丢；清站点数据、换浏览器、换设备、无痕模式会丢失。设置页导出/导入为 0.3.0 备份格式（兼容旧版），导入会整体替换本机数据且不可撤销。
+业务数据保存在**当前浏览器**的 IndexedDB（数据库 `persist-app`，单条记录
+`persist-mock-state`）：刷新、关标签页、重开浏览器都不丢；清站点数据、换浏览器、换设备、
+无痕模式会丢失。设置页导出/导入为 0.3.0 备份格式（兼容旧版），导入会整体替换本机数据且不可撤销。
 
-跨设备同步的代码已在步骤 12 完成（服务端 SQLite 副本 + 设备令牌 + 增量同步 + 设置页开关，**默认关闭**），且**服务端已于 2026-11-06 部署、前端「数据同步」卡片 2026-11-07 已上传**——但**同步默认关闭**，不开开关服务端不会收到任何业务数据；开启后本机数据副本才会分批上传到自己的服务器，且同步副本不是备份。
+跨设备同步（服务端 SQLite 副本 + 设备令牌 + 增量同步 + 设置页开关）**默认关闭**，不开开关
+服务端不会收到任何业务数据；开启后本机数据副本才会分批上传到自己的服务器，
+且**同步副本不是备份**。
 
-步骤 13 的服务端综合分析报告同样**只存在服务端归档**（`analysis_reports`，保留 365 天，每次生成时清理过期项），不进本机 IndexedDB、不进 0.3.0 导出包；归档里只存模型文字与指标快照；墓碑与 `sync_ops` 30 天、`ai_calls` 30 天、`audit_log` 30 天的清理均已实现（`sync_retention` / `ai_audit_prune`，每日 04:00 后跑一次）；`audit_log` 只记写动作（建设备 / 换设备 / 吊销 / 删账号 / 建快照 / 恢复 / 导出），删账号时该账号的历史行只置空 `user_id` 不删行。步骤 14c 的 `GET /api/v1/export` 只导出当前账号的业务实体，**不会把服务端分析归档伪装成本地报告**；步骤 14d 的 `DELETE /api/v1/account` 与 `GET/POST /api/v1/backups` 已于 2026-11-10 部署到生产并完成专项测试，14d 前端「先删服务端、成功后清本机」入口已在本机接线，待双端验收。
+服务端综合分析报告同样**只存在服务端归档**（`analysis_reports`，保留 365 天），不进本机
+IndexedDB、不进 0.3.0 导出包；归档里只存模型文字与指标快照。墓碑与 `sync_ops`、`ai_calls`、
+`audit_log` 均为 30 天保留（每日 04:00 后跑一次清理 job）。`audit_log` 只记写动作，删账号时
+该账号的历史行只置空 `user_id` 不删行。

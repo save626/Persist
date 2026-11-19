@@ -27,7 +27,7 @@ src/
 | ---------------- | ------------------------------------------------------- | -------------------------------------------------------------------- |
 | 服务端           | `import ... from '@persist/shared/contract/sync'`       | 路由校验入参、组装响应；`server/src/db/entities.ts` 只做转出         |
 | 服务端           | `import ... from '@persist/shared/contract/analysis'`   | 步骤 13：`/api/v1/analysis/*`、`/api/v1/reports*` 的入参校验与响应整形 |
-| 服务端           | `import ... from '@persist/shared/contract/backup'`     | 步骤 14：`GET/POST /api/v1/backups` 与 `POST /api/v1/backups/:id/restore` 的列表 / 创建 / 恢复类型 |
+| 服务端           | `import ... from '@persist/shared/contract/backup'`     | 步骤 14 的备份 / 恢复底层类型（`db/restore.ts` 消费）。**备份 HTTP 端点已于 2026-11-18 删除**，契约本身仍需要 |
 | 服务端           | `import ... from '@persist/shared/contract/export'`     | 步骤 14c：`GET /api/v1/export` 的信封 / 数据切片 / 下载文件名契约 |
 | 服务端           | `import ... from '@persist/shared/contract/account'`    | 步骤 14d：`DELETE /api/v1/account` 的 `confirm:true` 校验与删除计数响应 |
 | 前端             | `app/src/lib/sync-contract.ts`                          | 前端唯一入口，12d 的 `sync-client` / `sync-queue` 经由它取类型与校验 |
@@ -37,11 +37,11 @@ src/
 ## 响应形状约定（步骤 13 起，别再踩）
 
 - **综合分析成功响应是平铺对象**（`AnalysisReportResponse` 直接带 `id / type / rangeDays / origin / cached / model / createdAt / content / metrics`），**没有 `{ report: ... }` 包裹层**。这是前后端共同的契约：改形状必须同时改 `shared/src/contract/analysis.ts`、服务端返回与前端解析。
-- 与旧接口的差别要在代码里看清：`POST /api/report` 是 `{ report, model }` 包裹，`POST /api/v1/analysis/reports` 是平铺——历史教训见 `HANDOFF.md` §18.3（客户端曾按 `{ report }` 解包，导致整块显示不可用）。
+- 与旧接口的差别要在代码里看清：`POST /api/report` 是 `{ report, model }` 包裹，`POST /api/v1/analysis/reports` 是平铺——历史教训：客户端曾按 `{ report }` 解包，导致整块显示不可用。
 - 列表接口是 `{ reports, nextCursor }`，详情接口是单个对象，404 走 `{ error: { code: 'not_found' } }`。
 - 步骤 14c 的导出信封是 `{ app: 'Persist', version: '0.3.0', mode: 'server-export', schemaVersion: 2, exportedAt, data }`；`data` 必须与客户端 0.3.0 备份同构，客户端导入不得按 `mode` 拒收。
 - 步骤 14d 的删除成功响应是平铺 `{ deleted: true, deletedAt, counts }`；`counts` 同时给出账号行、分析归档、任务、同步台账、设备与已清理备份文件数。失败使用统一 `{ error: { code, message } }`，其中缺失确认是 `422 confirmation_required`。
-- 备份列表响应是平铺 `{ backups: BackupListItem[] }`，手动创建响应是 `{ backup: BackupListItem }`；列表项只含 `id / bytes / createdAt / reason / sha256`，`sha256` 可为 `null`，**绝不暴露服务端绝对路径**。
+- 备份契约 `BackupListItem` 只含 `id / bytes / createdAt / reason / sha256`，`sha256` 可为 `null`，**绝不暴露服务端绝对路径**。**注意**：对应的 `GET/POST /api/v1/backups` HTTP 端点已于 2026-11-18 删除（无管理员鉴权）；该契约现在只被 `server/src/db/restore.ts` 消费。
 
 ## 构建与消费
 
