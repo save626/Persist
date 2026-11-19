@@ -7,6 +7,7 @@
 export type {
   BootstrapBody,
   DeviceCredentials,
+  DeviceRecoveryCodeResponse,
   DeviceRegisterBody,
   DeviceRegisterResponse,
   DeviceRestoreBody,

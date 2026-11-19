@@ -25,6 +25,7 @@ export const AUDIT_ACTIONS = [
   'device.create',
   'device.restore',
   'device.revoke',
+  'device.recovery_reset',
   'account.delete',
   'backup.create',
   'backup.restore',

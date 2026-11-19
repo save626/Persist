@@ -176,6 +176,7 @@ function buildContextValue(overrides: Partial<MockDataContextValue> = {}): MockD
     disableSync: vi.fn(async () => {}),
     restoreSync: vi.fn(async () => {}),
     revokeSync: vi.fn(async () => {}),
+    resetRecoveryCode: vi.fn(async () => 'f'.repeat(32)),
     deleteServerAccount: vi.fn(async () => {
       throw new Error('not used in analysis tests')
     }),

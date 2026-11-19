@@ -85,6 +85,17 @@ export interface DeviceRevokeBody {
   deviceId?: string
 }
 
+/**
+ * 手动重置恢复码的响应。
+ *
+ * 新恢复码**只在这里返回一次**：服务端只存哈希，之后任何接口都取不回明文。
+ * 因此客户端必须当场展示给用户抄走——拿丢了就再点一次重置（端点可重复调用）。
+ */
+export interface DeviceRecoveryCodeResponse {
+  /** 32 位十六进制小写。 */
+  recoveryCode: string
+}
+
 export interface DeviceCredentials {
   userId: string
   deviceId: string

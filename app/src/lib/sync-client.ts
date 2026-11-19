@@ -3,6 +3,7 @@ import {
   MAX_PULL_LIMIT,
   type BootstrapBody,
   type DeviceCredentials,
+  type DeviceRecoveryCodeResponse,
   type DeviceRegisterBody,
   type DeviceRegisterResponse,
   type DeviceRestoreBody,
@@ -27,6 +28,7 @@ export type SyncApiPath =
   | 'devices'
   | 'devices/restore'
   | 'devices/revoke'
+  | 'devices/recovery-code/reset'
   | 'sync/push'
   | 'sync/pull'
   | 'sync/bootstrap'
@@ -88,6 +90,11 @@ export interface SyncClient {
   register(body: DeviceRegisterBody): Promise<DeviceRegisterResponse>
   restore(body: DeviceRestoreBody): Promise<DeviceCredentials>
   revoke(token: string, body: DeviceRevokeBody): Promise<{ revoked: boolean; deviceId: string }>
+  /**
+   * 手动换一张恢复码。新码只在这一次响应里出现，服务端只存哈希。
+   * 端点可重复调用：响应丢了就再调一次。
+   */
+  resetRecoveryCode(token: string): Promise<DeviceRecoveryCodeResponse>
   push(token: string, body: PushBody): Promise<PushResult>
   pull(token: string, query: PullQuery): Promise<PullResponseBody>
   bootstrap(token: string, body: BootstrapBody): Promise<PushResult>
@@ -280,6 +287,13 @@ export function createSyncClient(options: SyncClientOptions = {}): SyncClient {
       return parseAccountDeleteResponse(
         await request('DELETE', 'account', { token, body: { confirm: true } }),
       )
+    },
+    async resetRecoveryCode(token) {
+      const result = await request('POST', 'devices/recovery-code/reset', { token })
+      if (!isRecord(result)) {
+        throw new SyncRequestError('invalid', '恢复码接口返回的内容不是对象。', { status: 200 })
+      }
+      return { recoveryCode: requireString(result.recoveryCode, 'recoveryCode') }
     },
   }
 }

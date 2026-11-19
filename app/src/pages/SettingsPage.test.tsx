@@ -129,6 +129,7 @@ function buildContextValue(
     disableSync: vi.fn(async () => {}),
     restoreSync: vi.fn(async () => {}),
     revokeSync: vi.fn(async () => {}),
+    resetRecoveryCode: vi.fn(async () => 'f'.repeat(32)),
     deleteServerAccount: vi.fn(async () => {
       throw new Error('not used in brief tests')
     }),
@@ -557,5 +558,81 @@ describe('SettingsPage 服务端连接检查', () => {
 
     await waitFor(() => expect(screen.getByText(/不调用服务端对话/)).toBeInTheDocument())
     expect(calls.some((url) => url.endsWith('/api/chat'))).toBe(false)
+  })
+})
+
+/**
+ * 重新生成恢复码。
+ *
+ * 它是破坏性操作（旧码立即作废），所以核心断言是**确认之前不许动服务端**——
+ * 点错一次就等于把唯一的换机凭据作废掉。
+ */
+describe('SettingsPage 重新生成恢复码', () => {
+  const enabledStatus = {
+    enabled: true,
+    pending: 0,
+    lastSyncAt: '2026-11-19 09:00',
+    online: true,
+    syncing: false,
+    error: null,
+    needsAttention: false,
+    errorKind: null,
+    state: '已同步' as const,
+  }
+
+  it('先确认再换码：没确认前不调用服务端', async () => {
+    const user = userEvent.setup()
+    const resetRecoveryCode = vi.fn(async () => 'c'.repeat(32))
+    renderSettings(INITIAL_SETTINGS, {
+      syncStatus: enabledStatus,
+      syncRecoveryCode: 'b'.repeat(32),
+      resetRecoveryCode,
+    })
+
+    await user.click(screen.getByRole('button', { name: '重新生成恢复码' }))
+
+    expect(screen.getByText('重新生成恢复码？')).toBeInTheDocument()
+    expect(resetRecoveryCode).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '生成新恢复码' }))
+
+    await waitFor(() => expect(resetRecoveryCode).toHaveBeenCalledTimes(1))
+  })
+
+  it('取消确认就不换码', async () => {
+    const user = userEvent.setup()
+    const resetRecoveryCode = vi.fn(async () => 'c'.repeat(32))
+    renderSettings(INITIAL_SETTINGS, {
+      syncStatus: enabledStatus,
+      syncRecoveryCode: 'b'.repeat(32),
+      resetRecoveryCode,
+    })
+
+    await user.click(screen.getByRole('button', { name: '重新生成恢复码' }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
+
+    expect(resetRecoveryCode).not.toHaveBeenCalled()
+  })
+
+  it('服务端拒绝时把原因原样告诉用户（还有其他设备在用）', async () => {
+    const user = userEvent.setup()
+    vi.mocked(UI_VALUE.showToast).mockClear()
+    const resetRecoveryCode = vi.fn(async () => {
+      throw new Error('这个账号还有 2 台设备在用。请先吊销其他设备，再重新生成恢复码。')
+    })
+    renderSettings(INITIAL_SETTINGS, {
+      syncStatus: enabledStatus,
+      syncRecoveryCode: 'b'.repeat(32),
+      resetRecoveryCode,
+    })
+
+    await user.click(screen.getByRole('button', { name: '重新生成恢复码' }))
+    await user.click(screen.getByRole('button', { name: '生成新恢复码' }))
+
+    await waitFor(() =>
+      expect(vi.mocked(UI_VALUE.showToast)).toHaveBeenCalledWith(
+        expect.stringContaining('这个账号还有 2 台设备在用'),
+      ),
+    )
   })
 })

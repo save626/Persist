@@ -102,6 +102,13 @@ export interface MockDataContextValue {
   disableSync: () => Promise<void>
   /** 用恢复码把本机绑定到已有账号（服务端数据为准）。 */
   restoreSync: (recoveryCode: string, label?: string) => Promise<void>
+  /**
+   * 手动换一张恢复码（旧码立即作废）。
+   *
+   * 存在的理由：开放注册已关闭，换机只剩恢复码一条路，而它只显示一次、只存哈希。
+   * 换出新码会写进本机 sync meta，关掉页面也能再看一眼。
+   */
+  resetRecoveryCode: () => Promise<string>
   /** 吊销本机令牌并关闭同步。 */
   revokeSync: () => Promise<void>
   /** 删除服务端账号并清空本机同步凭据/outbox；调用方随后负责清空本机业务数据。 */

@@ -498,6 +498,20 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
     refreshSyncInfo(engine)
   }, [refreshSyncInfo, requireSyncEngine])
 
+  /**
+   * 手动换一张恢复码。
+   *
+   * 失败时**不**刷新界面：服务端已经作废旧码但响应没回来时，用户手里的新码
+   * 其实已经生效，这里再报错会让人以为什么都没变。引擎把新码写进 meta 后
+   * 才刷新，所以刷新出来的就是当前有效的那一张。
+   */
+  const resetRecoveryCode = useCallback(async () => {
+    const engine = requireSyncEngine()
+    const recoveryCode = await engine.resetRecoveryCode()
+    refreshSyncInfo(engine)
+    return recoveryCode
+  }, [refreshSyncInfo, requireSyncEngine])
+
   const deleteServerAccount = useCallback(async (): Promise<AccountDeleteResponse> => {
     const engine = requireSyncEngine()
     try {
@@ -800,6 +814,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       disableSync,
       restoreSync,
       revokeSync,
+      resetRecoveryCode,
       deleteServerAccount,
       syncNow,
       longTermPlans,
@@ -836,6 +851,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       replaceMockData,
       reports,
       resetSettings,
+      resetRecoveryCode,
       restoreSync,
       revokeSync,
       setAiConsent,

@@ -6,12 +6,7 @@ import {
   type EntityCandidate,
   type PushResult,
 } from './sync-contract'
-import {
-  nextBackoffMs,
-  SyncRequestError,
-  type SyncClient,
-  type SyncErrorKind,
-} from './sync-client'
+import { nextBackoffMs, SyncRequestError, type SyncClient, type SyncErrorKind } from './sync-client'
 import {
   applyPulledEntities,
   collectLocalEntities,
@@ -314,6 +309,23 @@ export class SyncEngine {
     await this.saveMeta()
     this.emit()
     await this.flush('restore')
+  }
+
+  /**
+   * 手动换一张恢复码（旧码立即作废）。
+   *
+   * 新码服务端只返回这一次、库里只存哈希；本机把它存进 sync meta，是为了
+   * 关掉页面后还能再看一眼——它与设备令牌同级保存在本机，不上传、不外发。
+   * 端点可重复调用：响应丢了就再换一次。
+   */
+  async resetRecoveryCode(): Promise<string> {
+    const token = this.meta.token
+    if (!token) throw new Error('当前没有已绑定的服务端账号。')
+    const { recoveryCode } = await this.deps.client.resetRecoveryCode(token)
+    this.meta = { ...this.meta, recoveryCode }
+    await this.saveMeta()
+    this.emit()
+    return recoveryCode
   }
 
   /** 吊销本机令牌并关闭同步；本机数据保持不动。 */

@@ -102,6 +102,7 @@ export function SettingsPage() {
     disableSync,
     restoreSync,
     revokeSync,
+    resetRecoveryCode,
     deleteServerAccount,
     syncNow,
   } = useMockData()
@@ -120,13 +121,14 @@ export function SettingsPage() {
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
   const [infoSheet, setInfoSheet] = useState<InfoSheet>(null)
   const [syncBusy, setSyncBusy] = useState<
-    null | 'toggle' | 'sync' | 'restore' | 'revoke' | 'delete'
+    null | 'toggle' | 'sync' | 'restore' | 'revoke' | 'delete' | 'reset-code'
   >(null)
   const [restoreOpen, setRestoreOpen] = useState(false)
   const [restoreCode, setRestoreCode] = useState('')
   const [restoreError, setRestoreError] = useState('')
   const [copiedCode, setCopiedCode] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState(false)
+  const [confirmResetCode, setConfirmResetCode] = useState(false)
   const [briefTimeError, setBriefTimeError] = useState(false)
 
   const enabledReminderCount = reminders.filter((reminder) => reminder.enabled).length
@@ -438,6 +440,26 @@ export function SettingsPage() {
         showToast('本机同步已吊销 · 本机数据保留')
       })
       .catch((error: unknown) => showToast(`吊销失败：${syncErrorMessage(error)}`))
+      .finally(() => setSyncBusy(null))
+  }
+
+  /**
+   * 换一张恢复码。
+   *
+   * 旧码立即作废，所以先进确认弹层。成功后新码已写进本机 meta，上面那张恢复码卡片
+   * 会直接显示它——服务端只存哈希，页面上的这张就是最后一次机会；没抄到也不要紧，
+   * 再点一次会再生成一张（服务端端点可重复调用）。
+   */
+  const resetRecoveryCodeNow = () => {
+    setConfirmResetCode(false)
+    if (syncBusy) return
+    setSyncBusy('reset-code')
+    void resetRecoveryCode()
+      .then(() => {
+        setSavedAt('恢复码已重新生成')
+        showToast('已生成新的恢复码 · 旧码立即作废，请立刻抄走新的这张')
+      })
+      .catch((error: unknown) => showToast(`重新生成失败：${syncErrorMessage(error)}`))
       .finally(() => setSyncBusy(null))
   }
 
@@ -869,6 +891,17 @@ export function SettingsPage() {
                     <small>
                       在新设备上用恢复码找回同一账号。服务端只保存哈希，请自行抄写保存，不要截图外发。
                     </small>
+                    <div className="settings-sync-code-actions">
+                      <button
+                        className="btn quiet"
+                        type="button"
+                        disabled={syncBusy !== null}
+                        onClick={() => setConfirmResetCode(true)}
+                      >
+                        {syncBusy === 'reset-code' ? '生成中…' : '重新生成恢复码'}
+                      </button>
+                      <small>换码后旧码立即作废；新码只显示一次。</small>
+                    </div>
                   </div>
 
                   <div className="settings-sync-meta">
@@ -1213,6 +1246,16 @@ export function SettingsPage() {
           danger
           onClose={() => setConfirmRevoke(false)}
           onConfirm={revokeThisDevice}
+        />
+      )}
+      {confirmResetCode && (
+        <ConfirmDialog
+          title="重新生成恢复码？"
+          description="旧恢复码会立即作废，之后凭它换过的新设备将无法再绑定。新码只显示一次，请立刻抄走并妥善保存；万一没抄到也不要紧，可以再生成一张。"
+          confirmLabel="生成新恢复码"
+          danger
+          onClose={() => setConfirmResetCode(false)}
+          onConfirm={resetRecoveryCodeNow}
         />
       )}
 

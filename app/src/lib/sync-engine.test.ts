@@ -111,6 +111,7 @@ function createFakeClient(state: FakeClientState) {
     })),
     restore: vi.fn(async () => ({ userId: 'u1', deviceId: 'd2', token: 'token-2' })),
     revoke: vi.fn(async () => ({ revoked: true, deviceId: 'd1' })),
+    resetRecoveryCode: vi.fn(async () => ({ recoveryCode: 'f'.repeat(32) })),
     deleteAccount: vi.fn(async (_token: string) => {
       if (state.deleteAccountError) throw state.deleteAccountError
       return ACCOUNT_DELETE_RESULT
@@ -620,6 +621,31 @@ describe('SyncEngine', () => {
     expect(meta.enabled).toBe(false)
     expect(meta.token).toBeNull()
     expect(engine.status().state).toBe('未开启')
+  })
+
+  it('resetRecoveryCode：换到新恢复码并写进本机 meta，同步本身不受影响', async () => {
+    const { engine, client, meta } = createEngine()
+    await engine.init()
+    await engine.enable('桌面浏览器')
+    expect(meta.recoveryCode).toBe('a'.repeat(32))
+
+    const code = await engine.resetRecoveryCode()
+
+    expect(code).toBe('f'.repeat(32))
+    expect(client.resetRecoveryCode).toHaveBeenCalledTimes(1)
+    expect(meta.recoveryCode).toBe('f'.repeat(32))
+    // 换码只动恢复码：令牌、开关、队列都不该被牵连。
+    expect(meta.enabled).toBe(true)
+    expect(meta.token).not.toBeNull()
+    expect(meta.userId).toBe('u1')
+  })
+
+  it('resetRecoveryCode：没绑定账号时直接拒绝，不发请求', async () => {
+    const { engine, client } = createEngine()
+    await engine.init()
+
+    await expect(engine.resetRecoveryCode()).rejects.toThrow('当前没有已绑定的服务端账号。')
+    expect(client.resetRecoveryCode).not.toHaveBeenCalled()
   })
 
   it('deleteAccount：服务端成功后清空同步凭据与 outbox，但不改业务数据', async () => {

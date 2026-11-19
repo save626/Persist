@@ -346,3 +346,215 @@ describe('POST /api/v1/devices/revoke', () => {
     }
   })
 })
+
+/**
+ * 恢复码重置。
+ *
+ * 它存在的唯一理由：开放注册已关闭，换机只剩恢复码一条路，而恢复码只显示一次、
+ * 只存哈希——弄丢就永久锁死账号。这里要证明三件事：换出来的码能用、旧的确实作废、
+ * 以及「响应丢了也能自愈」（端点可重复调用）。
+ */
+describe('POST /api/v1/devices/recovery-code/reset', () => {
+  it('换出新恢复码：旧码立即失效，新码仍能换回同一账号', async () => {
+    const { app, db } = setup()
+    try {
+      const credentials = await register(app, { label: '本机' })
+
+      const reset = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+        headers: { authorization: `Bearer ${credentials.token}` },
+      })
+      expect(reset.statusCode).toBe(200)
+      expect(reset.headers['cache-control']).toBe('no-store')
+
+      const body = reset.json<{ recoveryCode: string }>()
+      expect(body.recoveryCode).toMatch(/^[0-9a-f]{32}$/)
+      expect(body.recoveryCode).not.toBe(credentials.recoveryCode)
+
+      // 库里仍然只有哈希。
+      const user = db.db
+        .prepare<{ recovery_hash: string }>('SELECT recovery_hash FROM users WHERE id = ?')
+        .get(credentials.userId)
+      expect(user?.recovery_hash).not.toBe(body.recoveryCode)
+      expect(user?.recovery_hash).toMatch(/^[0-9a-f]{64}$/)
+
+      // 旧码立刻作废。
+      const stale = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: credentials.recoveryCode },
+      })
+      expect(stale.statusCode).toBe(400)
+      expect(stale.json<{ error: { code: string } }>().error.code).toBe('invalid_recovery_code')
+
+      // 新码换得回同一个账号。
+      const fresh = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: body.recoveryCode },
+      })
+      expect(fresh.statusCode).toBe(200)
+      expect(fresh.json<{ userId: string }>().userId).toBe(credentials.userId)
+    } finally {
+      await close(app, db)
+    }
+  })
+
+  it('端点可重复调用：再点一次就换一个码，上一个立刻作废（响应丢了也能自愈）', async () => {
+    const { app, db } = setup()
+    try {
+      const credentials = await register(app)
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+        headers: { authorization: `Bearer ${credentials.token}` },
+      })
+      expect(first.statusCode).toBe(200)
+      const firstCode = first.json<{ recoveryCode: string }>().recoveryCode
+
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+        headers: { authorization: `Bearer ${credentials.token}` },
+      })
+      expect(second.statusCode).toBe(200)
+      const secondCode = second.json<{ recoveryCode: string }>().recoveryCode
+      expect(secondCode).not.toBe(firstCode)
+
+      const reused = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: firstCode },
+      })
+      expect(reused.statusCode).toBe(400)
+
+      const latest = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: secondCode },
+      })
+      expect(latest.statusCode).toBe(200)
+    } finally {
+      await close(app, db)
+    }
+  })
+
+  it('其他设备还在用时返回 409，不换码', async () => {
+    const { app, db } = setup()
+    try {
+      const credentials = await register(app)
+      // 凭恢复码再换一台设备，于是这个账号有 2 台未吊销设备。
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: credentials.recoveryCode, label: '第二台' },
+      })
+      expect(second.statusCode).toBe(200)
+
+      const reset = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+        headers: { authorization: `Bearer ${credentials.token}` },
+      })
+      expect(reset.statusCode).toBe(409)
+      expect(reset.json<{ error: { code: string } }>().error.code).toBe('other_devices_active')
+
+      // 被拒时不能把码换掉：原恢复码仍然有效。
+      const stillValid = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: credentials.recoveryCode },
+      })
+      expect(stillValid.statusCode).toBe(200)
+    } finally {
+      await close(app, db)
+    }
+  })
+
+  it('吊销其他设备后即可换码', async () => {
+    const { app, db } = setup()
+    try {
+      const credentials = await register(app)
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: credentials.recoveryCode, label: '第二台' },
+      })
+      expect(second.statusCode).toBe(200)
+      const secondDeviceId = second.json<{ deviceId: string }>().deviceId
+
+      const revoke = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/revoke',
+        headers: { authorization: `Bearer ${credentials.token}` },
+        payload: { deviceId: secondDeviceId },
+      })
+      expect(revoke.statusCode).toBe(200)
+
+      const reset = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+        headers: { authorization: `Bearer ${credentials.token}` },
+      })
+      expect(reset.statusCode).toBe(200)
+    } finally {
+      await close(app, db)
+    }
+  })
+
+  it('无有效令牌返回 401，且不换码', async () => {
+    const { app, db } = setup()
+    try {
+      const credentials = await register(app)
+
+      const anonymous = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+      })
+      expect(anonymous.statusCode).toBe(401)
+
+      const bogus = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+        headers: { authorization: 'Bearer pst_not_a_real_token' },
+      })
+      expect(bogus.statusCode).toBe(401)
+
+      const stillValid = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/restore',
+        payload: { recoveryCode: credentials.recoveryCode },
+      })
+      expect(stillValid.statusCode).toBe(200)
+    } finally {
+      await close(app, db)
+    }
+  })
+
+  it('审计留一行 device.recovery_reset', async () => {
+    const { app, db } = setup()
+    try {
+      const credentials = await register(app)
+      const reset = await app.inject({
+        method: 'POST',
+        url: '/api/v1/devices/recovery-code/reset',
+        headers: { authorization: `Bearer ${credentials.token}` },
+      })
+      expect(reset.statusCode).toBe(200)
+
+      const rows = db.db
+        .prepare<{ action: string; result: string; target: string | null }>(
+          'SELECT action, result, target FROM audit_log WHERE user_id = ? ORDER BY id',
+        )
+        .all(credentials.userId)
+      const resetRow = rows.find((row) => row.action === 'device.recovery_reset')
+      expect(resetRow).toBeDefined()
+      expect(resetRow?.result).toBe('ok')
+      expect(resetRow?.target).toBe(credentials.deviceId)
+    } finally {
+      await close(app, db)
+    }
+  })
+})

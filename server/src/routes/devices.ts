@@ -8,7 +8,12 @@ import {
   type DeviceRevokeBody,
 } from '@persist/shared/contract/sync'
 import { recordAuditEvent } from '../audit/audit-log.js'
-import { registerAccount, restoreAccount, revokeDevice } from '../sync/accounts.js'
+import {
+  registerAccount,
+  resetRecoveryCode,
+  restoreAccount,
+  revokeDevice,
+} from '../sync/accounts.js'
 import { countActiveUsers } from '../db/repositories/devices.js'
 import type { ServerConfig } from '../config.js'
 import { enforceRateLimit, requireDevice } from './guards.js'
@@ -16,9 +21,10 @@ import type { FastifyInstance } from 'fastify'
 
 /**
  * 账号与设备接口（设计文档 §7.1 / §10）：
- * - POST /api/v1/devices          首次开启同步：建账号 + 第一台设备
- * - POST /api/v1/devices/restore  凭恢复码换新设备令牌
- * - POST /api/v1/devices/revoke   吊销本机（或指定设备）
+ * - POST /api/v1/devices                 首次开启同步：建账号 + 第一台设备
+ * - POST /api/v1/devices/restore         凭恢复码换新设备令牌
+ * - POST /api/v1/devices/revoke          吊销本机（或指定设备）
+ * - POST /api/v1/devices/recovery-code/reset  手动换一张恢复码（旧码立即作废）
  *
  * 所有响应都带 `cache-control: no-store`：令牌与恢复码不允许被任何中间层缓存。
  */
@@ -42,7 +48,10 @@ export function registerDeviceRoutes(app: FastifyInstance, options: AccountRoute
     if (maxAccounts > 0) {
       const active = countActiveUsers(options.db)
       if (active >= maxAccounts) {
-        request.log.warn({ active, maxAccounts }, 'device registration refused: account cap reached')
+        request.log.warn(
+          { active, maxAccounts },
+          'device registration refused: account cap reached',
+        )
         return reply
           .header('cache-control', NO_STORE)
           .code(409)
@@ -137,5 +146,48 @@ export function registerDeviceRoutes(app: FastifyInstance, options: AccountRoute
       revoked: true,
       deviceId: target,
     })
+  })
+
+  /**
+   * 手动换一张恢复码。
+   *
+   * 存在的理由是「开放注册已关闭」这个事实：换机只剩恢复码一条路，恢复码弄丢就
+   * 永久锁死账号。新码只在这里返回一次，服务端只存哈希。
+   *
+   * 三点约束（详见 `sync/accounts.ts` 的 `resetRecoveryCode`）：
+   * ① 端点**可重复调用**，响应丢了就再点一次，旧码每次立即作废；
+   * ② 其他设备还在用时返回 409，要换码先吊销其他设备；
+   * ③ 不提供「旧码宽限期」——两个同时有效的恢复码等于凭证面翻倍。
+   */
+  app.post('/api/v1/devices/recovery-code/reset', async (request, reply) => {
+    if (!enforceRateLimit(options.limiter, request, reply)) return reply
+
+    const auth = requireDevice(options.db, request, reply, options.now)
+    if (!auth) return reply
+
+    const result = resetRecoveryCode(options.db, { userId: auth.userId })
+    if (!result.ok) {
+      return reply
+        .header('cache-control', NO_STORE)
+        .code(409)
+        .send(
+          errorBody(
+            'other_devices_active',
+            `这个账号还有 ${result.activeDevices} 台设备在用。请先吊销其他设备，再重新生成恢复码。`,
+          ),
+        )
+    }
+
+    recordAuditEvent(options.db, {
+      userId: auth.userId,
+      action: 'device.recovery_reset',
+      target: auth.deviceId,
+      ip: request.ip,
+      now: options.now,
+    })
+    return reply
+      .header('cache-control', NO_STORE)
+      .code(200)
+      .send({ recoveryCode: result.recoveryCode })
   })
 }

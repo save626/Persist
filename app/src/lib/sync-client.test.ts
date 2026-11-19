@@ -226,3 +226,43 @@ describe('nextBackoffMs', () => {
     expect(nextBackoffMs(99, () => 1)).toBe(SYNC_RETRY_MAX_MS)
   })
 })
+
+describe('createSyncClient 恢复码重置', () => {
+  it('带令牌 POST /api/v1/devices/recovery-code/reset，取回新的恢复码', async () => {
+    const { fetchImpl, calls } = fakeFetch([jsonResponse({ recoveryCode: 'c'.repeat(32) })])
+    const client = createSyncClient({ fetchImpl, baseUrl: 'http://localhost:3100' })
+
+    const result = await client.resetRecoveryCode('pst_token')
+
+    expect(result.recoveryCode).toBe('c'.repeat(32))
+    expect(calls[0]?.url).toBe('http://localhost:3100/api/v1/devices/recovery-code/reset')
+    expect(calls[0]?.init.method).toBe('POST')
+    const headers = calls[0]?.init.headers as Record<string, string>
+    expect(headers.authorization).toBe('Bearer pst_token')
+  })
+
+  it('响应缺 recoveryCode 时判为不可用，不返回半截恢复码', async () => {
+    const { fetchImpl } = fakeFetch([jsonResponse({})])
+    const client = createSyncClient({ fetchImpl })
+    await expect(client.resetRecoveryCode('pst_token')).rejects.toMatchObject({
+      name: 'SyncRequestError',
+      kind: 'invalid',
+    })
+  })
+
+  it('服务端 409（还有其他设备在用）时保留服务端原话，不吞掉原因', async () => {
+    const { fetchImpl } = fakeFetch([
+      jsonResponse(
+        { error: { code: 'other_devices_active', message: '这个账号还有 2 台设备在用。' } },
+        409,
+      ),
+    ])
+    const client = createSyncClient({ fetchImpl })
+    await expect(client.resetRecoveryCode('pst_token')).rejects.toMatchObject({
+      kind: 'invalid',
+      status: 409,
+      code: 'other_devices_active',
+      message: '这个账号还有 2 台设备在用。',
+    })
+  })
+})
