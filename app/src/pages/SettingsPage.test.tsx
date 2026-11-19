@@ -549,6 +549,50 @@ describe('SettingsPage 服务端连接检查', () => {
     expect(screen.getByText(/还没有可用的 AI 凭据/)).toBeInTheDocument()
   })
 
+  it('「待绑定账号」用琥珀色待办态，不用红色的故障态', async () => {
+    const user = userEvent.setup()
+    stubServer(
+      () =>
+        new Response(JSON.stringify({ error: { code: 'ai_unauthorized' } }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    )
+    renderSettings()
+
+    await user.click(screen.getByRole('button', { name: '测试服务端连接' }))
+
+    await waitFor(() => expect(screen.getByText('待绑定账号')).toBeInTheDocument())
+    // 红色是失败态专用：涂成红会让人去查网络和反代，而实际什么都没坏。
+    const pill = screen.getByText('待绑定账号').closest('.settings-service-pill')
+    expect(pill?.className).toContain('notice')
+    expect(pill?.className).not.toContain('error')
+    // 提示条同样不该抢 role="alert"（那是打断式播报）。
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(document.querySelector('.surface-notice.settings-ai-health')).not.toBeNull()
+  })
+
+  it('真的链路故障仍然用红色故障态，不被「待办」这一档吞掉', async () => {
+    const user = userEvent.setup()
+    setAiRuntimeCredential(`pst_${'c'.repeat(43)}`)
+    stubServer(
+      () =>
+        new Response(JSON.stringify({ error: { code: 'ai_unauthorized' } }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    )
+    renderSettings()
+
+    await user.click(screen.getByRole('button', { name: '测试服务端连接' }))
+
+    await waitFor(() => expect(screen.getByText('对话链路异常')).toBeInTheDocument())
+    const pill = screen.getByText('对话链路异常').closest('.settings-service-pill')
+    expect(pill?.className).toContain('error')
+    expect(pill?.className).not.toContain('notice')
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+  })
+
   it('demo 不测对话链路：那种模式下不调服务端 AI，401 是预期而不是故障', async () => {
     const user = userEvent.setup()
     const calls = stubServer(() => sse(['{"type":"done"}']))

@@ -103,6 +103,22 @@
   line-height: 1.55;
 }
 
+/*
+ * 「需要处理，但没坏」的提示条。
+ * 与 `.surface-error` 同一套版式、不同色相：红色留给真正的故障，琥珀色留给
+ * 「这台设备还没绑账号」这类待办，避免用户去查网络和反代。
+ */
+.surface-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(161, 117, 44, 0.26);
+  border-radius: 11px;
+  color: #7a5c28;
+  background: #f7f0e2;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
 .surface-note {
   display: flex;
   align-items: flex-start;

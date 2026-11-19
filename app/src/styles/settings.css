@@ -248,6 +248,23 @@
   background: #8b5651;
 }
 
+/*
+ * 「待绑定账号」不是故障，是待办。
+ *
+ * 红色在这个项目里已经被 P5-7 / P5-10 定为失败态专用语义：同步徽标的 401/429
+ * 和这里的「对话链路异常」都走它。如果把「还没绑账号」也涂成红，等于让一个正常
+ * 状态看起来像故障——用户会去查反代、查服务器、查白名单，而实际什么都没坏。
+ * 琥珀色淡黄底承担「需要处理，但没坏」这层语义。
+ */
+.settings-service-pill.notice {
+  color: #7a5c28;
+  background: #f7f0e2;
+}
+
+.settings-service-pill.notice .dot {
+  background: #a1752c;
+}
+
 .settings-reminder-list {
   display: grid;
 }
@@ -537,7 +554,8 @@
  * 而设置卡片自身 `padding: 0`、由每个子区块各自留白，所以直接放进来会顶到卡片两侧边线。
  * 这里补齐与 `.settings-inline-note` 同一套外边距，红条才不会像漏出来的。
  */
-.settings-ai-card .surface-error.settings-ai-health {
+.settings-ai-card .surface-error.settings-ai-health,
+.settings-ai-card .surface-notice.settings-ai-health {
   margin: 14px 22px 18px;
 }
 

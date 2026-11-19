@@ -22,7 +22,7 @@ import {
 } from '../lib/analysis-contract'
 import type { DataSource, Reminder, ReminderId } from '../types'
 
-type AiState = 'idle' | 'testing' | 'connected' | 'error'
+type AiState = 'idle' | 'testing' | 'connected' | 'error' | 'notice'
 type InfoSheet = 'privacy' | 'deploy' | null
 
 const SOURCE_COPY: Record<DataSource, { title: string; detail: string }> = {
@@ -203,8 +203,15 @@ export function SettingsPage() {
     setAiHealth(null)
     const health = await checkServerHealth({ checkChat: runtime.ai.chat })
     setAiHealth(health)
-    // `connected` / `error` 只是 CSS 用的两档，真实区别由 `aiHealth.kind` 决定文案。
-    setAiState(health.kind === 'ready' ? 'connected' : 'error')
+    // `connected` / `notice` / `error` 是 CSS 的三档语义色：正常、待办、故障。
+    // 「待绑定账号」走 notice —— 它不是故障，涂成红色会让人去查网络和反代。
+    setAiState(
+      health.kind === 'ready'
+        ? 'connected'
+        : health.kind === 'chat-no-credential'
+          ? 'notice'
+          : 'error',
+    )
     showToast(
       health.kind === 'ready'
         ? '服务端连接正常'
@@ -654,6 +661,12 @@ export function SettingsPage() {
                   <Icon name="check" className="icon-sm" />
                   {aiHealth.message}
                 </p>
+              ) : aiHealth.kind === 'chat-no-credential' ? (
+                /*
+                 * 「待办」不是故障：用琥珀色而不是红色，也不抢 role="alert"——
+                 * 屏幕阅读器对 alert 是打断式播报，用来喊「你还没绑账号」太吵。
+                 */
+                <p className="surface-notice settings-ai-health">{aiHealth.message}</p>
               ) : (
                 <p className="surface-error settings-ai-health" role="alert">
                   {aiHealth.message}
