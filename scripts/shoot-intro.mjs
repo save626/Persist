@@ -1,5 +1,5 @@
 // 重拍落地页开场动画的证据图（对齐仓库根 preview/ 与 landing/preview/ 两处）。
-// 时间线：字符画眼睛(0-6.9s) → 满屏 3D 粒子流星雨(6.9-8.5s) → 等点击 → 落地页。
+// 时间线：字符画眼睛(0-4.6s) → Three.js 满屏 3D 粒子流星雨(4.6s 起) → 6.4s 等点击 → 落地页。
 import fs from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from '../app/node_modules/playwright-core/index.mjs'
@@ -7,10 +7,10 @@ import { chromium } from '../app/node_modules/playwright-core/index.mjs'
 const FILE = 'file:///D:/Persist/landing/index.html'
 const SHOTS = [
   { name: 'intro-1-eye-drawn.png', at: 2600, note: '眼睑睁开，灰蓝字符画虹膜与瞳孔露出' },
-  { name: 'intro-2-gaze.png', at: 4400, note: '眨眼后，视线游移' },
-  { name: 'intro-3-push-pupil.png', at: 6000, note: '镜头向瞳孔推进' },
-  { name: 'intro-4-meteor-fullscreen.png', at: 7500, note: '满屏 3D 粒子流星雨（铺满整个视口）' },
-  { name: 'intro-5-waiting-click.png', at: 9300, note: '停在粒子层，显示「点击任意位置进入」' },
+  { name: 'intro-2-gaze.png', at: 3800, note: '眨眼后，瞳孔推进开始' },
+  { name: 'intro-3-push-pupil.png', at: 4500, note: '瞳孔推进到顶点' },
+  { name: 'intro-4-meteor-fullscreen.png', at: 6900, note: 'Three.js 满屏 3D 粒子流星雨（铺满整个视口，PC 带 Bloom）' },
+  { name: 'intro-5-waiting-click.png', at: 7400, note: '停在粒子层，显示「点击任意位置进入」' },
 ]
 const LANDSCAPE_SHOT = { name: 'intro-6-handoff-landing.png', note: '点击交棒后的落地页' }
 

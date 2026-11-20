@@ -12,8 +12,9 @@
 //   · 眼睛标记存在，且虹膜跟随光标但不越界
 //   · 关键色对对比度达标（正文 4.5 / 图形 3.0）
 //   · 开场动画：字符画眼睛 → 满屏 3D 粒子流星雨 → 等点击 → 进落地页
-//     满屏用独立全屏 canvas（1440×900）；流星雨灰蓝无暖色；
-//     点击任意位置后才交棒；跳过按钮可直接交棒
+//     满屏用 Three.js WebGL（独立全屏 canvas，1440×900）；灰蓝无暖色；
+//     PC 开 Bloom、移动端减粒子关 Bloom；页面隐藏暂停渲染；
+//     点击任意位置后才交棒；「关闭动画」按钮立即停止并清理资源
 //     （减动效 / ?intro=0 / 关 JS 时都不该出现开场层）
 //
 // 用法：
@@ -426,8 +427,8 @@ try {
     if (Math.abs(ratio - 8 / 15) > 0.06) fail('intro', `字符格比例应为 8:15（0.533），实为 ${ratio.toFixed(3)}`)
     if (early.frames < 10) fail('intro', `1.3s 只画了 ${early.frames} 帧（引擎没在跑）`)
     if (!early.heartDisabled) fail('intro', '心形星云没有被禁用')
-    if (Math.abs(early.meteorAt - 6.9) > 0.8) fail('intro', `粒子流星雨起点应 ~6.9s，实为 ${early.meteorAt}s`)
-    if (Math.abs(early.waitAt - 8.5) > 0.8) fail('intro', `等待点击时点应 ~8.5s，实为 ${early.waitAt}s`)
+    if (Math.abs(early.meteorAt - 4.6) > 0.8) fail('intro', `粒子流星雨起点应 ~4.6s，实为 ${early.meteorAt}s`)
+    if (Math.abs(early.waitAt - 6.4) > 0.8) fail('intro', `等待点击时点应 ~6.4s，实为 ${early.waitAt}s`)
 
     // 6.3 灰蓝色调：字符色不再是原版琥珀（暖色像素应为 0）。
     //     底色已由近黑改成深灰蓝 #0d151d，所以「近黑占比」改用「近底色占比」——
@@ -462,19 +463,15 @@ try {
 
     // 6.4 满屏 3D 粒子流星雨：6.9s 后独立全屏 canvas 接管，铺满整个视口、
     //     灰蓝无暖色、有星点拖尾（不是空白）。
-    await page.waitForTimeout(5100)   // ≈ 7.7s，粒子层已淡入
+    await page.waitForTimeout(5100)   // ≈ 7.7s（含 headless 渲染开销），粒子层已淡入
     const deep = await page.evaluate(() => {
       const cv = document.getElementById('introMeteor')
       const st = window.__persistIntroState()
-      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
-      let warm = 0, magenta = 0, lit = 0, blueish = 0, total = d.length / 4
-      for (let i = 0; i < d.length; i += 4) {
-        const R = d[i], G = d[i + 1], B = d[i + 2]
-        if (R > 140 && G > 80 && B < 90 && R > B * 1.8) warm++
-        if (R > 70 && B > 55 && G < R * 0.72 && B > G * 1.25) magenta++
-        if (R + G + B > 60) lit++
-        if (B > R) blueish++
-      }
+      // Three.js 的 canvas 是 WebGL，不能再取 2d context。
+      // 像素统计由 MeteorField.samplePixels() 用离屏 RenderTarget + readRenderTargetPixels 提供。
+      const px = st.meteorPixels || { warm: 0, magenta: 0, lit: 0, blueish: 0, total: 0 }
+      // 同时确认 WebGL 上下文真实存在且非 2d
+      const gl = cv.getContext('webgl2') || cv.getContext('webgl')
       const ov = document.getElementById('intro')
       return {
         fullscreen: st.meteorIsFullscreen,
@@ -483,13 +480,18 @@ try {
         meteorOn: st.meteorOn, meteorCount: st.meteorCount,
         meteorFrames: st.meteorFrames,
         isMeteor: ov.classList.contains('is-meteor'),
-        warm, magenta, lit, blueish, total,
+        webgl: !!gl,
+        bloom: st.meteorBloom, mobile: st.meteorMobile,
+        warm: px.warm, magenta: px.magenta, lit: px.lit, blueish: px.blueish, total: px.total,
       }
     })
     if (!deep.fullscreen || deep.cssW !== deep.vw || deep.cssH !== deep.vh) {
       fail('intro', `粒子层未铺满视口：canvas ${deep.cssW}×${deep.cssH} vs 视口 ${deep.vw}×${deep.vh}`)
     }
     if (!deep.isMeteor || !deep.meteorOn) fail('intro', '7.7s 时粒子层没有接管（is-meteor / meteorOn 未置位）')
+    if (!deep.webgl) fail('intro', '粒子层没有 WebGL 上下文（Three.js 未初始化）')
+    if (deep.mobile !== false) fail('intro', `PC 端不应判定为移动端，实为 ${deep.mobile}`)
+    if (deep.bloom !== true) fail('intro', `PC 端应开启 Bloom 辉光，实为 ${deep.bloom}`)
     if (deep.meteorFrames < 20) fail('intro', `粒子层只画了 ${deep.meteorFrames} 帧（粒子动画没在跑）`)
     if (deep.meteorCount < 5) fail('intro', `粒子数只有 ${deep.meteorCount}（流星雨没生成）`)
     if (deep.magenta > 3000) fail('intro', `粒子层出现 ${deep.magenta} 个粉紫像素（星云残留）`)
@@ -589,6 +591,103 @@ try {
       notes.push(`${label}：无开场层，标题 ${st.wmDrawn}/${st.wmTotal}`)
       await ctx.close()
     }
+  }
+
+  /* ---------- 6d. 移动端降级：减粒子 + 关 Bloom ---------- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+      hasTouch: true,
+      reducedMotion: 'no-preference',
+    })
+    const page = await ctx.newPage()
+    const errs = []
+    page.on('pageerror', (e) => errs.push(String(e)))
+    await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
+    await page.waitForTimeout(5600)
+    const m = await page.evaluate(() => {
+      const st = window.__persistIntroState()
+      return {
+        mobile: st.meteorMobile, bloom: st.meteorBloom,
+        count: st.meteorCount, frames: st.meteorFrames,
+        px: st.meteorPixels,
+      }
+    })
+    if (m.mobile !== true) fail('mobile', `移动端应判定为 mobile，实为 ${m.mobile}`)
+    if (m.bloom !== false) fail('mobile', `移动端应关闭 Bloom，实为 ${m.bloom}`)
+    if (m.frames < 5) fail('mobile', `移动端粒子层帧数 ${m.frames} 过低`)
+    if (!m.px || m.px.lit < 10) fail('mobile', `移动端粒子层没有可见粒子（lit=${m.px ? m.px.lit : 'null'}）`)
+    if (errs.length) fail('mobile', `移动端控制台报错：${errs.join(' | ')}`)
+    notes.push(`移动端降级：判定 ${m.mobile} · Bloom ${m.bloom} · 粒子 ${m.count} 颗/${m.frames} 帧 · 亮像素 ${m.px ? m.px.lit : 0}`)
+    await ctx.close()
+  }
+
+  /* ---------- 6e. 关闭动画按钮：立即停止并清理动画资源 ---------- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: 'no-preference',
+    })
+    const page = await ctx.newPage()
+    const errs = []
+    page.on('pageerror', (e) => errs.push(String(e)))
+    await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
+    await page.waitForTimeout(5200)   // 粒子层已接管
+    const before = await page.evaluate(() => ({
+      st: window.__persistIntroState(),
+      overlayHidden: document.getElementById('intro').hidden,
+    }))
+    if (!before.st.meteorOn) fail('close-btn', '点击关闭前粒子层没有在跑')
+    // 按钮文案必须是「关闭动画」
+    const btnText = (await page.textContent('#introSkip') || '').trim()
+    if (!btnText.includes('关闭')) fail('close-btn', `按钮文案应为「关闭动画」，实为「${btnText}」`)
+    await page.click('#introSkip')
+    await page.waitForTimeout(1900)   // 标题逐笔浮现约 1.4s，留足缓冲
+    const after = await page.evaluate(() => ({
+      st: window.__persistIntroState ? window.__persistIntroState() : null,
+      introAttr: document.documentElement.getAttribute('data-intro'),
+      overlayHidden: document.getElementById('intro').hidden,
+      wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
+      wmTotal: document.querySelectorAll('.wm-path').length,
+    }))
+    if (!after.overlayHidden) fail('close-btn', '点击关闭后开场层没有隐藏')
+    if (after.introAttr !== 'off') fail('close-btn', `点击关闭后 data-intro 应为 off，实为 ${after.introAttr}`)
+    if (after.st && after.st.meteorOn) fail('close-btn', '点击关闭后粒子状态仍为 on（资源未停）')
+    if (after.wmDrawn !== after.wmTotal) fail('close-btn', `点击关闭后标题只画了 ${after.wmDrawn}/${after.wmTotal}`)
+    if (errs.length) fail('close-btn', `关闭后报错：${errs.join(' | ')}`)
+    notes.push(`关闭动画按钮：文案「${btnText}」· 点击后资源停止 · 交棒标题 ${after.wmDrawn}/${after.wmTotal}`)
+    await ctx.close()
+  }
+
+  /* ---------- 6f. 页面不可见时暂停渲染，恢复后继续 ---------- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: 'no-preference',
+    })
+    const page = await ctx.newPage()
+    await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
+    await page.waitForTimeout(5000)
+    const f0 = await page.evaluate(() => window.__persistIntroState().meteorFrames)
+    // 模拟页面隐藏（headless 下 CDP 无 setPageVisibilityState，用属性 + 事件等价模拟）
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(1200)
+    const f1 = await page.evaluate(() => window.__persistIntroState().meteorFrames)
+    // 恢复可见
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => false })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(1200)
+    const f2 = await page.evaluate(() => window.__persistIntroState().meteorFrames)
+    if (f1 - f0 > 2) fail('visibility', `页面隐藏后粒子仍在渲染（${f0}→${f1}）`)
+    if (f2 - f1 < 2) fail('visibility', `页面恢复后粒子没有继续渲染（${f1}→${f2}）`)
+    notes.push(`页面可见性：隐藏时暂停 ${f0}→${f1} · 恢复后继续 ${f1}→${f2}`)
+    await ctx.close()
   }
 
   /* ---------- 7. 对比度 ---------- */

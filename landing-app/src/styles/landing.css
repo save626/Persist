@@ -1,0 +1,332 @@
+/* ============================================================
+   落地页（科技展示型）
+   ------------------------------------------------------------
+   定位：**炫技展示页**，不是产品介绍页。产品介绍在 home.html，
+   这里只留项目名、一句 slogan、几个关键词，把版面让给视觉。
+
+   视觉基调：与产品本体同一套色系（app/src/styles/home-v3.css 的令牌）——
+   浅底 #F4F7F9、低饱和蓝灰、强调色 #467692 / #6D9FBD。
+   背景渐变与 app 的 body 背景逐字对齐，落地页和���品是同一张纸。
+
+   动效预算（刻意克制）：
+     · 手写 SVG 标题「persist」逐笔浮现
+     · 眼睛标记（借鉴 eyeTutrial 的「圆 + 眼睑 + 虹膜 + 高光」画法，
+       虹膜跟随光标微动，入场眨一次眼）
+
+   流星雨已移到**入场层**（intro 的 6.9s–8.5s 满屏 3D 粒子流星雨）——
+   落地页本身不再跑常驻动画，是一张安静的纸。
+   不做：Shader、视差堆叠、滚动依赖、频闪、自定义光标、仿真终端。
+
+   所有元素零外部请求。
+   ============================================================ */
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;color:var(--ink);
+  font-family:var(--ui);
+  background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+:root{
+  /* —— 与产品本体的令牌保持一致 —— */
+  --bg:#f4f7f9;
+  --surface:#fbfcfd;
+  --strong:#ffffff;
+  --ink:#202830;
+  --soft:#4d5965;
+  --line:#dfe5eb;
+  --line2:#cbd5de;
+  --green:#6d9fbd;
+  --deep:#467692;
+  --gs:#e9f2f7;
+  --blue:#78aac8;
+  --bs:#eaf4f9;
+  --indigo:#7f8fac;
+
+  /* —— 两处为可读性做的加深（产品里的 --muted/--faint 在本底色上只有
+        3.75 / ≈2.6，正文不可读）—— */
+  --muted:#55616d;
+  --faint:#616d79;
+
+  --r:22px;
+  --shadow:0 20px 55px rgba(42,56,70,.07);
+  --ui:'Aptos','Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,'Segoe UI',sans-serif;
+  --num:'Cascadia Mono','SFMono-Regular','Roboto Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+
+/* ---------- 1. 舞台 ---------- */
+.stage{
+  position:fixed;inset:0;z-index:0;overflow:hidden;
+  /* 与 app 的 body 背景完全一致 */
+  background:
+    radial-gradient(circle at 8% -8%, rgba(255,255,255,.9), transparent 34%),
+    radial-gradient(circle at 105% 110%, rgba(126,173,200,.14), transparent 36%),
+    var(--bg);
+}
+
+/* 极细网格：给浅底一点结构，不抢戏 */
+.grid{
+  position:absolute;inset:0;pointer-events:none;opacity:.75;
+  background-image:
+    linear-gradient(to right, rgba(70,118,146,.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(70,118,146,.055) 1px, transparent 1px);
+  background-size:64px 64px;
+  -webkit-mask-image:radial-gradient(110% 85% at 50% 46%, #000 0%, rgba(0,0,0,.35) 55%, transparent 84%);
+  mask-image:radial-gradient(110% 85% at 50% 46%, #000 0%, rgba(0,0,0,.35) 55%, transparent 84%);
+}
+/* 中央柔光：把视线收进内容区，也让浅底上有一层「空气感」 */
+.glow{
+  position:absolute;left:50%;top:46%;width:min(92vw,1180px);aspect-ratio:2/1;
+  transform:translate(-50%,-50%);pointer-events:none;
+  background:radial-gradient(ellipse at center,
+    rgba(255,255,255,.92) 0%, rgba(255,255,255,.5) 42%, rgba(255,255,255,0) 72%);
+}
+/* 边缘压暗（浅底上做成极淡的冷灰，收拢视线） */
+.vignette{
+  position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(78% 66% at 50% 46%, rgba(203,213,222,0) 0%, rgba(203,213,222,.16) 78%, rgba(203,213,222,.3) 100%);
+}
+
+/* ---------- 2. 内容层 ---------- */
+.wrap{position:relative;z-index:2;min-height:100dvh;display:flex;flex-direction:column}
+
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:clamp(14px,2vw,22px) clamp(16px,3.4vw,40px);
+}
+.brand{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--num);font-size:12px;letter-spacing:.3em;
+  color:var(--ink);text-decoration:none;text-transform:uppercase;
+}
+/* 眼睛标记（点缀 2）：借鉴 eyeTutrial 的画法 —— 圆=虹膜、上下眼睑、
+   最后加一点高光。虹膜跟随光标微动。 */
+.eyemark{
+  width:30px;height:18px;flex:0 0 auto;overflow:visible;
+  transform-box:fill-box;transform-origin:50% 50%;
+  animation:blink 5.6s ease-in-out infinite;
+}
+.eyemark .em-lid{fill:none;stroke:var(--deep);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* 虹膜/瞳孔是**有意义的图形**（WCAG 非文本对比度门槛 3:1）。
+   早先用 --green 55% 透明度填充，实测只有 2.66:1 —— 改为实色。
+   虹膜 #5c8ba9 对页面底 3.41:1，瞳孔 #16323f 对虹膜 3.66:1，两者都达标。 */
+.eyemark .em-iris{fill:#5c8ba9}
+.eyemark .em-pupil{fill:#16323f}
+.eyemark .em-glint{fill:#fff}
+.eyemark .em-eye{transition:none}
+@keyframes blink{
+  0%,92%,100%{transform:scaleY(1)}
+  95%{transform:scaleY(.08)}
+}
+.top-actions{display:flex;align-items:center;gap:14px}
+.toplink{
+  font-size:12.5px;color:var(--muted);text-decoration:none;
+  border-bottom:1px solid transparent;padding-bottom:2px;
+  transition:color .2s ease,border-color .2s ease;
+}
+.toplink:hover{color:var(--deep);border-bottom-color:var(--line2)}
+.toplink:focus-visible{outline:2px solid var(--deep);outline-offset:3px;border-radius:2px}
+
+.stage-main{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:0 20px clamp(56px,8vh,84px);
+}
+
+/* ---------- 3. 手写标题（SVG 描边逐字浮现） ---------- */
+.wordmark{
+  display:block;width:clamp(230px,42vw,460px);height:auto;
+  overflow:visible;margin:0 auto;
+}
+.wordmark .wm-path{
+  fill:none;stroke:var(--deep);stroke-width:7.5;
+  stroke-linecap:round;stroke-linejoin:round;
+  /* 描边推进：由 dashoffset 归零控制，JS 逐笔推进。
+     注意长度与偏移必须走 CSS 变量 —— 若用内联 style 写死，
+     内联优先级高于 .is-drawn 类，归零动画就永远不会生效。 */
+  stroke-dasharray:var(--len, none);
+  stroke-dashoffset:var(--len, 0);
+  transition:stroke-dashoffset 1.15s cubic-bezier(.55,.06,.28,1);
+}
+.wordmark .wm-path.is-drawn{stroke-dashoffset:0}
+/* 无 JS 时路径必须可见（渐进增强） */
+html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
+
+/* 标题下方的 slogan */
+.slogan{
+  margin:clamp(18px,3vh,30px) 0 0;
+  font-size:clamp(15px,1.9vw,21px);line-height:1.6;color:var(--ink);
+  letter-spacing:.02em;
+}
+.slogan em{font-style:normal;color:var(--deep)}
+/* 关键词行 */
+.keys{
+  list-style:none;margin:clamp(14px,2.4vh,22px) 0 0;padding:0;
+  display:flex;flex-wrap:wrap;gap:10px;justify-content:center;
+}
+.keys li{
+  font-family:var(--num);font-size:11.5px;letter-spacing:.12em;
+  color:var(--muted);padding:6px 13px;border-radius:999px;
+  border:1px solid var(--line);background:rgba(255,255,255,.7);
+}
+.keys li b{color:var(--deep);font-weight:600}
+
+/* ---------- 4. CTA ---------- */
+.cta{
+  margin-top:clamp(22px,3.4vh,32px);
+  display:flex;gap:12px;flex-wrap:wrap;justify-content:center;
+}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:46px;padding:0 26px;border-radius:12px;
+  font-size:14.5px;font-weight:500;text-decoration:none;white-space:nowrap;
+  transition:transform .18s ease,background-color .18s ease,border-color .2s ease,box-shadow .2s ease;
+}
+.btn:focus-visible{outline:2px solid var(--deep);outline-offset:3px}
+.btn-primary{
+  /* 渐变三档都必须对白字 ≥ 4.5:1 —— 上档不能比 #467692 更亮 */
+  background:linear-gradient(180deg,#467692 0%,#42718c 55%,#3c6a84 100%);
+  color:#fff;border:1px solid transparent;
+  box-shadow:0 10px 24px rgba(70,118,146,.22);
+}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 14px 30px rgba(70,118,146,.28)}
+.btn-ghost{background:rgba(255,255,255,.72);color:var(--ink);border:1px solid var(--line2)}
+.btn-ghost:hover{border-color:var(--green);transform:translateY(-1px)}
+.note{margin:13px 0 0;font-size:12px;line-height:1.7;color:var(--faint)}
+
+/* ---------- 5. 动效开关 ---------- */
+.motion-toggle{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:var(--num);font-size:11px;letter-spacing:.08em;
+  color:var(--muted);background:rgba(255,255,255,.7);cursor:pointer;
+  border:1px solid var(--line);border-radius:999px;padding:6px 12px;
+  transition:color .2s ease,border-color .2s ease;
+}
+.motion-toggle:hover{color:var(--deep);border-color:var(--line2)}
+.motion-toggle:focus-visible{outline:2px solid var(--deep);outline-offset:3px}
+.motion-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 0 3px rgba(109,159,189,.16);
+  transition:background-color .2s ease,box-shadow .2s ease;
+}
+.motion-toggle[aria-pressed="false"] .motion-dot{background:var(--line2);box-shadow:none}
+.motion-toggle[aria-pressed="false"]{color:var(--faint)}
+
+/* ---------- 6. 备案信息页脚 ---------- */
+.foot{
+  position:fixed;left:0;right:0;bottom:0;z-index:4;
+  padding:0 16px calc(10px + env(safe-area-inset-bottom,0px));
+  text-align:center;font-size:11px;line-height:1.8;letter-spacing:.05em;
+  color:var(--faint);pointer-events:none;
+}
+.foot a{
+  color:var(--muted);pointer-events:auto;text-decoration:none;
+  border-bottom:1px solid var(--line2);padding-bottom:1px;
+  transition:color .2s ease,border-color .2s ease;
+}
+.foot a:hover{color:var(--deep);border-bottom-color:var(--green)}
+.site-info-sep{margin:0 8px;color:var(--line2)}
+.site-info-pending{color:var(--faint)}
+
+/* ---------- 7. 响应式 ---------- */
+@media (max-width:900px){
+  .stage-main{padding-bottom:clamp(64px,12vh,96px)}
+  .glow{width:min(130vw,1000px)}
+}
+@media (max-width:560px){
+  .keys{gap:8px}
+  .keys li{font-size:11px;padding:5px 11px}
+  .wordmark{width:min(78vw,300px)}
+  .note{font-size:11.5px}
+  .brand{font-size:11px;letter-spacing:.24em}
+  .eyemark{width:26px;height:16px}
+  .btn{min-height:44px;padding:0 20px}
+}
+
+/* ---------- 8. 动效降级 ---------- */
+@media (prefers-reduced-motion:reduce){
+  .wordmark .wm-path{transition:none}
+  .eyemark{animation:none}
+  .btn,.toplink,.foot a,.motion-toggle{transition:none}
+}
+
+/* ============================================================
+   9. 开场动画（eyeTutrial 眼型 + 星空穿行）
+   ------------------------------------------------------------
+   眼型来自 third_party/eyetutrial —— 上游 Praise-Peter/EyeTutrial-website
+   的《How to draw eyes》教程，把它的画法整段搬成动画：
+     Step 1 圆（眼球）→ 2 上眼睑 → 3 虹膜与瞳孔 → 4 下眼睑 → 5 双眼皮
+     → 7 上色（眼白/虹膜）→ 8 阴影 → 9 虹膜碗状受光 → 13 高光与闪点
+   上游是静态教程页、没有动画代码，本页把「描线→上色→高光」的顺序演一遍，
+   随后接上睁眼 / 眨眼 / 视线游移 / 推进瞳孔 / 穿过星空。
+
+   配色换成落地页的冷灰蓝色系（:root 令牌），不带上游的棕灰原色；
+   星空段用同一族的深蓝（#16323f）而不是纯黑，收尾淡出时能接上浅色落地页。
+
+   开眼/眨眼用 **mask**：眼裂形状整体缩放，虹膜被眼裂裁切，
+   所以眨眼是「眼皮盖住虹膜」，不是把虹膜压扁。
+   ============================================================ */
+.intro{
+  position:fixed;inset:0;z-index:60;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  /* 灰蓝：与产品令牌 --ink:#202830 / --deep:#467692 同族，
+     比原先的青蓝 #1d3c4f 更中性 —— 和落地页、产品是同一张纸。 */
+  background:radial-gradient(125% 92% at 50% 44%, #2a3945 0%, #1b2732 48%, #111a22 100%);
+  opacity:0;transition:opacity .8s ease;
+}
+.intro[hidden]{display:none!important}
+.intro.is-on{opacity:1}
+.intro.is-out{opacity:0;pointer-events:none}
+/* 引擎画布：字符画的承载容器（居中、留边，保持原版字符格）。
+   画布的 CSS 尺寸 = 网格列数 × 字符格宽（JS 精确设置），
+   所以字符不会被浏览器二次缩放 —— 那样会糊成一片。 */
+.intro-canvas{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  image-rendering:pixelated;
+  /* 画布是「深底 + 字符」，页面底色是灰蓝；不加这层柔和外晕的话，
+     两者之间会是一条硬邦邦的矩形边界。 */
+  box-shadow:0 0 170px 90px rgba(12,20,27,.92);
+  transition:opacity .7s ease;
+}
+/* 交棒段：铺满整个视口的 3D 粒子流星雨。
+   与字符画布分层 —— 眼睛阶段不受影响，满屏只在瞳孔铺满后发生。 */
+.intro-meteor{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  opacity:0;pointer-events:none;transition:opacity .9s ease;
+}
+/* 字符画淡出、粒子层淡入 */
+.intro.is-meteor .intro-canvas{opacity:0}
+.intro.is-meteor .intro-meteor{opacity:1}
+/* 交棒完成后停在粒子层，等用户点一下才进落地页 */
+.intro-enter{
+  position:absolute;left:50%;bottom:clamp(52px,11vh,104px);z-index:4;
+  transform:translateX(-50%);
+  font-family:var(--num);font-size:12px;letter-spacing:.2em;
+  color:#c6dae7;white-space:nowrap;
+  padding:12px 22px;border:1px solid rgba(174,205,224,.34);
+  border-radius:999px;background:rgba(20,31,40,.46);
+  opacity:0;pointer-events:none;transition:opacity .6s ease;
+}
+.intro.is-waiting .intro-enter{opacity:1;animation:intro-breathe 2.2s ease-in-out infinite}
+/* 等待点击时「跳过开场」已完成使命，淡出避免与「点击进入」语义重复 */
+.intro.is-waiting .intro-skip{opacity:0;pointer-events:none}
+@keyframes intro-breathe{0%,100%{border-color:rgba(174,205,224,.30)}50%{border-color:rgba(174,205,224,.68)}}
+
+/* 跳过按钮：开场是暗场，按钮用浅色文字（与深底对比 ≥ 4.5:1） */
+.intro-skip{
+  position:absolute;right:clamp(16px,4vw,40px);bottom:clamp(16px,4vw,40px);z-index:3;
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--num);font-size:12px;letter-spacing:.12em;color:#d3e6f1;
+  background:rgba(255,255,255,.07);border:1px solid rgba(160,200,225,.3);
+  border-radius:999px;padding:10px 16px;cursor:pointer;
+  transition:background-color .2s ease,border-color .2s ease,color .2s ease;
+}
+.intro-skip:hover{background:rgba(255,255,255,.13);border-color:rgba(160,200,225,.55);color:#fff}
+.intro-skip:focus-visible{outline:2px solid #8fc0dd;outline-offset:3px}
+
+@media (prefers-reduced-motion:reduce){
+  .intro{display:none!important}
+}
