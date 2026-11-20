@@ -21,7 +21,7 @@
 // 退出码：0 = 通过；1 = 有失败项。
 
 import { chromium } from '../app/node_modules/playwright-core/index.mjs'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
@@ -105,6 +105,35 @@ if (!existsSync(PAGE)) {
 const browser = await chromium.launch({ headless: true })
 
 try {
+  /* ---------- 0. 入口边界：落地页不得直达产品 ----------
+     落地页是炫技展示页，产品入口统一由 home.html 承接。
+     这条约束必须由脚本守住 —— 因为「顺手加个立即体验」是最容易被无声破坏的：
+     它不会报错、不会崩，只会让落地页变成第二个产品入口，
+     于是「先讲清楚再进产品」的顺序被悄悄打乱。 */
+  {
+    const html = readFileSync(PAGE, 'utf8')
+    // 只看可点的 href/src，不看注释与文档字符串
+    const links = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1])
+    const productLinks = links.filter((h) => /^\/app(\/|\?|$)/.test(h))
+    if (productLinks.length) {
+      fail('入口边界', `落地页出现直达产品的链接：${productLinks.join(', ')}`)
+    } else {
+      notes.push('✓ 落地页无任何直达产品的链接（产品入口只由 home.html 承接）')
+    }
+    // CTA 的两个按钮都必须指向 home.html
+    const ctaHtml = html.match(/<div class="cta"[^>]*>([\s\S]*?)<\/div>/)
+    const ctaHrefs = ctaHtml
+      ? [...ctaHtml[1].matchAll(/href="([^"]+)"/g)].map((m) => m[1])
+      : []
+    if (ctaHrefs.length < 2) {
+      fail('入口边界', `CTA 链接只有 ${ctaHrefs.length} 个`)
+    } else if (!ctaHrefs.every((h) => h.startsWith('home.html'))) {
+      fail('入口边界', `CTA 有指向 home.html 以外的链接：${ctaHrefs.join(', ')}`)
+    } else {
+      notes.push(`✓ CTA 全部指向 home.html（${ctaHrefs.join(' / ')}）`)
+    }
+  }
+
   /* ---------- 1. 多视口布局 + 动效 + 流星雨 ---------- */
   for (const vp of VIEWPORTS) {
     const ctx = await browser.newContext({

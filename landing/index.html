@@ -570,11 +570,16 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
       <li>数据自持</li>
     </ul>
 
+    <!-- 入口只有一个：产品介绍首页。
+         落地页是炫技展示页，不做产品入口 —— 想进产品必须先经过 home.html，
+         由它统一承接「看演示 / 自己试试」两个动作。
+         次按钮落到首页的「一段解读」段：那是产品最打动人的地方，
+         比再给一个泛泛的「了解更多」更值得点。 -->
     <div class="cta" id="cta">
-      <a class="btn btn-primary" href="/app/?mode=demo">立即体验</a>
-      <a class="btn btn-ghost" href="home.html">了解更多</a>
+      <a class="btn btn-primary" href="home.html">看看它能做什么</a>
+      <a class="btn btn-ghost" href="home.html#story">先看一段解读</a>
     </div>
-    <p class="note">不用注册。演示数据只留在你自己的浏览器里。</p>
+    <p class="note">不用注册。数据默认只存在你自己的设备上。</p>
   </main>
 </div>
 
