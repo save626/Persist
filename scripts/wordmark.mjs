@@ -1,4 +1,4 @@
-// 手写体字形生成器：输出「persist」小写字形 path + 完整 <svg> 块。
+// 手写体字形生成器：输出「Persist」字形 path + 完整 <svg> 块。
 //
 // 这是落地页手写标题的**唯一事实源** —— 页面里的 <svg> 块由本脚本产出后
 // 直接粘贴（手抄进 HTML 出过错：P 的路径和生成器对不上、viewBox 算错）。
@@ -6,134 +6,118 @@
 // 用法：node scripts/wordmark.mjs
 //   → .workbuddy/tmp/wordmark-block.html   粘贴用的 <svg> 块
 //   → .workbuddy/tmp/letter-audit.html     逐字母放大审查页
-//   → .workbuddy/tmp/word-preview.html     整词预览（含 r 的 4 个变体）
+//   → .workbuddy/tmp/word-preview.html     整词预览
 //
 // 改完字形后必须：① 单独放大审查每个字母；② 按落地页实际显示宽度（460px）
 // 再看整词 —— 单看正常、缩到整词就糊成一团的情况很常见。
 // 坐标系：基线 y=0，x-height 顶 y=-100，ascender y=-150。向上为负。
 //
-// 关键：**倾斜直接烘焙进路径坐标**，不用 <g transform="skewX()">。
-// 原因：skewX 是仿射变换，可以对控制点直接换算；而用 transform 时
-// viewBox 必须额外补偿位移（t 的升部会被裁掉），且每帧多一次变换计算。
+// 倾斜用 <g transform="skewX(-11)">（沿用 2026-11-19 上一版的写法）：
+//   skewX 是仿射变换 x' = x + y·tan(-11°)，可以直接对控制点换算，
+//   所以本脚本用同一套公式算 viewBox —— 上一版 viewBox 的左边多留了约 52px
+//   空档（符号算反），整词因此偏右；这里按正确符号算紧。
 import fs from 'node:fs';
 
 const SLANT = -11;                       // 度，负值 = 向右倾（italic）
 const TAN = Math.tan(SLANT * Math.PI / 180);
 
+const WORD = 'Persist';
+
+// 每个字母：adv = 前进宽度（下一个字母的 translate 偏移），paths = 笔画。
+// 路径是**未倾斜**的原始坐标，倾斜由 <g transform="skewX(-11)"> 统一施加。
 const LETTERS = {
-  // p：竖笔**下伸到基线以下** —— 小写 p 唯一可靠的识别特征。
-  // 不下伸会读成大写 P（第一版就是这样）。
-  p: { adv: 54, paths: [
-    'M 1,36 C 2,6 3,-46 4,-99',
-    'M 4,-98 C 24,-106 48,-98 48,-71 C 48,-43 25,-25 5,-31',
+  // P：大写。竖笔 + 一笔画完的碗形（上游 eyeTutrial 的 Round 眼型同源的手绘感）。
+  P: { adv: 65, paths: [
+    'M 4,0 C 6,-52 8,-112 10,-158 C 42,-166 60,-148 58,-124 C 56,-102 32,-92 12,-94',
   ]},
   // e：横杠 + 从横杠右端绕顶绕底的弧（两笔）。
-  // 底部收口必须张开（末端甩到右下），否则弧把横杠左端包住 → 读成 θ。
-  e: { adv: 50, paths: [
-    'M 0,-54 L 42,-54',
-    'M 42,-54 C 42,-82 31,-101 17,-99 C 2,-97 -7,-76 0,-55 C 7,-30 28,-15 48,-30',
+  e: { adv: 65, paths: [
+    'M -2,-56 L 46,-56',
+    'M 46,-56 C 46,-84 34,-102 18,-100 C 2,-98 -6,-76 0,-56 C 6,-30 26,-16 44,-32',
   ]},
-  // r：修复版 —— 关键在于「肩部必须停在高处」，不能像 n 那样落到基线。
-  // 旧版肩部接在竖笔顶端形成平滑拱形 → 读成 n。
-  r: { adv: 36, paths: [
-    'M 0,0 C 1,-30 2,-64 3,-98',
-    'M 2,-98 C 10,-106 22,-105 28,-97 C 31,-93 29,-89 26,-92',
+  // r：竖笔 + 高位肩部（肩部停在高处，不能像 n 那样落到基线）。
+  r: { adv: 37, paths: [
+    'M 2,0 C 3,-30 5,-60 7,-92',
+    'M 7,-92 C 12,-99 24,-97 28,-86',
   ]},
-  // s：下环**向左多甩一点**，尾巴收在上方 —— 否则整词缩到 460px 时
-  // 上下两个环糊成一团，读成 y / g。
-  s: { adv: 38, paths: [
-    'M 30,-90 C 22,-103 0,-103 0,-85 C 0,-69 30,-72 31,-47 C 32,-27 12,-18 0,-30',
+  // s：上下两环一笔连写，尾巴收在上方。
+  s: { adv: 39, paths: [
+    'M 32,-88 C 24,-102 0,-102 0,-84 C 0,-68 30,-70 30,-46 C 30,-26 8,-16 0,-32',
   ]},
-  // i：竖笔 + 点（点做成一小段干净短划，不要像逗号）
-  i: { adv: 22, paths: [
-    'M 0,0 C 1,-30 2,-64 3,-100',
-    'M 9,-123 C 12,-127 17,-127 19,-123',
+  // i：竖笔 + 点（点做成一小段干净短划，不要像逗号）。
+  i: { adv: 25, paths: [
+    'M 0,0 C 2,-32 3,-66 4,-100',
+    'M 6,-118 C 9,-126 16,-127 19,-122',
   ]},
-  // t：长竖 + 短尾 + 横画
+  // t：长竖 + 短尾 + 横画。
   t: { adv: 42, paths: [
     'M 12,-142 C 8,-104 5,-56 5,-24 C 5,-8 20,-4 30,-16',
     'M -10,-96 C 8,-102 24,-100 38,-94',
   ]},
 };
+// 第二个 s 复用同一个字形
+LETTERS.s2 = LETTERS.s;
 
-// r 的候选变体（放大审查用）
-const R_VARIANTS = {
-  rA: ['M 0,0 C 1,-30 2,-64 3,-98', 'M 2,-97 C 9,-107 23,-107 29,-99'],
-  rB: ['M 0,0 C 1,-30 2,-64 3,-98', 'M 2,-98 C 12,-104 25,-98 27,-86'],
-  rC: ['M 0,0 C 1,-30 2,-64 3,-98', 'M 1,-96 C 4,-108 12,-110 17,-102 C 19,-98 16,-95 13,-97 C 19,-104 26,-103 30,-97'],
-  rD: ['M 0,0 C 1,-30 2,-64 3,-98', 'M 2,-98 C 10,-106 22,-105 28,-97 C 31,-93 29,-89 26,-92'],
-};
+const ORDER = ['P', 'e', 'r', 's', 'i', 's2', 't'];
 
-const WORD = 'persist';
-
-// 把一条 path 的所有坐标做仿射倾斜变换（skewX: x' = x + y*tan）。
-// 注意：replace 的回调是**每个数字**触发一次，数字在 path 里交替出现
-// x,y,x,y...，所以要按奇偶位分别输出变换后的 x′ 与未变的 y。
-// 早先版本按「坐标对」输出，导致一半匹配拿到 undefined → SVG 解析中断 → 笔画断裂。
-function skewPath(d){
-  const nums = d.match(/-?\d+(?:\.\d+)?/g).map(Number);
-  const coords = [];
-  for (let i = 0; i < nums.length; i += 2){
-    const x = nums[i], y = nums[i + 1];
-    coords.push([(x + y * TAN).toFixed(2), y.toFixed(2)]);
-  }
-  let k = 0;
-  return d.replace(/-?\d+(?:\.\d+)?/g, () => {
-    const i = k++;
-    return coords[Math.floor(i / 2)][i % 2];
-  });
+// 把一条 path 的控制点坐标解析出来（不改变 path 本身，只为算包围盒）。
+function points(d) {
+  const nums = (d.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+  const out = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) out.push([nums[i], nums[i + 1]]);
+  return out;
 }
 
-function build(letters){
-  const paths = [];
-  let x = 0;
-  for (const ch of WORD){
-    const L = letters[ch];
-    for (const d of L.paths){
-      paths.push({ d: skewPath(d), tx: x });
+// 施加 skewX 之后的包围盒（控制点即极值，bezier 不会超出控制点凸包）。
+function skewedBBox(items, pad) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const it of items) {
+    for (const [x, y] of points(it.d)) {
+      const sx = x + it.tx + y * TAN;      // skewX: x' = x + y·tan(θ)
+      if (sx < x0) x0 = sx;
+      if (sx > x1) x1 = sx;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
     }
+  }
+  return {
+    x0: x0 - pad, y0: y0 - pad,
+    x1: x1 + pad, y1: y1 + pad,
+  };
+}
+
+function build() {
+  const items = [];
+  let x = 0;
+  for (const key of ORDER) {
+    const L = LETTERS[key];
+    for (const d of L.paths) items.push({ d, tx: x });
     x += L.adv;
   }
-  return { paths, width: x };
+  return { items, width: x };
 }
 
-function bbox(paths){
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const p of paths){
-    const nums = p.d.match(/-?\d+(?:\.\d+)?/g).map(Number);
-    for (let i = 0; i < nums.length; i += 2){
-      const px = nums[i] + p.tx, py = nums[i+1];
-      if (px < x0) x0 = px; if (px > x1) x1 = px;
-      if (py < y0) y0 = py; if (py > y1) y1 = py;
-    }
-  }
-  return { x0, x1, y0, y1 };
-}
-
-function svgBlock(paths, width, label){
-  const pad = 10;
-  const b = bbox(paths);
-  const minX = Math.min(b.x0, 0) - pad;
-  const maxX = Math.max(b.x1, width) + pad;
-  const minY = b.y0 - pad;
-  const maxY = b.y1 + pad;
-  const inner = paths.map(p =>
+function svgBlock(items, label) {
+  const b = skewedBBox(items, 10);
+  const inner = items.map(p =>
     `        <path class="wm-path" d="${p.d}"${p.tx ? ` transform="translate(${p.tx},0)"` : ''}></path>`
   ).join('\n');
-  return `<svg class="wordmark" id="wordmark" viewBox="${minX.toFixed(1)} ${minY.toFixed(1)} ${(maxX-minX).toFixed(1)} ${(maxY-minY).toFixed(1)}" role="img" aria-label="${label}">
+  return `<svg class="wordmark" id="wordmark" viewBox="${b.x0.toFixed(1)} ${b.y0.toFixed(1)} ${(b.x1 - b.x0).toFixed(1)} ${(b.y1 - b.y0).toFixed(1)}" role="img" aria-label="${label}">
+      <g transform="skewX(${SLANT})">
 ${inner}
+      </g>
     </svg>`;
 }
 
 fs.mkdirSync('.workbuddy/tmp', { recursive: true });
 
-const built = build(LETTERS);
-const block = svgBlock(built.paths, built.width, 'persist');
+const built = build();
+const block = svgBlock(built.items, WORD);
 fs.writeFileSync('.workbuddy/tmp/wordmark-block.html', block, 'utf8');
 
-const SVG_ATTRS = 'fill="none" stroke="#467692" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"';
+const SVG_ATTRS = 'fill="none" stroke="#467692" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"';
 
-// 整词预览：当前 + 各 r 变体
+// 整词预览：按落地页实际显示宽度看一遍
 let words = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 body{margin:0;background:#f4f7f9;font:12px ui-monospace,monospace;color:#467692;
   display:flex;flex-direction:column;gap:18px;padding:24px}
@@ -141,11 +125,6 @@ svg{border:1px solid #dfe5eb;border-radius:12px;background:#fff}
 </style></head><body>`;
 words += `<div><div>当前字形（460px，与落地页一致）</div>${block.replace('class="wordmark"', `class="wordmark" ${SVG_ATTRS} style="width:460px"`)}</div>`;
 words += `<div><div>当前字形（900px，看细节）</div>${block.replace('class="wordmark"', `class="wordmark" ${SVG_ATTRS} style="width:900px"`)}</div>`;
-for (const [name, ps] of Object.entries(R_VARIANTS)){
-  const L2 = { ...LETTERS, r: { adv: 36, paths: ps } };
-  const b2 = build(L2);
-  words += `<div><div>r = ${name}</div>${svgBlock(b2.paths, b2.width, 'persist').replace('class="wordmark"', `class="wordmark" ${SVG_ATTRS} style="width:460px"`)}</div>`;
-}
 words += `</body></html>`;
 fs.writeFileSync('.workbuddy/tmp/word-preview.html', words, 'utf8');
 
@@ -156,14 +135,17 @@ body{margin:0;background:#f4f7f9;font:12px ui-monospace,monospace;color:#467692;
 figure{margin:0;text-align:center;background:#fff;border:1px solid #dfe5eb;border-radius:14px;padding:10px}
 svg{border:1px solid #eef2f6;border-radius:8px;background:#fbfcfd}
 </style></head><body>`;
-for (const [ch, L] of Object.entries(LETTERS)){
-  const sp = L.paths.map(d => skewPath(d));
-  audit += `<figure><svg width="200" height="250" viewBox="-40 -180 130 250" fill="none" stroke="#467692" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">`;
-  for (const d of sp) audit += `<path d="${d}"/>`;
-  audit += `</svg><figcaption>${ch}</figcaption></figure>`;
+for (const key of ORDER) {
+  const L = LETTERS[key];
+  const items = L.paths.map(d => ({ d, tx: 0 }));
+  const b = skewedBBox(items, 12);
+  audit += `<figure><svg width="200" height="250" viewBox="${b.x0.toFixed(1)} ${b.y0.toFixed(1)} ${(b.x1 - b.x0).toFixed(1)} ${(b.y1 - b.y0).toFixed(1)}" fill="none" stroke="#467692" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round">`;
+  audit += `<g transform="skewX(${SLANT})">`;
+  for (const it of items) audit += `<path d="${it.d}"/>`;
+  audit += `</g></svg><figcaption>${key === 's2' ? 's' : key}</figcaption></figure>`;
 }
 audit += `</body></html>`;
 fs.writeFileSync('.workbuddy/tmp/letter-audit.html', audit, 'utf8');
 
 console.log('viewBox:', block.match(/viewBox="([^"]+)"/)[1]);
-console.log('word width:', built.width, '| paths:', built.paths.length);
+console.log('word width:', built.width, '| paths:', built.items.length);

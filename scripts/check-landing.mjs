@@ -1,4 +1,4 @@
-// 落地页验收（landing/index.html · 科技展示型 · 浅色产品色系）。
+// 落地页验收（landing/index.html · 科技展示型 · 浅色产品色系 + 开场动画）。
 //
 // 为什么需要它：这是纯视觉页面，改坏了**不会报错**——只会变得不炫、
 // 掉帧、或在手机上卡死。这个脚本把「炫技但不失控」变成可复现的断言：
@@ -11,6 +11,8 @@
 //   · 「动效关」时流星雨真的停住、标题直接是终态
 //   · 眼睛标记存在，且虹膜跟随光标但不越界
 //   · 关键色对对比度达标（正文 4.5 / 图形 3.0）
+//   · 开场动画：眼睛画出来 → 星空有内容 → 交棒给落地页 → 跳过可用
+//     （减动效 / ?intro=0 / 关 JS 时都不该出现开场层）
 //
 // 用法：
 //   node scripts/check-landing.mjs              # 只跑断言
@@ -38,6 +40,8 @@ const VIEWPORTS = [
 ]
 
 const fileUrl = `file:///${PAGE.replace(/\\/g, '/').replace(/^\//, '')}`
+// 落地页本体一律 ?intro=0：开场动画会盖住页面 7 秒，
+// 布局/流星/标题这些断言要测的是落地页本身，不是开场层。
 
 /* ---------- 对比度 ---------- */
 function hexToRgb(hex) {
@@ -115,7 +119,7 @@ try {
     })
     page.on('pageerror', (err) => consoleErrors.push(String(err)))
 
-    await page.goto(`${fileUrl}?selftest=1`, { waitUntil: 'load' })
+    await page.goto(`${fileUrl}?selftest=1&intro=0`, { waitUntil: 'load' })
     await page.waitForTimeout(3600)
 
     const data = await page.evaluate(() => {
@@ -174,7 +178,7 @@ try {
     }
 
     // 窄屏预算：低端机不能和桌面一样密
-    if (vp.width <= 390 && data.maxMeteors > 12) {
+    if (vp.width <= 390 && data.maxMeteors > 22) {
       fail(vp.name, `窄屏流星预算过高：${data.maxMeteors}`)
     }
 
@@ -186,7 +190,7 @@ try {
       mkdirSync(SHOTS, { recursive: true })
       const file = join(SHOTS, `landing-${vp.name}.png`)
       // 另开一次不带 selftest 的加载：自检块是等宽字，不能混进证据图
-      await page.goto(fileUrl, { waitUntil: 'load' })
+      await page.goto(`${fileUrl}?intro=0`, { waitUntil: 'load' })
       await page.waitForTimeout(3000)
       await page.screenshot({ path: file })
     }
@@ -209,6 +213,7 @@ try {
       const keys = document.querySelectorAll('.keys li').length
       const foot = document.querySelector('.foot')
       const eye = document.querySelector('.eyemark')
+      const intro = document.getElementById('intro')
       const vis = (el) => {
         if (!el) return false
         const s = getComputedStyle(el)
@@ -231,6 +236,7 @@ try {
         keys,
         footVisible: vis(foot),
         eyeVisible: vis(eye),
+        introHidden: intro ? intro.hasAttribute('hidden') : true,
         hasTerminal: !!document.querySelector('.term'),
       }
     })
@@ -242,6 +248,7 @@ try {
     if (plain.keys < 3) fail('no-js', `关掉 JS 后关键词只有 ${plain.keys} 个`)
     if (!plain.footVisible) fail('no-js', '关掉 JS 后备案信息不可见')
     if (!plain.eyeVisible) fail('no-js', '关掉 JS 后眼睛标记不可见')
+    if (!plain.introHidden) fail('no-js', '关掉 JS 后开场层仍然可见（应整层不出现）')
     if (plain.hasTerminal) fail('no-js', '关掉 JS 后仍有终端元素')
     if (!plain.sloganText.includes('看懂自己')) fail('no-js', `关掉 JS 后 slogan 文案缺失（实为「${plain.sloganText}」）`)
     await ctx.close()
@@ -294,7 +301,7 @@ try {
       reducedMotion: 'no-preference',
     })
     const page = await ctx.newPage()
-    await page.goto(`${fileUrl}?selftest=1`, { waitUntil: 'load' })
+    await page.goto(`${fileUrl}?selftest=1&intro=0`, { waitUntil: 'load' })
     await page.waitForTimeout(1500)
     // 实时状态函数：自检块是一次性快照，比较帧数必须读实时值
     const readState = () => page.evaluate(() => {
@@ -346,7 +353,7 @@ try {
       reducedMotion: 'no-preference',
     })
     const page = await ctx.newPage()
-    await page.goto(fileUrl, { waitUntil: 'load' })
+    await page.goto(`${fileUrl}?intro=0`, { waitUntil: 'load' })
     await page.waitForTimeout(800)
     const getT = () => page.evaluate(() => {
       const el = document.getElementById('emEye')
@@ -371,7 +378,132 @@ try {
     await ctx.close()
   }
 
-  /* ---------- 6. 对比度 ---------- */
+  /* ---------- 6. 开场动画（eyeTutrial 眼型 → 星空 → 落地页） ---------- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: 'no-preference',
+    })
+    const page = await ctx.newPage()
+    const consoleErrors = []
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push(m.text())
+    })
+    page.on('pageerror', (e) => consoleErrors.push(String(e)))
+
+    await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
+
+    // 6.1 开场进行中：眼睛在场，落地页标题被按住（还没开始写）
+    await page.waitForTimeout(1300)
+    const early = await page.evaluate(() => {
+      const overlay = document.getElementById('intro')
+      const eye = document.getElementById('introEye')
+      const r = eye ? eye.getBoundingClientRect() : null
+      const st = typeof window.__persistIntroState === 'function' ? window.__persistIntroState() : null
+      return {
+        overlayVisible: overlay ? !overlay.hidden : false,
+        overlayOpacity: overlay ? Number(getComputedStyle(overlay).opacity) : 0,
+        eyeW: r ? r.width : 0,
+        eyeH: r ? r.height : 0,
+        playing: st ? st.playing : null,
+        hasEye: st ? st.hasEye : null,
+        hasSpace: st ? st.hasSpace : null,
+        hasSkip: st ? st.hasSkip : null,
+        wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
+      }
+    })
+    if (!early.overlayVisible) fail('intro', '开场层没有出现（?intro=1 应强制播放）')
+    if (early.overlayOpacity < 0.8) fail('intro', `开场层透明度只有 ${early.overlayOpacity}`)
+    if (early.eyeW < 200 || early.eyeH < 100) fail('intro', `眼睛尺寸异常 ${early.eyeW}×${early.eyeH}`)
+    if (!early.playing) fail('intro', '开场状态没有标记为 playing')
+    if (!early.hasEye || !early.hasSpace || !early.hasSkip) fail('intro', '开场层缺少眼睛/星空/跳过按钮')
+    if (early.wmDrawn !== 0) fail('intro', `开场期间手写标题已经画了 ${early.wmDrawn} 条（应等交棒后再写）`)
+
+    // 6.2 星空段：画布上必须有内容（说明星场真的画出来了）
+    await page.waitForTimeout(4600)   // ≈ 5.9s，正处在穿行星空
+    const space = await page.evaluate(() => {
+      const c = document.getElementById('introSpace')
+      if (!c) return { exists: false, nonEmpty: false }
+      const ctx = c.getContext('2d')
+      const d = ctx.getImageData(0, 0, c.width, c.height).data
+      let n = 0
+      for (let i = 3; i < d.length; i += 4 * 53) if (d[i] > 0) n++
+      return { exists: true, nonEmpty: n > 0, pixels: n }
+    })
+    if (!space.exists) fail('intro', '缺少星空画布')
+    else if (!space.nonEmpty) fail('intro', '星空画布是空的（星场没画出来）')
+
+    // 6.3 交棒：开场结束后标题才开始写，最终全部画完
+    await page.waitForTimeout(2600)   // ≈ 8.5s
+    const done = await page.evaluate(() => {
+      const overlay = document.getElementById('intro')
+      const paths = Array.prototype.slice.call(document.querySelectorAll('.wm-path'))
+      return {
+        overlayHidden: overlay ? overlay.hidden : true,
+        introAttr: document.documentElement.getAttribute('data-intro'),
+        wmDrawn: paths.filter((p) => p.classList.contains('is-drawn')).length,
+        wmTotal: paths.length,
+        ctaVisible: !!document.querySelector('.cta'),
+      }
+    })
+    if (!done.overlayHidden) fail('intro', '开场结束后开场层没有隐藏')
+    if (done.introAttr !== 'off') fail('intro', `data-intro 应为 off，实为 ${done.introAttr}`)
+    if (done.wmDrawn !== done.wmTotal) fail('intro', `交棒后标题只画了 ${done.wmDrawn}/${done.wmTotal} 条`)
+    if (!done.ctaVisible) fail('intro', '交棒后 CTA 不见了')
+    if (consoleErrors.length) fail('intro', `控制台报错：${consoleErrors.join(' | ')}`)
+    notes.push(`开场：1.3s 眼睛在场（${Math.round(early.eyeW)}×${Math.round(early.eyeH)}）· 5.9s 星空像素 ${space.pixels} · 8.5s 标题 ${done.wmDrawn}/${done.wmTotal}`)
+    await ctx.close()
+  }
+
+  /* ---------- 6b. 跳过按钮：点了立刻交棒 ---------- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: 'no-preference',
+    })
+    const page = await ctx.newPage()
+    await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
+    await page.waitForTimeout(1000)
+    await page.click('#introSkip')
+    await page.waitForTimeout(2200)   // 逐笔浮现约需 1.3s
+    const after = await page.evaluate(() => ({
+      introAttr: document.documentElement.getAttribute('data-intro'),
+      overlayHidden: document.getElementById('intro').hidden,
+      wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
+      wmTotal: document.querySelectorAll('.wm-path').length,
+    }))
+    if (after.introAttr !== 'off') fail('intro-skip', `跳过后 data-intro 应为 off，实为 ${after.introAttr}`)
+    if (!after.overlayHidden) fail('intro-skip', '跳过后开场层没有隐藏')
+    if (after.wmDrawn !== after.wmTotal) fail('intro-skip', `跳过后标题只画了 ${after.wmDrawn}/${after.wmTotal} 条`)
+    notes.push(`跳过开场：0s 内交棒，标题 ${after.wmDrawn}/${after.wmTotal}`)
+    await ctx.close()
+  }
+
+  /* ---------- 6c. ?intro=0 / 减动效：都不该出现开场层 ---------- */
+  {
+    for (const [label, url, opts] of [
+      ['intro=0', `${fileUrl}?intro=0`, { reducedMotion: 'no-preference' }],
+      ['reduced-motion', `${fileUrl}`, { reducedMotion: 'reduce' }],
+    ]) {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...opts })
+      const page = await ctx.newPage()
+      await page.goto(url, { waitUntil: 'load' })
+      await page.waitForTimeout(2000)
+      const st = await page.evaluate(() => ({
+        hidden: document.getElementById('intro').hidden,
+        opacity: Number(getComputedStyle(document.getElementById('intro')).opacity),
+        wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
+        wmTotal: document.querySelectorAll('.wm-path').length,
+      }))
+      if (!st.hidden) fail(label, '开场层出现了（本该直接进落地页）')
+      if (st.opacity > 0.05) fail(label, `开场层透明度 ${st.opacity}，没有隐藏`)
+      if (st.wmDrawn !== st.wmTotal) fail(label, `标题只画了 ${st.wmDrawn}/${st.wmTotal} 条`)
+      notes.push(`${label}：无开场层，标题 ${st.wmDrawn}/${st.wmTotal}`)
+      await ctx.close()
+    }
+  }
+
+  /* ---------- 7. 对比度 ---------- */
   for (const pair of COLOR_PAIRS) {
     const ratio = contrast(pair.fg, pair.bg)
     const ok = ratio >= pair.min

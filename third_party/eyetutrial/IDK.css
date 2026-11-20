@@ -1,0 +1,133 @@
+p{
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 150%;
+    color: rgb(83, 56, 0);
+}
+h1{
+    color: white;
+    border-radius: 10px;
+    border: 3px solid white
+}
+img{
+    width: 800px;
+}
+
+     
+      li{
+        font-size: large;
+      }
+
+body{
+    background-color: rgb(200, 209, 212);
+}
+.b-list{
+    display: flex;
+    gap: 80px;
+}
+.b-image{
+    width: 600px;
+}
+.b-text{
+    padding: 25px;
+    background-color: rgb(168, 177, 180);
+}
+.Last-Step{
+    display: flex;
+    gap: 80px;
+}
+
+.Eye{
+    width: 1000px;
+}
+.Last-Text{
+    padding: 25px;
+    background-color: rgb(168, 177, 180)
+}
+.Step-Two{
+    display: flex;
+    gap: 300px;
+}
+
+.Step2-Img{
+    width: 500px;
+}
+.Step2-Text{
+    padding: 70px;
+    width: 1000px;
+    position: relative;
+    left: 80px;
+    background-color: rgb(168, 177, 180)
+}
+.step-three{
+    display: flex;
+    gap: 80px;
+}
+
+.step3-text{
+    background-color: rgb(168, 177, 180)
+}
+.step-four{
+    display: flex;
+    gap: 80px;
+}
+
+.step4-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step-five{
+    display: flex;
+    gap: 80px;
+}
+
+.step5-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step-six{
+    display: flex;
+    gap: 80px;
+}
+
+.step6-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step-seven{
+    display: flex;
+    gap: 80px;
+}
+
+.step7-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step8-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step9-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step10-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step11-text{
+    background-color: rgb(168, 177, 180)
+}
+
+
+.step-twelve{
+    display: flex;
+    gap: 80px;
+}
+
+.step12-text{
+    background-color: rgb(168, 177, 180)
+}
+
+.step13-text{
+    background-color: rgb(168, 177, 180)
+}
