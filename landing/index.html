@@ -304,116 +304,21 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   position:fixed;inset:0;z-index:60;overflow:hidden;
   display:flex;align-items:center;justify-content:center;
   background:radial-gradient(125% 92% at 50% 44%, #1d3c4f 0%, #142a37 46%, #0b1a23 100%);
-  opacity:0;transition:opacity .5s ease;
+  opacity:0;transition:opacity .8s ease;
 }
 .intro[hidden]{display:none!important}
 .intro.is-on{opacity:1}
 .intro.is-out{opacity:0;pointer-events:none}
-.intro-space{
+/* 引擎画布：字符画的承载容器。
+   画布的 CSS 尺寸 = 网格列数 × 字符格宽（JS 精确设置），
+   所以字符不会被浏览器二次缩放 —— 那样会糊成一片。 */
+.intro-canvas{
   position:absolute;inset:0;width:100%;height:100%;display:block;
-  opacity:0;transition:opacity .45s ease;
+  image-rendering:pixelated;
+  /* 画布是「黑底 + 字符」，页面底色是深蓝灰；不加这层柔和外晕的话，
+     两者之间会是一条硬邦邦的矩形边界。 */
+  box-shadow:0 0 170px 90px rgba(4,11,17,.92);
 }
-.intro-space.is-on{opacity:1}
-.intro-eye{
-  position:relative;z-index:2;
-  width:min(88vw,760px);height:auto;display:block;overflow:visible;
-  transition:opacity .5s ease;
-}
-
-/* ---------- 9.1 眼：分层画法（上游 14 步的顺序） ---------- */
-.ie-halo{opacity:0;animation:ieFade 1.1s ease .15s forwards}
-/* 睁眼前的那条闭眼线：先画出来，再被睁开的眼睛接管 */
-.ie-closed{
-  fill:none;stroke:#7aa3bd;stroke-width:3.4;stroke-linecap:round;
-  stroke-dasharray:100;stroke-dashoffset:100;
-  animation:ieDraw .42s ease var(--t-closed) forwards,
-            ieFadeOut .38s ease var(--t-closedEnd) forwards;
-}
-/* Step 1 的圆：起稿辅助线，画完就收掉（留着会像一圈多余的轮廓） */
-.ie-ball{
-  fill:none;stroke:#5d89a5;stroke-width:2.1;
-  stroke-dasharray:100;stroke-dashoffset:100;
-  animation:ieDraw .5s ease var(--t-ball) forwards,
-            ieBallFade .6s ease var(--t-ballFade) forwards;
-}
-.ie-shadow{opacity:0;animation:ieFade .55s ease var(--t-shadow) forwards}
-/* 眼白在推进时被放大成上下两条白边，所以推进一开始就收掉 */
-.ie-sclera{opacity:0;animation:ieFade .5s ease var(--t-sclera) forwards,ieFadeOut .3s ease var(--t-push) forwards}
-.ie-iris,.ie-pupil,.ie-glint,.ie-glint2{
-  opacity:0;transform-box:fill-box;transform-origin:50% 50%;
-  animation:iePop .42s ease var(--t-iris) forwards;
-}
-.ie-pupil{animation:iePop .36s ease var(--t-pupil) forwards}
-/* 高光在推进时被放大成巨白球，所以推进一开始就收掉 */
-.ie-glint{animation:iePop .32s ease var(--t-glint) forwards,ieFadeOut .3s ease var(--t-push) forwards}
-.ie-glint2{animation:iePop .32s ease var(--t-glint) forwards,ieFadeOut .3s ease var(--t-push) forwards}
-.ie-iris-shade{opacity:0;animation:ieFade .45s ease var(--t-shade) forwards}
-.ie-sparkle{
-  opacity:0;transform-box:fill-box;transform-origin:50% 50%;
-  animation:ieSpark .55s ease var(--t-sparkle) forwards,
-            ieFadeOut .3s ease var(--t-push) forwards;
-}
-/* Step 2/4 眼睑、Step 5 双眼皮 */
-.ie-lid{
-  fill:none;stroke:#3f6d8a;stroke-width:3.2;
-  stroke-linecap:round;stroke-linejoin:round;
-  stroke-dasharray:100;stroke-dashoffset:100;
-  animation:ieDraw .34s ease var(--t-lid) forwards;
-}
-.ie-lid-up{--t-lid:var(--t-lidUp)}
-.ie-lid-low{--t-lid:var(--t-lidLow)}
-.ie-lid2{
-  fill:none;stroke:#7fa5bd;stroke-width:1.5;stroke-linecap:round;opacity:.72;
-  stroke-dasharray:100;stroke-dashoffset:100;
-  animation:ieDraw .3s ease var(--t-lid2) forwards;
-}
-/* 眼裂（遮罩里的形状）负责睁眼与眨眼 */
-.ie-openmask{
-  transform-box:view-box;transform-origin:200px 132px;
-  animation:ieOpen .5s ease var(--t-open) forwards,
-            ieBlink .34s ease var(--t-blink1),
-            ieBlink .34s ease var(--t-blink2);
-}
-.ie-blink{
-  transform-box:view-box;transform-origin:200px 132px;
-  animation:ieBlink .34s ease var(--t-blink1),
-            ieBlink .34s ease var(--t-blink2);
-}
-/* 视线游移：只在虹膜组上平移，眼白和眼睑不动 */
-.ie-gaze{animation:ieGaze 1.5s ease-in-out var(--t-gaze) both}
-/* 镜头推进瞳孔：整只眼以瞳孔为原点放大。
-   放大倍率由 JS 按视口算好写进 --push-scale（要保证瞳孔最后能填满屏幕），
-   固定倍率在窄屏上会露边（眼白会从上下漏出来）。 */
-.ie-push{
-  transform-box:view-box;transform-origin:200px 130px;
-  animation:iePush 1s cubic-bezier(.55,.02,.3,1) var(--t-push) forwards;
-}
-
-@keyframes ieDraw{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
-@keyframes ieFade{from{opacity:0}to{opacity:1}}
-@keyframes ieFadeOut{from{opacity:1}to{opacity:0}}
-@keyframes ieBallFade{to{opacity:0}}
-@keyframes iePop{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:scale(1)}}
-@keyframes ieSpark{
-  0%{opacity:0;transform:scale(.2) rotate(0deg)}
-  55%{opacity:1;transform:scale(1.18) rotate(45deg)}
-  100%{opacity:.92;transform:scale(1) rotate(45deg)}
-}
-@keyframes ieOpen{from{transform:scaleY(.05)}to{transform:scaleY(1)}}
-@keyframes ieBlink{
-  0%,100%{transform:scaleY(1)}
-  46%,56%{transform:scaleY(.05)}
-}
-@keyframes ieGaze{
-  0%{transform:translate(0,0)}
-  15%{transform:translate(-15px,-5px)}
-  33%{transform:translate(14px,3px)}
-  51%{transform:translate(-5px,-13px)}
-  69%{transform:translate(11px,9px)}
-  85%{transform:translate(-9px,2px)}
-  100%{transform:translate(0,0)}
-}
-@keyframes iePush{from{transform:scale(1)}to{transform:scale(var(--push-scale,20))}}
 
 /* 跳过按钮：开场是暗场，按钮用浅色文字（与深底对比 ≥ 4.5:1） */
 .intro-skip{
@@ -434,73 +339,12 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 </head>
 <body>
 
-<!-- 开场动画：eyeTutrial 的眼睛 → 穿过星空 → 落地页（默认隐藏，无 JS 时不出现） -->
+<!-- 开场动画：eyeTutorial 复刻版的 ASCII 眼睛 → 穿过星场 → 落地页
+     （默认隐藏，无 JS 时整层不出现） -->
 <div class="intro" id="intro" hidden>
-  <canvas class="intro-space" id="introSpace" aria-hidden="true"></canvas>
-  <svg class="intro-eye" id="introEye" viewBox="0 0 400 260" aria-hidden="true" focusable="false">
-    <defs>
-      <radialGradient id="ieHalo" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#4d7f9d" stop-opacity=".4"/>
-        <stop offset="55%" stop-color="#33627e" stop-opacity=".15"/>
-        <stop offset="100%" stop-color="#1b394b" stop-opacity="0"/>
-      </radialGradient>
-      <radialGradient id="ieShadowGrad" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#0b1c26" stop-opacity=".55"/>
-        <stop offset="68%" stop-color="#0b1c26" stop-opacity=".2"/>
-        <stop offset="100%" stop-color="#0b1c26" stop-opacity="0"/>
-      </radialGradient>
-      <radialGradient id="ieScleraGrad" cx="50%" cy="24%" r="84%">
-        <stop offset="0%" stop-color="#f1f6f9"/>
-        <stop offset="60%" stop-color="#dfe8ee"/>
-        <stop offset="100%" stop-color="#c4d1da"/>
-      </radialGradient>
-      <radialGradient id="ieIrisGrad" cx="36%" cy="28%" r="80%">
-        <stop offset="0%" stop-color="#92bfd7"/>
-        <stop offset="50%" stop-color="#5c8ba9"/>
-        <stop offset="100%" stop-color="#31536a"/>
-      </radialGradient>
-      <!-- Step 9：光从上方来，虹膜下半部更暗（碗状受光） -->
-      <linearGradient id="ieIrisShadeGrad" x1="0" y1="130" x2="0" y2="176" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="#16323f" stop-opacity="0"/>
-        <stop offset="100%" stop-color="#16323f" stop-opacity=".62"/>
-      </linearGradient>
-      <mask id="ieMask" maskUnits="userSpaceOnUse" x="-70" y="-90" width="540" height="440">
-        <rect x="-70" y="-90" width="540" height="440" fill="#000"/>
-        <g class="ie-openmask">
-          <path d="M 118,132 C 132,58 268,58 282,132 C 262,196 138,196 118,132 Z" fill="#fff"/>
-        </g>
-      </mask>
-    </defs>
-
-    <ellipse class="ie-halo" cx="200" cy="130" rx="200" ry="136" fill="url(#ieHalo)"/>
-    <ellipse class="ie-shadow" cx="200" cy="140" rx="104" ry="62" fill="url(#ieShadowGrad)"/>
-
-    <g class="ie-push">
-      <circle class="ie-ball" pathLength="100" cx="200" cy="130" r="80"/>
-      <g class="ie-blink">
-        <g mask="url(#ieMask)">
-          <circle class="ie-sclera" cx="200" cy="130" r="80" fill="url(#ieScleraGrad)"/>
-          <g class="ie-gaze">
-            <circle class="ie-iris" cx="200" cy="130" r="44" fill="url(#ieIrisGrad)"/>
-            <path class="ie-iris-shade" d="M 156,130 A 44,44 0 0 0 244,130 Z" fill="url(#ieIrisShadeGrad)"/>
-            <circle class="ie-pupil" cx="200" cy="130" r="17" fill="#16323f"/>
-            <circle class="ie-glint" cx="214" cy="117" r="5.4" fill="#ffffff"/>
-            <circle class="ie-glint2" cx="188" cy="142" r="2.6" fill="#dceaf2"/>
-            <g transform="translate(231,106)">
-              <path class="ie-sparkle" d="M 0,-11 L 2.6,-2.6 L 11,0 L 2.6,2.6 L 0,11 L -2.6,2.6 L -11,0 L -2.6,-2.6 Z" fill="#ffffff"/>
-            </g>
-          </g>
-        </g>
-        <g class="ie-lids">
-          <path class="ie-lid ie-lid-up" pathLength="100" d="M 118,132 C 132,58 268,58 282,132"/>
-          <path class="ie-lid ie-lid-low" pathLength="100" d="M 118,132 C 138,196 262,196 282,132"/>
-          <path class="ie-lid2" pathLength="100" d="M 122,131 C 140,72 260,72 278,131"/>
-        </g>
-      </g>
-    </g>
-
-    <path class="ie-closed" pathLength="100" d="M 118,132 C 150,168 250,168 282,132"/>
-  </svg>
+  <!-- 引擎输出的字符画。尺寸由 JS 按「字符格」精确设置，
+       画布只是承载字符的容器 —— 真正的画面是这些字符。 -->
+  <canvas class="intro-canvas" id="introCanvas" aria-hidden="true"></canvas>
   <button class="intro-skip" id="introSkip" type="button">跳过开场</button>
 </div>
 
@@ -1130,23 +974,1057 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 })();
 </script>
 
+<!-- ===== 内联：third_party/eyetutorial-replica/engine.js（勿手改，见 scripts/inline-intro-engine.mjs） ===== -->
+<script>
+/*!
+ * Eye -> Space · 浏览器版渲染引擎
+ * 基于 iremcnar/eyeTutorial 的效果复刻：纯 JS、无依赖、无图片素材。
+ * 用法：Renderer(cellW, cellH, rows).render(t, dt) -> { idx, q }
+ */
+(function (global) {
+  "use strict";
+
+  const PI = Math.PI;
+  const CFG = {
+    SS: 2,                 // 每格 2x2 个采样点
+    ASPECT: 1.40,          // 画面宽高比
+    MAX_ROWS: 30,
+    T_OPEN: 0.9, T_OPEN_D: 2.4, T_BLINK: 4.0,
+    T_Z0: 5.4, T_ZD: 28.0, ZEND: 14.0,
+    T_SPACE: 5.4 + 28.0,
+    T_HEART: 5.4 + 3.5,
+    T_HEART_D: 26.0,
+    WO: 0.78, HU: 0.30, HL: 0.20, RI: 0.27, RP0: 0.098, GS0: 0.085,
+    RAMP: " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+    QL: 24,
+  };
+  const RAMP = CFG.RAMP, NR = RAMP.length - 1, QL = CFG.QL;
+  const CIDX = {};
+  for (let i = 0; i < RAMP.length; i++) CIDX[RAMP[i]] = i;   // 后写覆盖，与 Python dict 一致
+
+  // ------------------------------------------------------------ 数学小工具
+  const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+  function smoothstep(a, b, x) {
+    const t = clamp((x - a) / (b - a), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+  function ease(t) {
+    t = clamp(t, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+  const mix = (a, b, k) => a + (b - a) * k;
+  const f32 = Math.fround;
+
+  // ------------------------------------------------------------ MT19937
+  // 与 numpy.RandomState / CPython random 的底层发生器保持一致，这样随机纹理、
+  // 星点分布、视线关键帧都几乎与 Python 版逐个数值对得上。
+  class MT19937 {
+    constructor() {
+      this.mt = new Uint32Array(624);
+      this.mti = 625;
+    }
+    initGenrand(seed) {
+      const mt = this.mt;
+      mt[0] = seed >>> 0;
+      for (let i = 1; i < 624; i++) {
+        mt[i] = (Math.imul(1812433253, mt[i - 1] ^ (mt[i - 1] >>> 30)) + i) >>> 0;
+      }
+      this.mti = 624;
+    }
+    initByArray(key) {
+      const mt = this.mt;
+      this.initGenrand(19650218);
+      let i = 1, j = 0;
+      let k = Math.max(624, key.length);
+      for (; k; k--) {
+        mt[i] = ((mt[i] ^ Math.imul(mt[i - 1] ^ (mt[i - 1] >>> 30), 1664525)) + key[j] + j) >>> 0;
+        i++; j++;
+        if (i >= 624) { mt[0] = mt[623]; i = 1; }
+        if (j >= key.length) j = 0;
+      }
+      for (k = 623; k; k--) {
+        mt[i] = ((mt[i] ^ Math.imul(mt[i - 1] ^ (mt[i - 1] >>> 30), 1566083941)) - i) >>> 0;
+        i++;
+        if (i >= 624) { mt[0] = mt[623]; i = 1; }
+      }
+      mt[0] = 0x80000000;
+      this.mti = 624;
+    }
+    int32() {
+      const mt = this.mt;
+      if (this.mti >= 624) {
+        for (let kk = 0; kk < 624; kk++) {
+          const y = (mt[kk] & 0x80000000) | (mt[(kk + 1) % 624] & 0x7fffffff);
+          mt[kk] = mt[(kk + 397) % 624] ^ (y >>> 1) ^ (y & 1 ? 0x9908b0df : 0);
+        }
+        this.mti = 0;
+      }
+      let y = mt[this.mti++];
+      y ^= y >>> 11;
+      y ^= (y << 7) & 0x9d2c5680;
+      y ^= (y << 15) & 0xefc60000;
+      y ^= y >>> 18;
+      return y >>> 0;
+    }
+    random() {
+      const a = this.int32() >>> 5, b = this.int32() >>> 6;
+      return (a * 67108864.0 + b) / 9007199254740992.0;
+    }
+  }
+
+  class NumpyRandom {
+    constructor(seed) {
+      this.mt = new MT19937();
+      this.mt.initGenrand(seed >>> 0);
+    }
+    random() { return this.mt.random(); }
+    rand(n) {
+      const out = new Float64Array(n);
+      for (let i = 0; i < n; i++) out[i] = this.random();
+      return out;
+    }
+    uniform(a, b, n) {
+      const out = new Float64Array(n);
+      for (let i = 0; i < n; i++) out[i] = a + (b - a) * this.random();
+      return out;
+    }
+  }
+
+  class PyRandom {
+    constructor(seed) {                    // CPython random.Random(int)
+      this.mt = new MT19937();
+      const key = [];
+      let n = Math.abs(seed);
+      do { key.push(n % 4294967296); n = Math.floor(n / 4294967296); } while (n);
+      this.mt.initByArray(key);
+    }
+    random() { return this.mt.random(); }
+    uniform(a, b) { return a + (b - a) * this.random(); }
+    randbelow(n) {                          // 与 CPython _randbelow_with_getrandbits 一致
+      const k = n.toString(2).length;
+      let r;
+      do { r = this.mt.int32() >>> (32 - k); } while (r >= n);
+      return r;
+    }
+    choice(arr) { return arr[this.randbelow(arr.length)]; }
+  }
+
+  // ------------------------------------------------------------ 程序化贴图
+  function upsample(b, g, n) {              // 可平铺的二次平滑插值放大
+    const t = new Float32Array(g * n);
+    const out = new Float32Array(n * n);
+    const frac = new Float32Array(n);
+    const i0s = new Int32Array(n), i1s = new Int32Array(n);
+    for (let j = 0; j < n; j++) {
+      const x = (j * g) / n;
+      const i0 = Math.floor(x) % g;
+      i0s[j] = i0;
+      i1s[j] = (i0 + 1) % g;
+      let f = x - Math.floor(x);
+      frac[j] = f * f * (3 - 2 * f);
+    }
+    for (let j = 0; j < n; j++) {
+      const f = frac[j], a = i0s[j], c = i1s[j];
+      for (let row = 0; row < g; row++) {
+        t[row * n + j] = b[row * g + a] * (1 - f) + b[row * g + c] * f;
+      }
+    }
+    for (let j = 0; j < n; j++) {
+      const f = frac[j], a = i0s[j], c = i1s[j];
+      for (let col = 0; col < n; col++) {
+        out[j * n + col] = t[a * n + col] * (1 - f) + t[c * n + col] * f;
+      }
+    }
+    return out;
+  }
+
+  function normalize01(arr, k) {
+    let sum = 0;
+    for (let i = 0; i < arr.length; i++) sum += arr[i];
+    const mean = sum / arr.length;
+    let varSum = 0;
+    for (let i = 0; i < arr.length; i++) {
+      const d = arr[i] - mean;
+      varSum += d * d;
+    }
+    const std = Math.sqrt(varSum / arr.length);
+    const out = new Float32Array(arr.length);
+    const denom = std * k + 1e-9;
+    for (let i = 0; i < arr.length; i++) out[i] = clamp(0.5 + (arr[i] - mean) / denom, 0, 1);
+    return out;
+  }
+
+  function fractalTex(rng, n, grids) {
+    const out = new Float32Array(n * n);
+    let amp = 1.0;
+    for (const g of grids) {
+      const layer = upsample(Float32Array.from(rng.rand(g * g)), g, n);
+      for (let i = 0; i < out.length; i++) out[i] = f32(out[i] + amp * layer[i]);
+      amp *= 0.55;
+    }
+    return normalize01(out, 4.0);
+  }
+
+  function noise1d(rng, n, g) {
+    const base = Float32Array.from(rng.rand(g));
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i * g) / n;
+      const i0 = Math.floor(x) % g;
+      const i1 = (i0 + 1) % g;
+      let f = x - Math.floor(x);
+      f = f * f * (3 - 2 * f);
+      out[i] = base[i0] * (1 - f) + base[i1] * f;
+    }
+    return out;
+  }
+
+  function bilinear(tex, n, u, v) {
+    const u0 = Math.floor(u), v0 = Math.floor(v);
+    const fu = u - u0, fv = v - v0;
+    const i0 = ((u0 % n) + n) % n, j0 = ((v0 % n) + n) % n;
+    const i1 = (i0 + 1) % n, j1 = (j0 + 1) % n;
+    return ((tex[j0 * n + i0] * (1 - fu) + tex[j0 * n + i1] * fu) * (1 - fv)
+      + (tex[j1 * n + i0] * (1 - fu) + tex[j1 * n + i1] * fu) * fv);
+  }
+
+  // ------------------------------------------------------------ 素材
+  const NA = 4096, NS = 3200, NUP = 44, NLO = 20;
+
+  class Textures {
+    constructor() {
+      const rng = new NumpyRandom(5);
+      this.rng = rng;
+
+      this.skin = fractalTex(rng, 1024, [6, 20, 64, 200]);
+      this.glow = fractalTex(rng, 1024, [8, 24, 64, 160]);
+      this.white = Float32Array.from(rng.rand(512 * 512));
+
+      const tv = fractalTex(rng, 512, [5, 12, 30]);
+      this.ring = new Float32Array(tv.length);
+      for (let i = 0; i < tv.length; i++) this.ring[i] = 1 - Math.abs(2 * tv[i] - 1);
+
+      const tv2 = fractalTex(rng, 512, [3, 7, 16]);
+      this.vein = new Float32Array(tv2.length);
+      for (let i = 0; i < tv2.length; i++) this.vein[i] = 1 - Math.abs(2 * tv2[i] - 1);
+
+      const mixNoise = (a, b, c) => {
+        const n = NA;
+        const out = new Float32Array(n);
+        for (let i = 0; i < n; i++) out[i] = a[i] * 0.5 + b[i] * 0.3 + c[i] * 0.2;
+        return out;
+      };
+      this.a1 = normalize01(mixNoise(noise1d(rng, NA, 900), noise1d(rng, NA, 300), noise1d(rng, NA, 120)), 3.0);
+      this.a2 = normalize01(mixNoise(noise1d(rng, NA, 700), noise1d(rng, NA, 200), noise1d(rng, NA, 80)), 3.0);
+      this.a3 = normalize01(noise1d(rng, NA, 13), 3.0);
+      this.a4 = normalize01(noise1d(rng, NA, 48), 3.0);
+
+      // ---- 星场 ----
+      this.starX = Float32Array.from(rng.uniform(-1, 1, NS));
+      this.starY = Float32Array.from(rng.uniform(-1, 1, NS));
+      this.starZ = Float32Array.from(rng.uniform(0.06, 1.0, NS));
+      this.starB = new Float32Array(NS);
+      const randB = rng.rand(NS);
+      for (let i = 0; i < NS; i++) this.starB[i] = 0.10 + 0.90 * Math.pow(randB[i], 3.5);
+      this.starCol = new Float32Array(NS * 3);
+      const warm = rng.rand(NS);
+      for (let i = 0; i < NS; i++) {
+        const k = Math.pow(warm[i], 1.5);
+        this.starCol[i * 3] = mix(0.70, 1.0, k);
+        this.starCol[i * 3 + 1] = mix(0.82, 0.80, k);
+        this.starCol[i * 3 + 2] = mix(1.0, 0.55, k);
+      }
+      this.starPhase = Float32Array.from(rng.uniform(0, 6.28, NS));
+      this.starFreq = Float32Array.from(rng.uniform(1.0, 3.5, NS));
+
+      // ---- 视线关键帧 ----
+      const gaze = new PyRandom(4);
+      this.gazeKeys = [[0.0, 0.0, 0.0]];
+      let tc = 1.7;
+      while (tc < 40) {
+        this.gazeKeys.push([tc, gaze.uniform(-0.045, 0.045), gaze.uniform(-0.022, 0.02)]);
+        tc += gaze.uniform(0.9, 2.4);
+      }
+
+      // ---- 睫毛 ----
+      const lash = new PyRandom(21);
+      this.upperLashes = [];
+      for (let i = 0; i < NUP; i++) this.upperLashes.push(-0.92 + (1.84 * i) / (NUP - 1));
+      this.upperLen = [];
+      for (let i = 0; i < NUP; i++) this.upperLen.push(lash.uniform(0.92, 1.08));
+      this.lowerLashes = [];
+      for (let i = 0; i < NLO; i++) this.lowerLashes.push(-0.70 + (1.40 * i) / (NLO - 1));
+      this.lowerLen = [];
+      for (let i = 0; i < NLO; i++) this.lowerLen.push(lash.uniform(0.90, 1.10));
+
+      this.streakRnd = new PyRandom(9);
+    }
+  }
+
+  // ------------------------------------------------------------ 几何网格
+  function buildGeometry(rows, cw, ch) {
+    const nCols = Math.floor((rows * ch * CFG.ASPECT) / cw / 2) * 2;
+    const nRows = Math.floor(rows / 2) * 2;
+    const W = nCols * cw, H = nRows * ch;
+    const GW = nCols * CFG.SS, GH = nRows * CFG.SS;
+
+    const X = new Float32Array(GH * GW), Y = new Float32Array(GH * GW);
+    for (let j = 0; j < GH; j++) {
+      const y = ((j + 0.5) * (ch / CFG.SS) - H / 2) / H;
+      for (let i = 0; i < GW; i++) {
+        const x = ((i + 0.5) * (cw / CFG.SS) - W / 2) / H;
+        X[j * GW + i] = x;
+        Y[j * GW + i] = y;
+      }
+    }
+    const RS = new Float32Array(GH * GW);
+    for (let i = 0; i < RS.length; i++) RS[i] = Math.sqrt(X[i] * X[i] + Y[i] * Y[i]);
+
+    const XC = new Float32Array(nRows * nCols), YC = new Float32Array(nRows * nCols);
+    const RC = new Float32Array(nRows * nCols);
+    for (let j = 0; j < nRows; j++) {
+      const y = ((j + 0.5) * ch - H / 2) / H;
+      for (let i = 0; i < nCols; i++) {
+        const x = ((i + 0.5) * cw - W / 2) / H;
+        const p = j * nCols + i;
+        XC[p] = x; YC[p] = y; RC[p] = Math.sqrt(x * x + y * y);
+      }
+    }
+    const HASH = new Float32Array(nRows * nCols);
+    for (let j = 0; j < nRows; j++) {
+      for (let i = 0; i < nCols; i++) {
+        HASH[j * nCols + i] = (((j * 73856093) ^ (i * 19349663) ^ 0x5bd1e995) % 1009) / 1009;
+      }
+    }
+    return { nRows, nCols, W, H, GW, GH, cw, ch, X, Y, RS, XC, YC, RC, HASH };
+  }
+
+  // ------------------------------------------------------------ 眼球
+  function blinkCurve(t) {
+    const d = t - CFG.T_BLINK;
+    if (d < 0 || d > 0.36) return 0;
+    if (d < 0.09) return ease(d / 0.09);
+    if (d < 0.12) return 1;
+    return 1 - ease((d - 0.12) / 0.24);
+  }
+
+  function lidOpen(t) {
+    let k = ease((t - CFG.T_OPEN) / CFG.T_OPEN_D);
+    k = k * (1 + 0.035 * Math.sin(PI * k));
+    return Math.min(1, k) * (1 - 0.985 * blinkCurve(t));
+  }
+
+  function lidEdges(u0, ou) {
+    const s = u0 / CFG.WO;
+    const wu = s < -0.12 ? 0.88 : 1.12;
+    const cu = Math.pow(Math.max(0, 1 - Math.pow((s + 0.12) / wu, 2)), 0.8);
+    const cl = Math.pow(Math.max(0, 1 - Math.pow(s - 0.08, 2)), 0.9);
+    const vc = 0.03 * cl;
+    const vl = vc + (CFG.HL * cl - vc) * (0.35 + 0.65 * ou);
+    const vu = vl + (-CFG.HU * cu - vl) * ou;
+    return [vu, vl, cu, cl];
+  }
+
+  class Renderer {
+    constructor(cellW, cellH, rows, opts) {
+      this.opts = Object.assign({ smooth: 0, levels: 0, hash: 0.07 }, opts || {});
+      this.tex = this.opts.tex || new Textures();
+      this.geo = buildGeometry(rows, cellW, cellH);
+      const g = this.geo;
+      this.img = new Float32Array(g.GH * g.GW * 3);
+      this.space = new Float32Array(g.GH * g.GW * 3);
+      this.pm = new Float32Array(g.GH * g.GW);
+      this.cells = new Float32Array(g.nRows * g.nCols * 3);
+      this.lum = new Float32Array(g.nRows * g.nCols);
+      this.idx = new Uint8Array(g.nRows * g.nCols);
+      this.q = new Uint8Array(g.nRows * g.nCols * 3);
+      this.streaks = [];
+      this.nextShoot = 1e9;
+      this.comet = false;
+      this.lastT = 0;
+      this.reset();
+    }
+
+    reset() {
+      const tex = this.tex;
+      this.nextShoot = 1e9;
+      this.comet = false;
+      this.streaks.length = 0;
+      const z = tex.rng.uniform(0.06, 1.0, NS);
+      tex.starZ.set(Float32Array.from(z));
+    }
+
+    // -------------------------------------------------- 星空状态
+    updateWorld(t, dt, prog) {
+      const tex = this.tex;
+      const vf = 0.010 + 0.05 * prog + (t > CFG.T_SPACE ? 0.015 : 0);
+      if (!this._dead) this._dead = new Uint8Array(NS);
+      const dead = this._dead;
+      dead.fill(0);
+      let nDead = 0;
+      for (let i = 0; i < NS; i++) {
+        tex.starZ[i] -= vf * dt;
+        if (tex.starZ[i] < 0.06) { tex.starZ[i] += 0.94; dead[i] = 1; nDead++; }
+      }
+      if (nDead > 0) {
+        // 与 numpy 版一致：先整批抽 X，再整批抽 Y，按索引升序回填
+        const xs = tex.rng.uniform(-1, 1, nDead);
+        const ys = tex.rng.uniform(-1, 1, nDead);
+        let k = 0;
+        for (let i = 0; i < NS; i++) {
+          if (dead[i]) { tex.starX[i] = xs[k]; tex.starY[i] = ys[k]; k++; }
+        }
+      }
+      if (this.nextShoot > 1e8 && t > CFG.T_SPACE - 4.0) this.nextShoot = t + 1.0;
+      const rnd = tex.streakRnd;
+      if (t > this.nextShoot) {
+        this.nextShoot = t + rnd.uniform(2.2, 4.5);
+        const ang = (rnd.uniform(18, 62) * PI) / 180;
+        const sign = rnd.choice([-1, 1]);
+        const spd = rnd.uniform(0.7, 1.2);
+        this.streaks.push({
+          x: rnd.uniform(-0.7, 0.7), y: rnd.uniform(-0.45, -0.15),
+          vx: sign * Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+          life: rnd.uniform(0.9, 1.4), tail: rnd.uniform(0.14, 0.26),
+          col: [0.88, 0.94, 1.0], soft: false, age: 0,
+        });
+      }
+      if (t > CFG.T_SPACE + 1.5 && !this.comet) {
+        this.comet = true;
+        this.streaks.push({
+          x: -0.95, y: -0.28, vx: 0.030, vy: 0.008, life: 70.0, tail: 0.22,
+          col: [0.70, 0.86, 1.0], soft: true, age: 0,
+        });
+      }
+      for (const s of this.streaks) s.age += dt;
+      this.streaks = this.streaks.filter((s) => s.age < s.life);
+    }
+
+    // -------------------------------------------------- 星云
+    nebula(xs, ys, sz, hm, t, out, offset, scale) {
+      const tex = this.tex;
+      const hx = xs / sz, hy = -ys / sz;
+      const nC = bilinear(tex.glow, 1024, hx * 16 + 400, hy * 16 + 100);
+      const nD = bilinear(tex.glow, 1024, hx * 16 + 90, hy * 16 + 530);
+      const nA = bilinear(tex.glow, 1024, hx * 42 + 300, hy * 42 + 700 + t * 0.8);
+      const nB = bilinear(tex.glow, 1024, hx * 110 + 80, hy * 110 + 200);
+
+      const wob = 1 - 0.65 * hm;
+      const hxw = hx + wob * 0.40 * (nC - 0.5) + 0.05 * (nA - 0.5);
+      const hyw = hy + wob * 0.40 * (nD - 0.5) + 0.05 * (nA - 0.5);
+
+      const qc = Math.sqrt(hxw * hxw + hyw * hyw) / 0.80 - 1.0;
+      const hyh = hyw + 0.12;
+      const fh = Math.pow(hxw * hxw + hyh * hyh - 1.0, 3) - hxw * hxw * hyh * hyh * hyh;
+      const qh = 0.5 * Math.cbrt(fh);
+      const q = qc * (1 - hm) + qh * hm;
+
+      const ins = clamp(-q / (0.80 - 0.35 * hm), 0, 1);
+      const k = 3.0 + 2.5 * hm;
+      const body = q < 0 ? 0.50 + 0.50 * Math.sqrt(ins) : Math.exp(-clamp(q, 0, 10) * k) * 0.50;
+
+      const texScale = 1 + (0.62 + 0.80 * nB - 1) * 0.8;
+      const tI = Math.pow(ins, 0.8);
+      let r = body * texScale * mix(0.92, 1.0, tI);
+      let g = body * texScale * mix(0.16, 0.58, tI);
+      let b = body * texScale * mix(0.40, 0.78, tI);
+
+      const halo = Math.exp(-clamp(q, 0, 10) * 1.6) * 0.20 * (0.5 + nA) * (q > 0 ? 1 : 0);
+      r += halo * 0.78; g += halo * 0.10; b += halo * 0.30;
+
+      const rim = Math.exp(-Math.pow((q + 0.04) / 0.14, 2));
+      const rid = clamp((bilinear(tex.ring, 512, hxw * 120 + 50, hyw * 120 + 300 + t * 0.6) - 0.86) * 7, 0, 1);
+      const rimK = rim * (0.20 + 0.9 * rid) * (0.5 + nA);
+      r += rimK * 0.95; g += rimK * 0.16; b += rimK * 0.34;
+      const ridK = rid * clamp(-q, 0, 1) * 0.25;
+      r += ridK * 0.95; g += ridK * 0.16; b += ridK * 0.34;
+
+      out[offset] += r * scale;
+      out[offset + 1] += g * scale;
+      out[offset + 2] += b * scale;
+    }
+
+    // -------------------------------------------------- 眼球 + 星空合成
+    eyeScene(t, z, ou, gx, gy, Rp, space) {
+      const g = this.geo, tex = this.tex, img = this.img, pm = this.pm;
+      const iz = 1 / z, px = iz / g.GH;
+      const near = z < 3.4;
+      const GW = g.GW, GH = g.GH;
+      const RI = CFG.RI, WO = CFG.WO, HU = CFG.HU, HL = CFG.HL;
+
+      for (let j = 0; j < GH; j++) {
+        for (let i = 0; i < GW; i++) {
+          const p = j * GW + i;
+          const o3 = p * 3;
+          const u = g.X[p] * iz, v = g.Y[p] * iz;
+          const pmu = u - gx, pmv = v - gy;
+          const r = Math.sqrt(pmu * pmu + pmv * pmv);
+
+          let s = 0, vt = 0, vu = 0, vl = 0, duIn = 0, dlIn = 0, mIn = 1;
+          if (near) {
+            s = u / WO;
+            const sa = clamp(s, -1.3, 1.3);
+            const wu = sa < -0.12 ? 0.88 : 1.12;
+            const cu = Math.pow(clamp(1 - Math.pow((sa + 0.12) / wu, 2), 0, 1), 0.8);
+            const cl = Math.pow(clamp(1 - Math.pow(sa - 0.08, 2), 0, 1), 0.9);
+            vt = v + 0.055 * s;
+            const vc = 0.03 * cl;
+            vl = vc + (HL * cl - vc) * (0.35 + 0.65 * ou);
+            vu = vl + (-HU * cu - vl) * ou;
+            duIn = vt - vu;
+            dlIn = vl - vt;
+            mIn = clamp(Math.min(duIn, dlIn) / (1.6 * px) + 0.5, 0, 1);
+          }
+
+          // ---- 虹膜 ----
+          let angNorm = (Math.atan2(pmv, pmu) / (2 * PI)) % 1.0;
+          if (angNorm < 0) angNorm += 1.0;
+          const ia = (Math.trunc(angNorm * NA)) % NA;
+          const rn = clamp((r - Rp) / (RI - Rp), 0, 1.3);
+          const rb = rn * 14;
+          const i0 = Math.floor(rb);
+          const fr = rb - i0;
+          const fib = 0.55 * tex.a1[ia]
+            + 0.45 * (tex.a2[(ia + i0 * 131) % NA] * (1 - fr) + tex.a2[(ia + (i0 + 1) * 131) % NA] * fr);
+          const zig = Math.abs(((angNorm * 34) % 1.0) - 0.5) * 2 - 0.5;
+          const cr = 0.34 + 0.20 * (tex.a3[ia] - 0.5) + 0.035 * zig;
+          const mm = smoothstep(-0.10, 0.22, rn - cr);
+          let irR = mix(0.80, 0.42, mm), irG = mix(0.45, 0.20, mm), irB = mix(0.10, 0.06, mm);
+          const fibK = 0.45 + 1.05 * fib;
+          irR *= fibK; irG *= fibK; irB *= fibK;
+          const ringK = Math.exp(-Math.pow((rn - cr) / 0.07, 2)) * (0.2 + fib);
+          irR += 0.22 * ringK; irG += 0.11 * ringK;
+          const crypt = tex.a4[ia] > 0.72 ? smoothstep(0.65, 0.18, rn) : 0;
+          const c1 = 1 - 0.55 * crypt;
+          const c2 = 1 - 0.82 * smoothstep(0.62, 1.0, rn);
+          const c3 = 0.55 + 0.45 * smoothstep(0, 0.07, rn);
+          const c4 = near ? 0.30 + 0.70 * smoothstep(0, 0.16, duIn) : 1;
+          const irK = c1 * c2 * c3 * c4;
+          irR *= irK; irG *= irK; irB *= irK;
+
+          let inR, inG, inB;
+          if (near) {
+            const corner = smoothstep(0.40, 0.95, Math.abs(s));
+            const shade = (0.38 + 0.62 * smoothstep(0, 0.22, duIn))
+              * (0.72 + 0.28 * smoothstep(0, 0.10, dlIn))
+              * (1 - 0.30 * corner);
+            const cw2 = corner * 0.35;
+            let scR = mix(0.80, 0.86, cw2) * shade;
+            let scG = mix(0.82, 0.50, cw2) * shade;
+            let scB = mix(0.86, 0.46, cw2) * shade;
+            const vein = clamp((bilinear(tex.vein, 512, u * 85 + 40, v * 85 + 70) - 0.925) * 14, 0, 1)
+              * (0.25 + 0.75 * corner) * smoothstep(0.12, 0.32, Math.abs(pmu));
+            const vk = vein * 0.65;
+            scR = mix(scR, 0.62, vk); scG = mix(scG, 0.15, vk); scB = mix(scB, 0.14, vk);
+            const im = clamp((RI - r) / (1.6 * px) + 0.5, 0, 1);
+            inR = mix(scR, irR, im); inG = mix(scG, irG, im); inB = mix(scB, irB, im);
+          } else {
+            inR = irR; inG = irG; inB = irB;
+          }
+
+          const Rps = Rp * z;
+          const vig = 0.25 + 0.75 * smoothstep(0, 0.30 * Rps, Rps - g.RS[p]);
+          const pmVal = clamp((Rp - r) / (1.6 * px) + 0.5, 0, 1);
+          inR = mix(inR, space[o3] * vig, pmVal);
+          inG = mix(inG, space[o3 + 1] * vig, pmVal);
+          inB = mix(inB, space[o3 + 2] * vig, pmVal);
+
+          // ---- 角膜高光 ----
+          const fade = Math.max(0, Math.min(1, 1 - (z - 1.6) / 2.4));
+          if (fade > 0) {
+            const dd = Math.sqrt(Math.pow(pmu - 0.075, 2) + Math.pow(pmv + 0.040, 2));
+            const win = clamp(1 - (dd - 0.030) / (1.4 * px + 0.004), 0, 1);
+            const dd2 = Math.sqrt(Math.pow(pmu + 0.045, 2) + Math.pow(pmv - 0.050, 2));
+            const win2 = clamp(1 - (dd2 - 0.009) / (1.4 * px + 0.003), 0, 1) * 0.5;
+            const w = (win + win2) * fade * 1.4;
+            inR += w; inG += w * 0.98; inB += w * 0.95;
+          }
+
+          pm[p] = pmVal;
+          if (!near) {
+            img[o3] = inR; img[o3 + 1] = inG; img[o3 + 2] = inB;
+            continue;
+          }
+
+          if (z < 2.6) {
+            const mid = 0.5 * (vu + vl);
+            const upper = vt < mid;
+            const du = Math.max(vu - vt, 0);
+            const dl = Math.max(vt - vl, 0);
+            const dd = upper ? du : dl;
+            const tx = bilinear(tex.skin, 1024, u * 120 + 100, v * 120 + 100);
+            let skR = 0.62 * (0.90 + 0.20 * tx);
+            let skG = 0.40 * (0.90 + 0.20 * tx);
+            let skB = 0.29 * (0.90 + 0.20 * tx);
+
+            let sh = 0.50 + 0.50 * smoothstep(0, 0.30, dd);
+            sh *= 1 + 0.10 * Math.exp(-Math.pow((v + 0.20) / 0.09, 2));
+            const crPos = 0.075 + 0.03 * (1 - ou);
+            sh *= 1 - 0.42 * Math.exp(-Math.pow((du - crPos) / 0.020, 2)) * (upper ? 1 : 0);
+            sh *= 1 + 0.08 * Math.exp(-Math.pow((dl - 0.09) / 0.04, 2)) * (upper ? 0 : 1);
+            skR *= sh; skG *= sh; skB *= sh;
+            const lidzone = smoothstep(crPos, crPos * 0.4, du) * (upper ? 1 : 0);
+            const lk = lidzone * 0.5;
+            skR = mix(skR, 0.68 * sh, lk); skG = mix(skG, 0.40 * sh, lk); skB = mix(skB, 0.31 * sh, lk);
+
+            // 眉毛
+            const sb = clamp(1 - Math.abs(s), 0, 1);
+            const eb = Math.exp(-Math.pow((vt + 0.42 + 0.10 * s * s) / (0.040 + 0.012 * sb), 2));
+            const hair = 0.55 + 0.9 * bilinear(tex.white, 512, u * 90, v * 30);
+            const browK = clamp(eb * hair, 0, 0.92);
+            skR = mix(skR, 0.10, browK); skG = mix(skG, 0.06, browK); skB = mix(skB, 0.04, browK);
+
+            // 上眼睑线
+            const line = Math.exp(-Math.pow(du / 0.010, 2)) * (upper ? 1 : 0);
+            const lineK = clamp(line * (1.0 - 0.3 * ou) * 0.9, 0, 1);
+            skR = mix(skR, 0.05, lineK); skG = mix(skG, 0.03, lineK); skB = mix(skB, 0.022, lineK);
+
+            // 下眼睑湿润反光
+            const wl = smoothstep(0.014, 0.0, dl) * (upper ? 0 : 1);
+            skR = mix(skR, 0.74, wl * 0.7); skG = mix(skG, 0.34, wl * 0.7); skB = mix(skB, 0.30, wl * 0.7);
+            const gl = Math.exp(-Math.pow((dl - 0.016) / 0.006, 2)) * (upper ? 0 : 1)
+              * (0.35 + 0.65 * bilinear(tex.white, 512, u * 60, v * 60));
+            const glK = gl * 0.55 * smoothstep(0.12, 0.5, ou);
+            skR += glK; skG += glK * 0.85; skB += glK * 0.75;
+
+            // 皮肤微光
+            const spark = (bilinear(tex.white, 512, u * 150 + 7, v * 150 + 3) > 0.985 ? 1 : 0)
+              * 0.35 * (0.4 + tx) * smoothstep(0.0, 0.3, dd);
+            skR += spark; skG += spark * 0.9; skB += spark * 0.8;
+
+            inR = mix(skR, inR, mIn); inG = mix(skG, inG, mIn); inB = mix(skB, inB, mIn);
+
+            // 内眼角
+            const cg = Math.exp(-(Math.pow((u + WO * 0.90) / 0.045, 2)
+              + Math.pow((vt - 0.025) / 0.032, 2))) * smoothstep(0.1, 0.5, ou);
+            const cgK = cg * 0.85;
+            inR = mix(inR, 0.82, cgK); inG = mix(inG, 0.42, cgK); inB = mix(inB, 0.38, cgK);
+          }
+
+          img[o3] = inR; img[o3 + 1] = inG; img[o3 + 2] = inB;
+        }
+      }
+    }
+
+    // -------------------------------------------------- 泛光 + 色调映射
+    bloom() {
+      const g = this.geo, img = this.img;
+      const GW = g.GW, GH = g.GH;
+      if (!this._bright) this._bright = new Float32Array(GW * GH * 3);
+      const bright = this._bright;
+      for (let i = 0; i < bright.length; i++) bright[i] = Math.max(img[i] - 0.45, 0);
+
+      for (const [factor, weight] of [[2, 0.40], [4, 0.30]]) {
+        const sw = GW / factor, sh = GH / factor;
+        const small = new Float32Array(sw * sh * 3);
+        for (let y = 0; y < sh; y++) {
+          for (let x = 0; x < sw; x++) {
+            let sr = 0, sg = 0, sb = 0;
+            for (let dy = 0; dy < factor; dy++) {
+              for (let dx = 0; dx < factor; dx++) {
+                const p = ((y * factor + dy) * GW + (x * factor + dx)) * 3;
+                sr += bright[p]; sg += bright[p + 1]; sb += bright[p + 2];
+              }
+            }
+            const o = (y * sw + x) * 3;
+            const n = factor * factor;
+            small[o] = sr / n; small[o + 1] = sg / n; small[o + 2] = sb / n;
+          }
+        }
+        for (let pass = 0; pass < 2; pass++) {
+          const tmp = new Float32Array(small.length);
+          for (let y = 0; y < sh; y++) {
+            for (let x = 0; x < sw; x++) {
+              const o = (y * sw + x) * 3;
+              const ym = ((y - 1 + sh) % sh) * sw, yp = ((y + 1) % sh) * sw;
+              const xm = (x - 1 + sw) % sw, xp = (x + 1) % sw;
+              for (let c = 0; c < 3; c++) {
+                tmp[o + c] = (small[o + c] * 2 + small[(ym + x) * 3 + c] + small[(yp + x) * 3 + c]
+                  + small[(y * sw + xm) * 3 + c] + small[(y * sw + xp) * 3 + c]) / 6;
+              }
+            }
+          }
+          small.set(tmp);
+        }
+        // 上采样叠加
+        for (let y = 0; y < GH; y++) {
+          const sy = Math.floor(y / factor);
+          for (let x = 0; x < GW; x++) {
+            const sx = Math.floor(x / factor);
+            const p = (y * GW + x) * 3, sp = (sy * sw + sx) * 3;
+            img[p] += weight * small[sp];
+            img[p + 1] += weight * small[sp + 1];
+            img[p + 2] += weight * small[sp + 2];
+          }
+        }
+      }
+    }
+
+    // -------------------------------------------------- 星点 / 流星 / 睫毛
+    stampStars(lum, t, gs, amt, offx, offy) {
+      const g = this.geo, tex = this.tex, idx = this.idx, q = this.q;
+      if (amt <= 0.003) return;
+      const COLS = g.nCols, ROWS = g.nRows, W = g.W, H = g.H, cw = g.cw, ch = g.ch;
+      const pupil = this.pupilCells, vigc = this.vigc;
+
+      for (let i = 0; i < NS; i++) {
+        const d = tex.starZ[i];
+        const c = Math.trunc((W * 0.5 + (tex.starX[i] * gs / d + offx) * H) / cw);
+        const r = Math.trunc((H * 0.5 + (tex.starY[i] * gs / d + offy) * H) / ch);
+        if (c < 0 || c >= COLS || r < 0 || r >= ROWS) continue;
+        const alpha = smoothstep(1.0, 0.82, d)
+          * (0.80 + 0.20 * Math.sin(t * tex.starFreq[i] + tex.starPhase[i])) * amt;
+        if (alpha <= 0.04) continue;
+        if (pupil[r * COLS + c] <= 0.5) continue;
+        const b = tex.starB[i] * alpha * (1 + 0.05 / d);
+        if (b <= lum[r * COLS + c] * 0.7) continue;
+        const p = r * COLS + c;
+        idx[p] = b < 0.20 ? CIDX["."] : b < 0.42 ? CIDX["+"] : CIDX["*"];
+        const k = clamp(0.35 + 0.9 * b, 0, 1) * vigc[p];
+        q[p * 3] = (clamp(tex.starCol[i * 3] * k, 0, 1) * (QL - 1)) | 0;
+        q[p * 3 + 1] = (clamp(tex.starCol[i * 3 + 1] * k, 0, 1) * (QL - 1)) | 0;
+        q[p * 3 + 2] = (clamp(tex.starCol[i * 3 + 2] * k, 0, 1) * (QL - 1)) | 0;
+
+        if (b > 0.55) {
+          idx[p] = b > 0.85 ? CIDX["@"] : CIDX["*"];
+          const ln = Math.trunc(2 + 6 * (b - 0.5));
+          const col = [tex.starCol[i * 3] * vigc[p], tex.starCol[i * 3 + 1] * vigc[p], tex.starCol[i * 3 + 2] * vigc[p]];
+          for (let k2 = 1; k2 <= ln; k2++) {
+            const a = (1 - k2 / (ln + 1)) * b;
+            const vert = Math.floor(k2 / 2) + (k2 > 2 ? 1 : 0);
+            const arms = [[0, k2, "-"], [0, -k2, "-"], [vert, 0, "|"], [-vert, 0, "|"]];
+            for (const [dr, dc, chh] of arms) {
+              if (dr === 0 && dc === 0) continue;
+              const r2 = r + dr, c2 = c + dc;
+              if (r2 < 0 || r2 >= ROWS || c2 < 0 || c2 >= COLS) continue;
+              const p2 = r2 * COLS + c2;
+              if (pupil[p2] <= 0.5 || lum[p2] >= a * 0.8) continue;
+              idx[p2] = CIDX[a > 0.18 ? chh : "."];
+              const kk = Math.min(1, 0.25 + a);
+              q[p2 * 3] = (clamp(col[0] * kk, 0, 1) * (QL - 1)) | 0;
+              q[p2 * 3 + 1] = (clamp(col[1] * kk, 0, 1) * (QL - 1)) | 0;
+              q[p2 * 3 + 2] = (clamp(col[2] * kk, 0, 1) * (QL - 1)) | 0;
+            }
+          }
+        }
+      }
+    }
+
+    stampStreaks() {
+      const g = this.geo, idx = this.idx, q = this.q, pm = this.pm, GW = g.GW;
+      const COLS = g.nCols, ROWS = g.nRows, W = g.W, H = g.H, cw = g.cw, ch = g.ch;
+      for (const s of this.streaks) {
+        const hx = s.x + s.vx * s.age;
+        const hy = s.y + s.vy * s.age;
+        const sp = Math.hypot(s.vx, s.vy);
+        const dx = s.vx / sp, dy = s.vy / sp;
+        const fade = Math.pow(Math.sin(PI * Math.min(1, s.age / s.life)), 0.7);
+        if (fade < 0.02) continue;
+        let tc;
+        if (Math.abs(dy) < 0.38 * Math.abs(dx)) tc = "-";
+        else if (Math.abs(dx) < 0.38 * Math.abs(dy)) tc = "|";
+        else if (dx * dy > 0) tc = "\\";
+        else tc = "/";
+        const n = Math.max(6, Math.trunc((s.tail * H) / (cw * 0.8)));
+        for (let k = 0; k < n; k++) {
+          const f = k / n;
+          const c = Math.trunc((W / 2 + (hx - dx * s.tail * f) * H) / cw);
+          const r = Math.trunc((H / 2 + (hy - dy * s.tail * f) * H) / ch);
+          const b = Math.pow(1 - f, 1.3) * fade;
+          if (b < 0.08 || r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+          if (this.pupilCells[r * COLS + c] < 0.5) continue;
+          let chIdx;
+          if (k === 0) chIdx = CIDX[s.soft ? "*" : "@"];
+          else if (s.soft) chIdx = CIDX[b > 0.35 ? ":" : "."];
+          else chIdx = CIDX[b > 0.30 ? tc : "."];
+          idx[r * COLS + c] = chIdx;
+          const kk = Math.min(1, 0.3 + b) * this.vigc[r * COLS + c];
+          q[(r * COLS + c) * 3] = (clamp(s.col[0] * kk, 0, 1) * (QL - 1)) | 0;
+          q[(r * COLS + c) * 3 + 1] = (clamp(s.col[1] * kk, 0, 1) * (QL - 1)) | 0;
+          q[(r * COLS + c) * 3 + 2] = (clamp(s.col[2] * kk, 0, 1) * (QL - 1)) | 0;
+        }
+      }
+    }
+
+    stampLashes(t, z, ou) {
+      if (z > 2.6 || ou < 0) return;
+      const g = this.geo, tex = this.tex, idx = this.idx, q = this.q;
+      const COLS = g.nCols, ROWS = g.nRows, W = g.W, H = g.H, cw = g.cw, ch = g.ch;
+      const closed = 1 - Math.pow(ou, 0.8);
+
+      const toCell = (ue, ve) => [Math.trunc((W / 2 + ue * z * H) / cw),
+                                  Math.trunc((H / 2 + ve * z * H) / ch)];
+      const pick = (angle) => {
+        const deg = ((Math.atan2(-Math.sin(angle), Math.cos(angle)) * 180) / PI) % 180;
+        const d = deg < 0 ? deg + 180 : deg;
+        if (d < 25 || d >= 155) return "-";
+        if (d < 70) return "/";
+        if (d < 110) return "|";
+        return "\\";
+      };
+      const draw = (baseU, baseV, a0, len, curl, cRoot, cTip, maxSteps, tip) => {
+        const steps = Math.max(2, Math.min(maxSteps, Math.trunc((len * z * H) / (cw * 0.85))));
+        const step = len / steps;
+        let ue = baseU, ve = baseV;
+        for (let k = 0; k < steps; k++) {
+          const tt = k / Math.max(1, steps - 1);
+          const aa = a0 + curl * tt * tt;
+          ue += Math.cos(aa) * step;
+          ve += Math.sin(aa) * step;
+          const [c, r] = toCell(ue, ve);
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+          const chDig = tip && k === steps - 1 && steps >= 4 ? tip : pick(aa);
+          idx[r * COLS + c] = CIDX[chDig];
+          const p = r * COLS + c;
+          q[p * 3] = (clamp(cRoot[0] + (cTip[0] - cRoot[0]) * tt, 0, 1) * (QL - 1)) | 0;
+          q[p * 3 + 1] = (clamp(cRoot[1] + (cTip[1] - cRoot[1]) * tt, 0, 1) * (QL - 1)) | 0;
+          q[p * 3 + 2] = (clamp(cRoot[2] + (cTip[2] - cRoot[2]) * tt, 0, 1) * (QL - 1)) | 0;
+        }
+      };
+
+      for (let i = 0; i < NUP; i++) {
+        const s0 = tex.upperLashes[i];
+        const u0 = s0 * CFG.WO;
+        const [vu, , ,] = lidEdges(u0, ou);
+        const bv = vu - 0.055 * s0;
+        const aOpen = (-90 + 26 * s0) * PI / 180;
+        const aClosed = s0 >= 0 ? (90 - 20 * s0) * PI / 180 : (-270 - 20 * s0) * PI / 180;
+        const a0 = aOpen + (aClosed - aOpen) * closed;
+        const edge = Math.sqrt(Math.max(0, 1 - s0 * s0));
+        const len = (0.070 + 0.050 * edge) * tex.upperLen[i];
+        const curl = (-22 * s0) * PI / 180 * (1 - closed);
+        draw(u0, bv, a0, len, curl, [0.16, 0.10, 0.07], [0.30, 0.19, 0.13], 14, "'");
+      }
+      for (let i = 0; i < NLO; i++) {
+        const s0 = tex.lowerLashes[i];
+        const u0 = s0 * CFG.WO;
+        const [, vl, , cl] = lidEdges(u0, ou);
+        const bv = vl - 0.055 * s0;
+        const a0 = (90 - 20 * s0) * PI / 180;
+        const len = 0.034 * (0.5 + 0.8 * cl) * tex.lowerLen[i];
+        const curl = (12 * (s0 > 0 ? 1 : -1)) * PI / 180;
+        draw(u0, bv, a0, len, curl, [0.17, 0.11, 0.08], [0.30, 0.20, 0.14], 6, ".");
+      }
+    }
+
+    // -------------------------------------------------- 单元格亮度平滑
+    blurLum() {
+      const g = this.geo, lum = this.lum;
+      const cols = g.nCols, rows = g.nRows;
+      const tmp = this._lumTmp || (this._lumTmp = new Float32Array(lum.length));
+      for (let r = 0; r < rows; r++) {
+        const rm = r > 0 ? r - 1 : 0, rp = r < rows - 1 ? r + 1 : r;
+        for (let c = 0; c < cols; c++) {
+          const cm = c > 0 ? c - 1 : 0, cp = c < cols - 1 ? c + 1 : c;
+          tmp[r * cols + c] = (
+            lum[rm * cols + cm] + lum[rm * cols + c] + lum[rm * cols + cp] +
+            lum[r * cols + cm] + lum[r * cols + c] * 2 + lum[r * cols + cp] +
+            lum[rp * cols + cm] + lum[rp * cols + c] + lum[rp * cols + cp]
+          ) / 10;
+        }
+      }
+      lum.set(tmp);
+    }
+
+    // -------------------------------------------------- 单元格亮度对比度拉伸
+    // 虹膜和皮肤的亮度几乎相同，直接映射成字符会糊成一片。
+    // 这里按当前帧的 6%~96% 分位做自动色阶，让画面结构占满整个字符梯度。
+    stretchLum(amount) {
+      const n = this.geo.nRows * this.geo.nCols;
+      const lum = this.lum;
+      if (!this._sorted || this._sorted.length !== n) this._sorted = new Float32Array(n);
+      const sorted = this._sorted;
+      sorted.set(lum);
+      const arr = Array.prototype.slice.call(sorted);
+      arr.sort((a, b) => a - b);
+      const lo = arr[Math.floor(n * 0.06)];
+      const hi = arr[Math.floor(n * 0.96)];
+      const span = Math.max(1e-3, hi - lo);
+      for (let p = 0; p < n; p++) {
+        const v = clamp((lum[p] - lo) / span, 0, 1);
+        lum[p] = lum[p] * (1 - amount) + v * amount;
+      }
+    }
+
+    // -------------------------------------------------- 一帧
+    render(t, dt) {
+      const g = this.geo, tex = this.tex;
+      this.lastT = t;
+      const prog = ease((t - CFG.T_Z0) / CFG.T_ZD);
+      const idle = ease(t / CFG.T_Z0);
+      const z = Math.exp(Math.log(CFG.ZEND) * prog) * (1 + 0.05 * idle + 0.004 * Math.sin(t * 0.9));
+      const zsp = t < CFG.T_SPACE ? z : CFG.ZEND * Math.exp(0.03 * (t - CFG.T_SPACE));
+      const gs = Math.min(6.0, CFG.GS0 * Math.pow(zsp, 1.25));
+      const gh = Math.min(1.15, CFG.GS0 * Math.pow(z, 1.25));
+      const ou = lidOpen(t);
+      const [gx, gy] = this.gaze(t);
+      const Rp = CFG.RP0 * (0.76 + 0.24 * ease((t - 1.8) / 3.5))
+        * (1 + 0.025 * Math.sin(1.9 * t)) * (1 + 0.30 * prog);
+      const Rps = Rp * z;
+      const full = Rps * 0.72 > 1.03;
+
+      const starAmt = ease((t - (CFG.T_Z0 + 1.5)) / 4.5);
+      const nebAmt = ease((t - (CFG.T_Z0 + 3.5)) / 8.0);
+      this.updateWorld(t, dt, prog);
+
+      const offx = gx * z, offy = gy * z;
+      const space = this.space;
+      for (let i = 0; i < space.length; i += 3) {
+        space[i] = 0.004; space[i + 1] = 0.005; space[i + 2] = 0.012;
+      }
+      if (nebAmt > 0.002) {
+        const drift = ease((t - CFG.T_SPACE) / 20.0);
+        const morph = ease((t - CFG.T_HEART) / CFG.T_HEART_D);
+        const beat = 1 + 0.03 * Math.sin(t * 2.6) * morph * morph;
+        const scale = 1.25 * Math.pow(nebAmt, 1.3);
+        const shift = 0.03 * drift * Math.sin(t * 0.07);
+        const sz = 0.17 * gh * beat;
+        for (let p = 0; p < g.GH * g.GW; p++) {
+          this.nebula(g.X[p] - offx - shift, g.Y[p] - offy, sz, morph, t, space, p * 3, scale);
+        }
+      }
+
+      const pupilCells = this.pupilCells || (this.pupilCells = new Float32Array(g.nRows * g.nCols));
+      if (full) {
+        this.img.set(space);
+        pupilCells.fill(1);
+      } else {
+        this.eyeScene(t, z, ou, gx, gy, Rp, space);
+        for (let r = 0; r < g.nRows; r++) {
+          for (let c = 0; c < g.nCols; c++) {
+            let sum = 0;
+            for (let dy = 0; dy < CFG.SS; dy++) {
+              for (let dx = 0; dx < CFG.SS; dx++) {
+                sum += this.pm[(r * CFG.SS + dy) * g.GW + (c * CFG.SS + dx)];
+              }
+            }
+            pupilCells[r * g.nCols + c] = sum / (CFG.SS * CFG.SS);
+          }
+        }
+      }
+
+      // 星点 / 流星用的暗角表（瞳孔越近越亮）
+      const vigc = this.vigc || (this.vigc = new Float32Array(g.nRows * g.nCols));
+      for (let p = 0; p < g.nRows * g.nCols; p++) {
+        vigc[p] = 0.25 + 0.75 * smoothstep(0, 0.30 * Rps, Rps - g.RC[p]);
+      }
+
+      this.bloom();
+
+      // 色调映射 + 暗角 + 淡入
+      const fadeIn = ease(t / 1.2);
+      for (let p = 0; p < g.GH * g.GW; p++) {
+        for (let c = 0; c < 3; c++) {
+          const v = this.img[p * 3 + c];
+          let o = 1 - Math.exp(-2.0 * (v > 0 ? v : 0));
+          o *= (1 - 0.30 * smoothstep(0.4, 1.0, g.RS[p])) * fadeIn;
+          this.img[p * 3 + c] = o;
+        }
+      }
+
+      // 字符格：取 SS×SS 平均色
+      for (let r = 0; r < g.nRows; r++) {
+        for (let c = 0; c < g.nCols; c++) {
+          let sr = 0, sg = 0, sb = 0;
+          for (let dy = 0; dy < CFG.SS; dy++) {
+            for (let dx = 0; dx < CFG.SS; dx++) {
+              const p = ((r * CFG.SS + dy) * g.GW + (c * CFG.SS + dx)) * 3;
+              sr += this.img[p]; sg += this.img[p + 1]; sb += this.img[p + 2];
+            }
+          }
+          const n = CFG.SS * CFG.SS;
+          const o = (r * g.nCols + c) * 3;
+          this.cells[o] = sr / n; this.cells[o + 1] = sg / n; this.cells[o + 2] = sb / n;
+          const lum = 0.30 * (sr / n) + 0.60 * (sg / n) + 0.10 * (sb / n);
+          this.lum[r * g.nCols + c] = Math.pow(clamp(lum, 0, 1), 0.72);
+        }
+      }
+
+      // 单元格亮度：可选平滑 + 对比度拉伸 + 字阶量化
+      for (let i = 0; i < (this.opts.smooth | 0); i++) this.blurLum();
+      if (this.opts.contrast) this.stretchLum(this.opts.contrast);
+      const levels = this.opts.levels | 0;
+      const glyphs = this.opts.glyphs || null;
+      const glyphIdx = glyphs ? Array.from(glyphs, (c) => CIDX[c]) : null;
+      const hashAmp = this.opts.hash;
+      const solid = full ? null : pupilCells;
+      for (let p = 0; p < g.nRows * g.nCols; p++) {
+        let li = this.lum[p];
+        let ri;
+        if (glyphIdx) {
+          const k = clamp(Math.round(li * (glyphIdx.length - 1)), 0, glyphIdx.length - 1);
+          ri = glyphIdx[k];
+        } else {
+          if (levels > 0) li = Math.round(li * levels) / levels;
+          ri = clamp((li + (g.HASH[p] - 0.5) * hashAmp) * NR, 0, NR);
+        }
+        if (solid && solid[p] < 0.5) ri = Math.max(ri, 3);
+        this.idx[p] = ri | 0;
+        const o = p * 3;
+        this.q[o] = clamp(this.cells[o] * 1.15, 0, 1) * (QL - 1) | 0;
+        this.q[o + 1] = clamp(this.cells[o + 1] * 1.15, 0, 1) * (QL - 1) | 0;
+        this.q[o + 2] = clamp(this.cells[o + 2] * 1.15, 0, 1) * (QL - 1) | 0;
+      }
+
+      this.stampStars(this.lum, t, gs, starAmt, offx, offy);
+      this.stampStreaks();
+      if (!full) this.stampLashes(t, z, ou);
+
+      return { idx: this.idx, q: this.q, rows: g.nRows, cols: g.nCols };
+    }
+
+    gaze(t) {
+      const keys = this.tex.gazeKeys;
+      let prev = [0, 0], cur = [0, 0], te = 0;
+      for (const [tk, kx, ky] of keys) {
+        if (tk <= t) { prev = cur; cur = [kx, ky]; te = tk; } else break;
+      }
+      const k = ease((t - te) / 0.09);
+      let gx = prev[0] + (cur[0] - prev[0]) * k;
+      let gy = prev[1] + (cur[1] - prev[1]) * k;
+      gx += 0.003 * Math.sin(t * 1.3);
+      gy += 0.002 * Math.sin(t * 1.1 + 1);
+      const amp = 1 - ease((t - CFG.T_Z0) / 2.5);
+      gy -= 0.03 * blinkCurve(t);
+      return [gx * amp, gy * amp];
+    }
+  }
+
+  global.EyeEngine = { CFG, RAMP, NR, QL, Renderer, MT19937 };
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+<!-- ===== 内联结束 ===== -->
+
 <script>
 /* ============================================================
-   开场动画：eyeTutrial 的眼睛 → 穿过星空 → 落地页
+   开场动画：eyeTutorial 复刻版的 ASCII 眼睛 → 穿过星场 → 落地页
    ------------------------------------------------------------
-   眼型的画法与顺序来自 third_party/eyetutrial（上游 Praise-Peter/
-   EyeTutrial-website 的《How to draw eyes》教程）：圆 → 上眼睑 →
-   虹膜瞳孔 → 下眼睑 → 双眼皮 → 上色 → 阴影 → 虹膜受光 → 高光闪点。
-   上游是静态教程页、本身没有动画代码，这里是把它的画法演成动画，
-   并把配色换成落地页的冷灰蓝色系。
+   渲染引擎是 third_party/eyetutorial-replica/engine.js（vendored，
+   与源工程逐字节一致）：Python 原版 eye_ascii/ 的 JavaScript 移植，
+   同一套数学（MT19937、程序化贴图、虹膜纤维、睫毛、星场）。
 
-   时序（秒，变量 T 是唯一事实源，CSS 里的 animation-delay 全从这里取）：
-     0.05 闭眼线    0.40 眼球圆   0.42 睁眼      0.62 上眼睑
-     0.72 虹膜      0.85 下眼睑   0.95 瞳孔      1.05 双眼皮
-     1.25 眼白上色  1.35 阴影     1.60 虹膜受光  1.85 高光
-     2.00 闪点      2.15/2.75 眨眼  3.05 视线游移
-     4.55 推进瞳孔  4.60 星空穿行  5.45 眼睛淡出  6.35 星空收尾
-     6.90 交棒落地页（此时才开始写手写标题）
+   ★ 关键：字符格必须用 Python 原版的物理尺寸，不能按视口放大
+   ------------------------------------------------------------
+   复刻版 web/index.html 默认把字符格放到 13×30px 并按视口铺满，
+   结果是**同一只眼睛用更少、更大的字符去画** —— 虹膜纤维、睫毛、
+   瞳孔边缘全糊成色块，正是「字符过于密集、展现不出原版效果」的根因。
+   Python 原版是 8×17px 的字符格、30 行（画面仅 704×510），
+   眼睛在**大量黑色留白**里被细密地画出来，结构才立得住。
+
+   所以这里：
+     · 字符格固定 8×17 CSS px（= 原版 Consolas size=8 的度量）
+     · 行数按视口高度算，但封顶 44 行（保证窄屏也够细）
+     · 画布**不铺满视口**，居中显示，四周留黑 —— 与原版构图一致
+
+   时间线（相对原版压缩，引擎 CFG 在运行时改写）：
+     0.00 皮肤与眉毛浮现，眼睑闭合
+     0.90 眼睑睁开（2.4s，带回弹）
+     4.00 眨眼一次
+     5.40 镜头向瞳孔推进（指数缩放 1→14）
+     6.90 星场出现，星星开始掠过
+     9.90 瞳孔铺满画面 → 交棒落地页
+   **不进心形星云**：把 CFG.T_HEART 推到极远，心形云雾永远不出现。
    ============================================================ */
 (function(){
   'use strict';
@@ -1155,10 +2033,18 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   var ready = window.__persistReady;
   if (!overlay || !ready) { if (ready) ready.fire(); return; }
 
-  var canvas = document.getElementById('introSpace');
+  var canvas = document.getElementById('introCanvas');
   var skipBtn = document.getElementById('introSkip');
   var stage = document.getElementById('stage');
   var wrap = document.querySelector('.wrap');
+  var engine = window.EyeEngine;
+
+  // 引擎缺失（文件没随页面部署）→ 整层不出现，直接进落地页。
+  if (!engine || !canvas || !canvas.getContext) {
+    overlay.hidden = true;
+    ready.fire();
+    return;
+  }
 
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var STILL = /[?&]still=1/.test(location.search);
@@ -1170,111 +2056,233 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   var skipped = false;
   try { skipped = sessionStorage.getItem('persist.intro.skip') === '1'; } catch (e) {}
 
+  /* ---------- 时间线 ----------
+     引擎 CFG 是导出对象，运行时改写即可，不必动引擎源码。
+
+     ★ 两条硬约束（都写死在引擎里，只能靠改时间线来满足）：
+       1) 镜头推进：T_Z0 起、T_ZD 内完成，结束时瞳孔铺满（T_SPACE = T_Z0 + T_ZD）
+       2) 云雾：nebAmt = ease((t - (T_Z0 + 3.5)) / 8.0)
+          → 只要 **T_ZD < 3.5**，推进结束那一刻云雾还没开始生成；
+            收尾段再压到 nebAmt 可忽略（< 0.008），画面就不会出现原版
+            那团粉紫色的星云。
+          注意：CFG.T_HEART = 1e6 只能保证「心形」不出现，
+          云雾本体照样会生成 —— 真正的开关是上面这条时间线约束。
+
+     取值：T_Z0 = 4.6（睁眼 + 眨眼之后开始推进）、T_ZD = 3.2、T_SPACE = 7.8、
+          T.end = 8.5 —— 全程约 8.5 秒：瞳孔扩大完直接交给落地页。 */
+  var CFG = engine.CFG;
+  var T_Z0 = 4.6, T_ZD = 3.2, T_SPACE = T_Z0 + T_ZD;
+  CFG.T_Z0 = T_Z0;
+  CFG.T_ZD = T_ZD;
+  CFG.T_SPACE = T_SPACE;
+  CFG.T_HEART = 1e6;        // 心形星云：morph 恒为 0，不会捏出心形
+  CFG.T_HEART_D = 1;
+  // ZEND 14 → 20：原版 14 倍放大时瞳孔差一点没铺满（0.72 × 0.098 × 14 = 0.99 < 1.03），
+  // 收尾还停在「虹膜纹理充满画面」。放大到 20 倍后瞳孔真正铺满，
+  // 画面切到深蓝黑星空 —— 这一层再淡出到落地页（落地页本身也是星空底），
+  // 两段衔接才自然。
+  CFG.ZEND = 20;
+
   var T = {
-    closed: 0.05, closedEnd: 0.42,
-    ball: 0.40, ballFade: 1.35, open: 0.42,
-    lidUp: 0.62, lidLow: 0.85, lid2: 1.05,
-    iris: 0.72, pupil: 0.95,
-    sclera: 1.25, shadow: 1.35, shade: 1.60,
-    glint: 1.85, sparkle: 2.00,
-    blink1: 2.15, blink2: 2.75,
-    gaze: 3.05, push: 4.55,
-    eyeOut: 5.45, space: 4.60, out: 6.45, settle: 6.85, end: 7.00
+    end: T_SPACE + 0.7      // 交棒落地页（此时才开始写手写标题）
   };
-  for (var k in T) overlay.style.setProperty('--t-' + k, T[k] + 's');
 
-  /* ---------- 星空：一片星点穿身而过（不是星云形状） ----------
-     星在以观察者为中心的锥体里，z 变小时投影向外扩散 → 拉出速度线。
-     先冲到最快再指数减速，收尾时只剩一层安静的星场。 */
-  var space = (function(){
-    if (!canvas || !canvas.getContext) return { start: function(){}, stop: function(){} };
-    var ctx = canvas.getContext('2d');
-    var stars = [], W = 0, H = 0, raf = 0, running = false, t0 = 0, last = 0;
-    var FAR = 64;
+  /* ---------- 网格：Python 原版的字符格 ----------
+     这一组数字不是拍脑袋，是从原版 `preview.py` 导出的 `docs/preview.png`
+     联���表里反解出来的（联系表每格 624×450，面板间距 gap=10、标签行 label_h=18）：
+         字符格 8×15 px  →  网格 78 列 × 30 行  →  画面 624×450
+     其中 78 = floor(30 × 15 × ASPECT(1.40) / 8 / 2) × 2，和引擎的网格公式对得上。
 
-    function resize(){
-      W = canvas.clientWidth || window.innerWidth;
-      H = canvas.clientHeight || window.innerHeight;
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.floor(W * dpr));
-      canvas.height = Math.max(1, Math.floor(H * dpr));
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    function spawn(){
-      // z 偏向近处：近星更亮、拉出的速度线更长，均匀分布会显得空。
-      // x/y 与 z 同比例 → 出生时正好铺满屏幕（投影偏移 = ±f），
-      // 之后 z 变小、星向外扩散，形成「穿过去」的观感。
-      var z = FAR * Math.pow(Math.random(), 1.45);
-      return {
-        x: (Math.random() * 2 - 1) * z,
-        y: (Math.random() * 2 - 1) * z,
-        z: z,
-        b: Math.random()
-      };
-    }
-    function reset(){
-      stars = [];
-      // 数量跟屏幕面积走（视觉密度才一致），再夹在合理区间里
-      var n = Math.round(Math.sqrt(W * H) * 0.45);
-      if (n < 220) n = 220;
-      if (n > 480) n = 480;
-      for (var i = 0; i < n; i++) stars.push(spawn());
-    }
-    function speedAt(el){
-      if (el < 0.3) return 56 * (el / 0.3);               // 起步加速
-      if (el < 1.4) return 56;                             // 全速穿行（眼睛淡出期间仍在冲）
-      return 56 * Math.exp(-(el - 1.4) * 3.2) + 1.2;      // 之后指数减速到慢漂
-    }
-    function frame(now){
-      if (!running) return;
-      var dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      var el = (now - t0) / 1000;
-      var sp = speedAt(el);
-      var f = Math.max(W, H) / 2;
-      ctx.clearRect(0, 0, W, H);
-      ctx.lineCap = 'round';
-      for (var i = 0; i < stars.length; i++){
-        var s = stars[i];
-        var zPrev = s.z;
-        s.z -= sp * dt;
-        if (s.z < 0.8){ s = stars[i] = spawn(); zPrev = s.z; }
-        var k1 = f / s.z, k0 = f / zPrev;
-        var x1 = W / 2 + s.x * k1, y1 = H / 2 + s.y * k1;
-        var x0 = W / 2 + s.x * k0, y0 = H / 2 + s.y * k0;
-        var a = 0.34 + 0.66 * Math.pow(1 - s.z / FAR, 1.4);
-        ctx.strokeStyle = s.b > 0.82
-          ? 'rgba(226,242,250,' + a.toFixed(3) + ')'
-          : 'rgba(150,196,224,' + (a * 0.8).toFixed(3) + ')';
-        ctx.lineWidth = 0.8 + s.b * 1.4;
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
-        ctx.stroke();
-      }
-      raf = requestAnimationFrame(frame);
-    }
+     ★ 为什么原版看着「疏朗」，而同样的引擎换个画法就「过于密集」？
+       差别全在**呈现层**，不在引擎：
+         · 原版用 Consolas **常规体** 14px（advance 7.7px ≈ 格宽 8px 的 96%），
+           笔画纤细 → 横向挤满一格，但格与格之间仍有细缝；
+         · 之前这版用了 **bold** + 格高×0.68 的字号 → 笔画粗一倍、字号偏小，
+           细缝被糊掉，看上去就是「一片符号墙」。
+       所以下面三件事必须严格对齐原版：格 8×15、字号 = 格宽×1.75、**不加粗**。
+
+     行数也锁死 30：眼裂高 = HU+HL = 0.5 画面高，眼睛在 30 行时只占 15 个字符行；
+     行数往上加（44 行 → 22 行），皮肤纹理铺得更密，眼睛反而被淹没。
+
+     不同屏幕靠**等比缩放**适配，而不是靠加行数 —— 构图比例始终与原版一致。 */
+  var CELL_W = 8, CELL_H = 15;
+  var BASE_ROWS = 30;
+  // Consolas 的 advance ≈ 0.55em → 字号 = 格宽 / 0.55 ≈ 格宽 × 1.75，
+  // 横向刚好填满一格（与原版 preview.py 的 14px / 8px 一致）。
+  var FONT_RATIO = 1.75;
+
+  function layout(){
+    // 视口可用区（留一点边距，别贴边）
+    var availW = (window.innerWidth || 1200) * 0.96;
+    var availH = (window.innerHeight || 800) * 0.92;
+    var rows = BASE_ROWS;
+    // 引擎的网格比例：列数 = rows * ch * ASPECT / cw（取偶数）
+    var cols = Math.floor(rows * CELL_H * 1.40 / CELL_W / 2) * 2;
+    // 底稿尺寸 = 列数 × 8、行数 × 15
+    var baseW = cols * CELL_W, baseH = rows * CELL_H;
+    // 等比缩放：原版是 1:1 的 8×15（624×450），这里按视口放大，
+    // 上限 1.9 倍 —— 再大字符就显笨，与原版气质不符。
+    var scale = Math.min(availW / baseW, availH / baseH);
+    if (scale > 1.9) scale = 1.9;
+    if (scale < 0.8) scale = 0.8;
     return {
-      start: function(){
-        resize();
-        reset();
-        canvas.classList.add('is-on');
-        t0 = performance.now();
-        last = t0;
-        running = true;
-        raf = requestAnimationFrame(frame);
-      },
-      stop: function(){
-        running = false;
-        cancelAnimationFrame(raf);
-      },
-      resize: function(){ if (running){ resize(); reset(); } }
+      rows: rows,
+      cols: cols,
+      cw: CELL_W * scale,
+      ch: CELL_H * scale
     };
-  })();
+  }
+
+  /* ---------- 配色：原版的 ASCII 调色板 ----------
+     引擎输出两张表：
+       · `idx` —— 每格显示 RAMP 里的第几个字符（亮度档 0..69）
+       · `q`   —— 每格的量化颜色（三通道各 0..QL-1）
+     这里只做一件事：把 q 原样翻译成 RGB，与原版 `preview.py` 的
+     `rgb = int(v) * 255 // (QL - 1)` 完全一致。
+
+     原版的暖调（琥珀虹膜 + 棕褐皮肤）配深蓝黑底本来就是原设计，
+     落地页沿用它 —— 眼睛成为画面里唯一的暖色焦点。 */
+  var QL = engine.QL;
+  /* 原版的取色公式（preview.py）：rgb = int(v) * 255 // (QL - 1)
+     ★ 别再乘 1.15 —— 引擎的 q 已经是 clip(cells*1.15) 量化后的结果，
+       原版渲染器里那一次 1.15 已经含在里面了。
+       再乘一次 = 暗部皮肤被系统性抬高 → 满屏亮橙字符、纯黑留白消失，
+       这正是「过于密集」的第二个成因。 */
+  function palette(q0, q1, q2, out){
+    out[0] = Math.floor(q0 * 255 / (QL - 1));
+    out[1] = Math.floor(q1 * 255 / (QL - 1));
+    out[2] = Math.floor(q2 * 255 / (QL - 1));
+  }
+
+  /* ---------- 播放器 ---------- */
+  var ctx = canvas.getContext('2d', { alpha: false });
+  var renderer = null, cols = 0, rows = 0, cssW = 0, cssH = 0;
+  var cellW = CELL_W, cellH = CELL_H;   // 实际字符格尺寸（随视口等比缩放）
+  var prevIdx = null, prevQ = null;
+  var raf = 0, running = false, t0 = 0, lastT = 0, lastDraw = 0;
+  var frames = 0;
+  var rgb = [0, 0, 0];
+  // 颜色缓存：key = q0*QL² + q1*QL + q2（颜色只有 QL³ = 13824 种组合），
+  // 用 Map 存，避免每帧重复算色。
+  var hexCache = new Map();
+
+  function build(){
+    var L = layout();
+    rows = L.rows;
+    cellW = L.cw; cellH = L.ch;
+    // ★ opts 与 Python 原版 `renderer.py` 逐项对齐：
+    //   smooth  = 0  不做 3×3 亮度平滑（原版没有这一步）
+    //   contrast= 0  不做自动色阶拉伸（原版没有这一步；拉了会把中间调压平、
+    //                  把暗部推进宽字符区，正是「密成一片」的推手）
+    //   levels  = 0  不做字阶量化，直接用 70 档 RAMP
+    //   hash    = 0.07 原版的逐格哈希抖动（皮肤颗粒感就来自这里）
+    renderer = new engine.Renderer(L.cw, L.ch, rows, {
+      smooth: 0, contrast: 0, levels: 0, hash: 0.07
+    });
+    cols = renderer.geo.nCols;
+    rows = renderer.geo.nRows;
+
+    // 画布 = 网格 × 字符格，**不铺满视口**：四周留黑，与原版构图一致。
+    cssW = cols * L.cw;
+    cssH = rows * L.ch;
+    var dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
+    canvas.width = Math.max(1, Math.round(cssW * dpr));
+    canvas.height = Math.max(1, Math.round(cssH * dpr));
+    // 画布居中：绝对定位 + translate，避免被 flex 拉伸变形
+    canvas.style.position = 'absolute';
+    canvas.style.left = '50%';
+    canvas.style.top = '50%';
+    canvas.style.transform = 'translate(-50%, -50%)';
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 字号 = 格宽 × 1.75（Consolas advance ≈ 0.55em），横向刚好填满一格，
+    // 与原版 preview.py 的 Consolas 14px / 格宽 8px 完全一致。
+    // ★ 必须用**常规体**：加粗会让笔画粗一倍、把格与格之间的细缝糊掉，
+    //   观感就从「原版疏朗」变成「一片符号墙」。
+    ctx.font = Math.round(L.cw * FONT_RATIO) + 'px Consolas, "Cascadia Mono", "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    prevIdx = new Int16Array(cols * rows).fill(-1);
+    prevQ = new Int16Array(cols * rows * 3).fill(-1);
+    renderer.reset();
+    clearCanvas();
+  }
+
+  function clearCanvas(){
+    ctx.fillStyle = '#010203';
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
+
+  function colorOf(q0, q1, q2){
+    var key = q0 * QL * QL + q1 * QL + q2;
+    var s = hexCache.get(key);
+    if (s === undefined) {
+      palette(q0, q1, q2, rgb);
+      s = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+      hexCache.set(key, s);
+    }
+    return s;
+  }
+
+  /* 差量重绘：只画「字符变了」或「颜色明显变了」的格子。
+     每帧全量重画 2000+ 格在高分屏上会掉帧。
+
+     ★★ 关键：字符变了必须**先把该格擦成背景色**再画新字符。
+        只画新字符的话，旧字形的残笔会留在画布上（`X` 换成 `,` 只盖住一小块），
+        几帧之后画面上就糊着一层旧字符 —— 看起来就是「字符过于密集」，
+        而且推进到瞳孔铺满时整屏金色残影永远擦不掉。 */
+  function drawFrame(idx, q){
+    var n = idx.length;
+    for (var p = 0; p < n; p++){
+      var po = p * 3;
+      var i0 = idx[p];
+      var charChanged = (i0 !== prevIdx[p]);
+      if (!charChanged &&
+          Math.abs(q[po] - prevQ[po]) < 3 &&
+          Math.abs(q[po + 1] - prevQ[po + 1]) < 3 &&
+          Math.abs(q[po + 2] - prevQ[po + 2]) < 3) continue;
+      var c = p % cols, r = (p / cols) | 0;
+      var x = c * cellW, y = r * cellH;
+      if (charChanged){
+        // 擦掉旧字形（多擦 1px，兜住字形边缘的抗锯齿溢出）
+        ctx.fillStyle = '#010203';
+        ctx.fillRect(x - 1, y - 1, cellW + 2, cellH + 2);
+      }
+      if (i0 !== 0){
+        ctx.fillStyle = colorOf(q[po], q[po + 1], q[po + 2]);
+        ctx.fillText(engine.RAMP[i0], x + cellW / 2, y + cellH / 2);
+      }
+      prevIdx[p] = i0;
+      prevQ[po] = q[po]; prevQ[po + 1] = q[po + 1]; prevQ[po + 2] = q[po + 2];
+    }
+  }
+
+  function frame(now){
+    if (!running) return;
+    var dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    var t = (now - t0) / 1000;
+    // 引擎按 30fps 设计；高于 30fps 时跳帧，省一半绘制开销
+    if (now - lastDraw < 1000 / 30 - 1) { raf = requestAnimationFrame(frame); return; }
+    lastDraw = now;
+
+    var f = renderer.render(t, dt);
+    drawFrame(f.idx, f.q);
+    frames++;
+
+    if (t >= T.end){
+      running = false;
+      finish();
+      return;
+    }
+    raf = requestAnimationFrame(frame);
+  }
 
   /* ---------- 收尾 ---------- */
   var timers = [];
-  function at(sec, fn){ timers.push(setTimeout(fn, sec * 1000)); }
   function clearTimers(){ for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]); timers = []; }
 
   var done = false;
@@ -1282,7 +2290,8 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     if (done) return;
     done = true;
     clearTimers();
-    space.stop();
+    running = false;
+    cancelAnimationFrame(raf);
     overlay.classList.remove('is-on');
     overlay.classList.add('is-out');
     setTimeout(function(){ overlay.hidden = true; }, 520);
@@ -1312,19 +2321,6 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   overlay.classList.add('is-on');
   document.documentElement.setAttribute('data-intro', 'on');
 
-  /* 推进倍率按视口算：瞳孔半径 17 个单位，最后要能填满屏幕。
-     固定倍率在窄屏上会露边 —— 眼白会从上下漏出来变成两条白边。
-     元素此刻已显示，才量得到真实渲染宽度。 */
-  (function(){
-    var eye = document.getElementById('introEye');
-    var w = eye ? eye.getBoundingClientRect().width : 0;
-    if (!w) return;
-    var pxPerUnit = w / 400;                      // viewBox 宽 400 单位
-    var need = Math.max(window.innerWidth, window.innerHeight) / 2;
-    var scale = need / (17 * pxPerUnit);
-    overlay.style.setProperty('--push-scale', Math.max(10, Math.min(46, scale)).toFixed(2));
-  })();
-
   // 开场期间落地页不可聚焦（视觉上被盖住，键盘也不该能钻进去）
   if (stage) stage.inert = true;
   if (wrap) wrap.inert = true;
@@ -1333,22 +2329,26 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape') skip();
   });
-  window.addEventListener('resize', function(){ space.resize(); });
 
-  at(T.space, function(){ space.start(); });
-  at(T.eyeOut, function(){
-    // 眼睛淡出 → 露出正在穿行的星场（CSS 里 .intro-eye 有 .5s 过渡，不是硬切）
-    var eye = document.getElementById('introEye');
-    if (eye) eye.style.opacity = '0';
+  build();
+  t0 = performance.now();
+  lastT = t0;
+  lastDraw = 0;
+  running = true;
+  raf = requestAnimationFrame(frame);
+
+  var resizeTimer = 0;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      if (!running) return;
+      var keep = renderer ? renderer.lastT : 0;
+      build();
+      // 重建后从当前时间继续，不重播
+      t0 = performance.now() - keep * 1000;
+      lastT = performance.now();
+    }, 220);
   });
-  at(T.out, function(){
-    // 星场收尾 → 深蓝幕布淡出 → 浅色落地页接手
-    space.stop();
-    if (canvas) canvas.classList.remove('is-on');
-    overlay.classList.remove('is-on');
-    overlay.classList.add('is-out');
-  });
-  at(T.end, finish);
 
   /* ---------- 自检：?selftest=1 时暴露开场状态 ---------- */
   window.__persistIntroState = function(){
@@ -1356,9 +2356,16 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
       playing: !done,
       done: done,
       hasOverlay: !!overlay,
-      hasEye: !!document.getElementById('introEye'),
-      hasSpace: !!canvas,
+      hasCanvas: !!canvas,
       hasSkip: !!skipBtn,
+      cellW: Math.round(cellW),
+      cellH: Math.round(cellH),
+      cols: cols,
+      rows: rows,
+      frames: frames,
+      heartDisabled: CFG.T_HEART > 1e5,
+      tSpace: T_SPACE,
+      end: T.end,
       introAttr: document.documentElement.getAttribute('data-intro')
     };
   };

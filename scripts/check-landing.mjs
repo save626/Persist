@@ -407,7 +407,7 @@ try {
     await ctx.close()
   }
 
-  /* ---------- 6. 开场动画（eyeTutrial 眼型 → 星空 → 落地页） ---------- */
+  /* ---------- 6. 开场动画（eyeTutorial 复刻引擎：睁眼 → 推进 → 星空 → 落地页） ---------- */
   {
     const ctx = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -422,48 +422,96 @@ try {
 
     await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
 
-    // 6.1 开场进行中：眼睛在场，落地页标题被按住（还没开始写）
+    // 6.1 开场进行中：引擎在跑，落地页标题被按住（还没开始写）
     await page.waitForTimeout(1300)
     const early = await page.evaluate(() => {
       const overlay = document.getElementById('intro')
-      const eye = document.getElementById('introEye')
-      const r = eye ? eye.getBoundingClientRect() : null
+      const canvas = document.getElementById('introCanvas')
+      const r = canvas ? canvas.getBoundingClientRect() : null
       const st = typeof window.__persistIntroState === 'function' ? window.__persistIntroState() : null
       return {
         overlayVisible: overlay ? !overlay.hidden : false,
         overlayOpacity: overlay ? Number(getComputedStyle(overlay).opacity) : 0,
-        eyeW: r ? r.width : 0,
-        eyeH: r ? r.height : 0,
+        canvasW: r ? r.width : 0,
+        canvasH: r ? r.height : 0,
         playing: st ? st.playing : null,
-        hasEye: st ? st.hasEye : null,
-        hasSpace: st ? st.hasSpace : null,
+        hasCanvas: st ? st.hasCanvas : null,
         hasSkip: st ? st.hasSkip : null,
+        cellW: st ? st.cellW : 0,
+        cellH: st ? st.cellH : 0,
+        cols: st ? st.cols : 0,
+        rows: st ? st.rows : 0,
+        frames: st ? st.frames : 0,
+        heartDisabled: st ? st.heartDisabled : null,
+        tSpace: st ? st.tSpace : 0,
+        end: st ? st.end : 0,
         wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
       }
     })
     if (!early.overlayVisible) fail('intro', '开场层没有出现（?intro=1 应强制播放）')
     if (early.overlayOpacity < 0.8) fail('intro', `开场层透明度只有 ${early.overlayOpacity}`)
-    if (early.eyeW < 200 || early.eyeH < 100) fail('intro', `眼睛尺寸异常 ${early.eyeW}×${early.eyeH}`)
+    if (early.canvasW < 400 || early.canvasH < 300) fail('intro', `开场画布尺寸异常 ${early.canvasW}×${early.canvasH}`)
     if (!early.playing) fail('intro', '开场状态没有标记为 playing')
-    if (!early.hasEye || !early.hasSpace || !early.hasSkip) fail('intro', '开场层缺少眼睛/星空/跳过按钮')
+    if (!early.hasCanvas || !early.hasSkip) fail('intro', '开场层缺少画布/跳过按钮')
     if (early.wmDrawn !== 0) fail('intro', `开场期间手写标题已经画了 ${early.wmDrawn} 条（应等交棒后再写）`)
 
-    // 6.2 星空段：画布上必须有内容（说明星场真的画出来了）
-    await page.waitForTimeout(4600)   // ≈ 5.9s，正处在穿行星空
-    const space = await page.evaluate(() => {
-      const c = document.getElementById('introSpace')
-      if (!c) return { exists: false, nonEmpty: false }
-      const ctx = c.getContext('2d')
-      const d = ctx.getImageData(0, 0, c.width, c.height).data
-      let n = 0
-      for (let i = 3; i < d.length; i += 4 * 53) if (d[i] > 0) n++
-      return { exists: true, nonEmpty: n > 0, pixels: n }
-    })
-    if (!space.exists) fail('intro', '缺少星空画布')
-    else if (!space.nonEmpty) fail('intro', '星空画布是空的（星场没画出来）')
+    // 6.2 网格必须与 Python 原版一致：78 列 × 30 行、字符格 8:15。
+    //     行数或格宽一改，眼睛在画面里占的字符行数就变了，密度观感立刻跑偏。
+    if (early.rows !== 30) fail('intro', `字符行数应为原版的 30，实为 ${early.rows}`)
+    if (early.cols !== 78) fail('intro', `字符列数应为原版的 78，实为 ${early.cols}`)
+    const ratio = early.cellW / early.cellH
+    if (Math.abs(ratio - 8 / 15) > 0.06) fail('intro', `字符格比例应为 8:15（0.533），实为 ${ratio.toFixed(3)}`)
+    if (early.frames < 10) fail('intro', `1.3s 只画了 ${early.frames} 帧（引擎没在跑）`)
+    if (!early.heartDisabled) fail('intro', '心形星云没有被禁用')
+    if (Math.abs(early.end - 8.5) > 0.8) fail('intro', `开场总时长应为 ~8.5s，实为 ${early.end}s`)
 
-    // 6.3 交棒：开场结束后标题才开始写，最终全部画完
-    await page.waitForTimeout(2600)   // ≈ 8.5s
+    // 6.3 疏朗度：画面近黑占比要贴近 Python 原版（~72%~75%）。
+    //     这是「字符过于密集」最直接的量化指标 ——
+    //     字体加粗 / 色阶拉伸(contrast) / 颜色重复乘 1.15，都会把它压下来。
+    await page.waitForTimeout(1300)   // ≈ 2.6s，眼睛已睁开
+    const density = await page.evaluate(() => {
+      const c = document.getElementById('introCanvas')
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      const lums = []
+      let nearBlack = 0
+      for (let i = 0; i < d.length; i += 4) {
+        const L = 0.30 * d[i] + 0.60 * d[i + 1] + 0.10 * d[i + 2]
+        lums.push(L)
+        if (L < 12) nearBlack++
+      }
+      lums.sort((a, b) => a - b)
+      const q = (p) => lums[Math.floor(lums.length * p)]
+      return {
+        nearBlack: +(nearBlack / lums.length * 100).toFixed(1),
+        p90: +q(0.9).toFixed(1),
+        p99: +q(0.99).toFixed(1),
+      }
+    })
+    if (density.nearBlack < 58) fail('intro', `画面近黑占比只有 ${density.nearBlack}%（原版 ~72%），字符过于密集`)
+    if (density.nearBlack > 88) fail('intro', `画面近黑占比 ${density.nearBlack}% 过高，画面可能是空的`)
+    if (density.p90 < 70) fail('intro', `画面 90 分位亮度只有 ${density.p90}，整体太暗`)
+
+    // 6.4 推进到瞳孔铺满后：画面应切到星空，不能残留虹膜色块（差量重绘漏擦旧字形
+    //     就会在这里露馅），也不能出现原版那团粉紫星云。
+    await page.waitForTimeout(5000)   // ≈ 7.6s
+    const deep = await page.evaluate(() => {
+      const c = document.getElementById('introCanvas')
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      let warm = 0, magenta = 0, lit = 0
+      for (let i = 0; i < d.length; i += 4) {
+        const R = d[i], G = d[i + 1], B = d[i + 2]
+        if (R > 140 && G > 80 && B < 90 && R > B * 1.8) warm++
+        if (R > 70 && B > 55 && G < R * 0.72 && B > G * 1.25) magenta++
+        if (R + G + B > 150) lit++
+      }
+      return { warm, magenta, lit, total: d.length / 4 }
+    })
+    const litPct = deep.lit / deep.total * 100
+    if (litPct > 12) fail('intro', `推进后画面仍有 ${litPct.toFixed(1)}% 亮像素（旧字形残影没擦掉）`)
+    if (deep.magenta > 3000) fail('intro', `推进后出现 ${deep.magenta} 个粉紫像素（星云没禁干净）`)
+
+    // 6.5 交棒：开场结束后标题才开始写，最终全部画完
+    await page.waitForTimeout(2200)   // ≈ 9.8s
     const done = await page.evaluate(() => {
       const overlay = document.getElementById('intro')
       const paths = Array.prototype.slice.call(document.querySelectorAll('.wm-path'))
@@ -480,7 +528,7 @@ try {
     if (done.wmDrawn !== done.wmTotal) fail('intro', `交棒后标题只画了 ${done.wmDrawn}/${done.wmTotal} 条`)
     if (!done.ctaVisible) fail('intro', '交棒后 CTA 不见了')
     if (consoleErrors.length) fail('intro', `控制台报错：${consoleErrors.join(' | ')}`)
-    notes.push(`开场：1.3s 眼睛在场（${Math.round(early.eyeW)}×${Math.round(early.eyeH)}）· 5.9s 星空像素 ${space.pixels} · 8.5s 标题 ${done.wmDrawn}/${done.wmTotal}`)
+    notes.push(`开场：${early.cols}×${early.rows} 格 ${early.cellW}×${early.cellH} · 2.6s 近黑 ${density.nearBlack}% · 7.6s 亮像素 ${litPct.toFixed(1)}% · 9.8s 标题 ${done.wmDrawn}/${done.wmTotal}`)
     await ctx.close()
   }
 
