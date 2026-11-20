@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#04060A">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f4f7f9">
 <title>Persist · 记录 · 复盘 · 变化</title>
 <meta name="description" content="Persist 是一个记录工具：把每天的碎片写下来，晚上给你一段看得懂的话。">
 <meta name="robots" content="index,follow">
@@ -36,66 +36,90 @@
    定位：**炫技展示页**，不是产品介绍页。产品介绍在 home.html，
    这里只留项目名、一句 slogan、几个关键词，把版面让给视觉。
 
-   动效预算（刻意克制，详见 landing/README.md）：
-     主特效 1 个 —— Canvas ASCII 字符流（中心瞳孔向外放射 / 消散）
-     点缀 2 个 —— SVG 手写描边标题「Persist」+ 仿真终端窗口
-   不做：Shader、视差堆叠、滚动依赖、频闪、鼠标跟随光标。
+   视觉基调：与产品本体同一套色系（app/src/styles/home-v3.css 的令牌）——
+   浅底 #F4F7F9、低饱和蓝灰、强调色 #467692 / #6D9FBD。
+   背景渐变与 app 的 body 背景逐字对齐，落地页和���品是同一张纸。
 
-   视觉：近黑底 + 极低饱和青蓝。所有元素零外部请求。
+   动效预算（1 主 + 2 点缀，刻意克制）：
+     主特效 · Canvas 流星雨（平行轨迹 + 拖尾 + 头部高光）
+     点缀 1 · 手写 SVG 标题「persist」逐笔浮现
+     点缀 2 · 眼睛标记（借鉴 eyeTutrial 的「圆 + 眼睑 + 虹膜 + 高光」画法，
+              虹膜跟随光标微动，入场眨一次眼）
+   不做：Shader、视差堆叠、滚动依赖、频闪、自定义光标、仿真终端。
+
+   所有元素零外部请求。
    ============================================================ */
 
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%}
 html{-webkit-text-size-adjust:100%}
 body{
-  margin:0;background:#04060A;color:#EAF4FF;
-  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC",
-              "Microsoft YaHei",system-ui,"Segoe UI",sans-serif;
+  margin:0;color:var(--ink);
+  font-family:var(--ui);
+  background:var(--bg);
   -webkit-font-smoothing:antialiased;
   overflow-x:hidden;
 }
 
 :root{
-  --bg:#04060A;
-  --ink:#EAF4FF;      /* 主文字 */
-  --ink-2:#9FB3C8;    /* 次级 */
-  --ink-3:#6E8299;    /* 弱化 */
-  --accent:#7FD8FF;   /* 强调（青） */
-  --accent-dim:rgba(127,216,255,.16);
-  --line:rgba(127,216,255,.18);
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  /* —— 与产品本体的令牌保持一致 —— */
+  --bg:#f4f7f9;
+  --surface:#fbfcfd;
+  --strong:#ffffff;
+  --ink:#202830;
+  --soft:#4d5965;
+  --line:#dfe5eb;
+  --line2:#cbd5de;
+  --green:#6d9fbd;
+  --deep:#467692;
+  --gs:#e9f2f7;
+  --blue:#78aac8;
+  --bs:#eaf4f9;
+  --indigo:#7f8fac;
+
+  /* —— 两处为可读性做的加深（产品里的 --muted/--faint 在本底色上只有
+        3.75 / ≈2.6，正文不可读）—— */
+  --muted:#55616d;
+  --faint:#616d79;
+
+  --r:22px;
+  --shadow:0 20px 55px rgba(42,56,70,.07);
+  --ui:'Aptos','Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,'Segoe UI',sans-serif;
+  --num:'Cascadia Mono','SFMono-Regular','Roboto Mono',ui-monospace,Menlo,Consolas,monospace;
 }
 
-/* ---------- 1. 舞台：字符流画布 ---------- */
+/* ---------- 1. 舞台 ---------- */
 .stage{
   position:fixed;inset:0;z-index:0;overflow:hidden;
+  /* 与 app 的 body 背景完全一致 */
   background:
-    radial-gradient(120% 90% at 50% 42%, #0C1626 0%, #070C15 42%, var(--bg) 78%);
+    radial-gradient(circle at 8% -8%, rgba(255,255,255,.9), transparent 34%),
+    radial-gradient(circle at 105% 110%, rgba(126,173,200,.14), transparent 36%),
+    var(--bg);
 }
-#flow{position:absolute;inset:0;width:100%;height:100%;display:block}
+#sky{position:absolute;inset:0;width:100%;height:100%;display:block}
 
-/* 中心瞳孔：字符从这里涌出。压暗中心让标题永远读得清。
-   压得太狠会把字符流主体一起吃掉 —— 罩子的有效半径要小、浓度要低，
-   否则整屏只剩稀疏几点，看不出「放射」。 */
-.pupil{
-  position:absolute;left:50%;top:50%;width:min(46vw,600px);aspect-ratio:1;
-  transform:translate(-50%,-50%);pointer-events:none;
-  background:radial-gradient(circle, rgba(4,6,10,.88) 0%, rgba(4,6,10,.62) 30%, rgba(4,6,10,0) 62%);
-}
-/* 极细网格：给纯黑背景一点结构，不抢戏 */
+/* 极细网格：给浅底一点结构，不抢戏 */
 .grid{
-  position:absolute;inset:0;pointer-events:none;opacity:.5;
+  position:absolute;inset:0;pointer-events:none;opacity:.75;
   background-image:
-    linear-gradient(to right, rgba(127,216,255,.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(127,216,255,.045) 1px, transparent 1px);
+    linear-gradient(to right, rgba(70,118,146,.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(70,118,146,.055) 1px, transparent 1px);
   background-size:64px 64px;
-  -webkit-mask-image:radial-gradient(110% 85% at 50% 46%, #000 0%, rgba(0,0,0,.3) 55%, transparent 82%);
-  mask-image:radial-gradient(110% 85% at 50% 46%, #000 0%, rgba(0,0,0,.3) 55%, transparent 82%);
+  -webkit-mask-image:radial-gradient(110% 85% at 50% 46%, #000 0%, rgba(0,0,0,.35) 55%, transparent 84%);
+  mask-image:radial-gradient(110% 85% at 50% 46%, #000 0%, rgba(0,0,0,.35) 55%, transparent 84%);
 }
-/* 边缘压暗，把视线收进中心 */
+/* 中央柔光：把视线收进内容区，也让浅底上有一层「空气感」 */
+.glow{
+  position:absolute;left:50%;top:46%;width:min(92vw,1180px);aspect-ratio:2/1;
+  transform:translate(-50%,-50%);pointer-events:none;
+  background:radial-gradient(ellipse at center,
+    rgba(255,255,255,.92) 0%, rgba(255,255,255,.5) 42%, rgba(255,255,255,0) 72%);
+}
+/* 边缘压暗（浅底上做成极淡的冷灰，收拢视线） */
 .vignette{
   position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(72% 62% at 50% 48%, rgba(4,6,10,0) 0%, rgba(4,6,10,.5) 74%, rgba(4,6,10,.86) 100%);
+  background:radial-gradient(78% 66% at 50% 46%, rgba(203,213,222,0) 0%, rgba(203,213,222,.16) 78%, rgba(203,213,222,.3) 100%);
 }
 
 /* ---------- 2. 内容层 ---------- */
@@ -106,32 +130,52 @@ body{
   padding:clamp(14px,2vw,22px) clamp(16px,3.4vw,40px);
 }
 .brand{
-  font-family:var(--mono);font-size:12px;letter-spacing:.32em;color:var(--ink);
-  text-decoration:none;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--num);font-size:12px;letter-spacing:.3em;
+  color:var(--ink);text-decoration:none;text-transform:uppercase;
 }
+/* 眼睛标记（点缀 2）：借鉴 eyeTutrial 的画法 —— 圆=虹膜、上下眼睑、
+   最后加一点高光。虹膜跟随光标微动。 */
+.eyemark{
+  width:30px;height:18px;flex:0 0 auto;overflow:visible;
+  transform-box:fill-box;transform-origin:50% 50%;
+  animation:blink 5.6s ease-in-out infinite;
+}
+.eyemark .em-lid{fill:none;stroke:var(--deep);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* 虹膜/瞳孔是**有意义的图形**（WCAG 非文本对比度门槛 3:1）。
+   早先用 --green 55% 透明度填充，实测只有 2.66:1 —— 改为实色。
+   虹膜 #5c8ba9 对页面底 3.41:1，瞳孔 #16323f 对虹膜 3.66:1，两者都达标。 */
+.eyemark .em-iris{fill:#5c8ba9}
+.eyemark .em-pupil{fill:#16323f}
+.eyemark .em-glint{fill:#fff}
+.eyemark .em-eye{transition:none}
+@keyframes blink{
+  0%,92%,100%{transform:scaleY(1)}
+  95%{transform:scaleY(.08)}
+}
+.top-actions{display:flex;align-items:center;gap:14px}
 .toplink{
-  font-size:12.5px;color:var(--ink-2);text-decoration:none;
+  font-size:12.5px;color:var(--muted);text-decoration:none;
   border-bottom:1px solid transparent;padding-bottom:2px;
   transition:color .2s ease,border-color .2s ease;
 }
-.toplink:hover{color:var(--ink);border-bottom-color:var(--line)}
-.toplink:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+.toplink:hover{color:var(--deep);border-bottom-color:var(--line2)}
+.toplink:focus-visible{outline:2px solid var(--deep);outline-offset:3px;border-radius:2px}
 
 .stage-main{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;padding:0 20px;
+  text-align:center;padding:0 20px clamp(56px,8vh,84px);
 }
 
 /* ---------- 3. 手写标题（SVG 描边逐字浮现） ---------- */
 .wordmark{
-  display:block;width:clamp(230px,42vw,460px);height:auto;
-  overflow:visible;
-  margin:0 auto;
+  display:block;width:clamp(238px,40vw,440px);height:auto;
+  overflow:visible;margin:0 auto;
 }
 .wordmark .wm-path{
-  fill:none;stroke:var(--accent);stroke-width:7.5;
+  fill:none;stroke:var(--deep);stroke-width:8;
   stroke-linecap:round;stroke-linejoin:round;
-  /* 描边推进：由 dashoffset 归零控制，JS 逐字推进。
+  /* 描边推进：由 dashoffset 归零控制，JS 逐笔推进。
      注意长度与偏移必须走 CSS 变量 —— 若用内联 style 写死，
      内联优先级高于 .is-drawn 类，归零动画就永远不会生效。 */
   stroke-dasharray:var(--len, none);
@@ -144,152 +188,99 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 
 /* 标题下方的 slogan */
 .slogan{
-  margin:clamp(20px,3.4vh,34px) 0 0;
+  margin:clamp(18px,3vh,30px) 0 0;
   font-size:clamp(15px,1.9vw,21px);line-height:1.6;color:var(--ink);
   letter-spacing:.02em;
 }
-.slogan em{
-  font-style:normal;color:var(--accent);
-}
+.slogan em{font-style:normal;color:var(--deep)}
 /* 关键词行 */
 .keys{
   list-style:none;margin:clamp(14px,2.4vh,22px) 0 0;padding:0;
   display:flex;flex-wrap:wrap;gap:10px;justify-content:center;
 }
 .keys li{
-  font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;
-  color:var(--ink-2);padding:6px 13px;border-radius:999px;
-  border:1px solid var(--line);background:rgba(127,216,255,.04);
+  font-family:var(--num);font-size:11.5px;letter-spacing:.12em;
+  color:var(--muted);padding:6px 13px;border-radius:999px;
+  border:1px solid var(--line);background:rgba(255,255,255,.7);
 }
-.keys li b{color:var(--accent);font-weight:600}
+.keys li b{color:var(--deep);font-weight:600}
 
-/* ---------- 4. 仿真终端（点缀 2） ----------
-   桌面端：浮在右下角，不占文档流，首屏因此保持 100dvh 单屏。
-   窄屏端：回到文档流（见 @media），因为 .wrap 是 min-height:100dvh，
-   浮在外的元素会被推到首屏之外。 */
-.term{
-  position:fixed;right:clamp(14px,3vw,40px);bottom:clamp(52px,7vh,76px);
-  z-index:3;width:min(360px,42vw);
-  border:1px solid var(--line);border-radius:10px;
-  background:rgba(7,12,21,.82);
-  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
-  box-shadow:0 18px 50px rgba(0,0,0,.55);
-  font-family:var(--mono);font-size:11.5px;line-height:1.72;
-  overflow:hidden;text-align:left;
-}
-.term-bar{
-  display:flex;align-items:center;gap:8px;
-  padding:8px 12px;border-bottom:1px solid rgba(127,216,255,.12);
-  background:rgba(127,216,255,.04);
-}
-.term-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
-.term-dot:nth-child(1){background:#3A4A5C}
-.term-dot:nth-child(2){background:#3A4A5C}
-.term-dot:nth-child(3){background:#3A4A5C}
-.term-title{
-  margin-left:4px;font-size:10.5px;color:var(--ink-3);letter-spacing:.08em;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.term-body{
-  padding:11px 13px 13px;margin:0;
-  height:158px;overflow:hidden;
-  color:var(--ink-2);white-space:pre-wrap;word-break:break-all;
-}
-.term-body .c-prompt{color:var(--accent)}
-.term-body .c-cmd{color:var(--ink)}
-.term-body .c-ok{color:#8FE3A8}
-.term-body .c-dim{color:var(--ink-3)}
-.term-body .c-cursor{
-  display:inline-block;width:7px;height:1.05em;vertical-align:-2px;
-  background:var(--accent);animation:blink 1.05s steps(1,end) infinite;
-}
-@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
-
-/* ---------- 5. CTA ---------- */
+/* ---------- 4. CTA ---------- */
 .cta{
   margin-top:clamp(22px,3.4vh,32px);
   display:flex;gap:12px;flex-wrap:wrap;justify-content:center;
 }
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
-  min-height:46px;padding:0 24px;border-radius:10px;
+  min-height:46px;padding:0 26px;border-radius:12px;
   font-size:14.5px;font-weight:500;text-decoration:none;white-space:nowrap;
-  transition:transform .18s ease,background-color .18s ease,border-color .2s ease;
+  transition:transform .18s ease,background-color .18s ease,border-color .2s ease,box-shadow .2s ease;
 }
-.btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.btn-primary{background:var(--accent);color:#04121C;border:1px solid transparent}
-.btn-primary:hover{background:#A6E4FF;transform:translateY(-1px)}
-.btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
-.btn-ghost:hover{border-color:rgba(127,216,255,.42);transform:translateY(-1px)}
-.note{margin:13px 0 0;font-size:12px;line-height:1.7;color:var(--ink-3)}
+.btn:focus-visible{outline:2px solid var(--deep);outline-offset:3px}
+.btn-primary{
+  /* 渐变三档都必须对白字 ≥ 4.5:1 —— 上档不能比 #467692 更亮 */
+  background:linear-gradient(180deg,#467692 0%,#42718c 55%,#3c6a84 100%);
+  color:#fff;border:1px solid transparent;
+  box-shadow:0 10px 24px rgba(70,118,146,.22);
+}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 14px 30px rgba(70,118,146,.28)}
+.btn-ghost{background:rgba(255,255,255,.72);color:var(--ink);border:1px solid var(--line2)}
+.btn-ghost:hover{border-color:var(--green);transform:translateY(-1px)}
+.note{margin:13px 0 0;font-size:12px;line-height:1.7;color:var(--faint)}
 
-/* ---------- 6. 动效开关 ---------- */
+/* ---------- 5. 动效开关 ---------- */
 .motion-toggle{
   display:inline-flex;align-items:center;gap:7px;
-  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
-  color:var(--ink-2);background:transparent;cursor:pointer;
+  font-family:var(--num);font-size:11px;letter-spacing:.08em;
+  color:var(--muted);background:rgba(255,255,255,.7);cursor:pointer;
   border:1px solid var(--line);border-radius:999px;padding:6px 12px;
   transition:color .2s ease,border-color .2s ease;
 }
-.motion-toggle:hover{color:var(--ink);border-color:rgba(127,216,255,.4)}
-.motion-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.motion-toggle:hover{color:var(--deep);border-color:var(--line2)}
+.motion-toggle:focus-visible{outline:2px solid var(--deep);outline-offset:3px}
 .motion-dot{
-  width:7px;height:7px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 8px rgba(127,216,255,.7);
+  width:7px;height:7px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 0 3px rgba(109,159,189,.16);
   transition:background-color .2s ease,box-shadow .2s ease;
 }
-.motion-toggle[aria-pressed="false"] .motion-dot{background:var(--ink-3);box-shadow:none}
-.motion-toggle[aria-pressed="false"]{color:var(--ink-3)}
+.motion-toggle[aria-pressed="false"] .motion-dot{background:var(--line2);box-shadow:none}
+.motion-toggle[aria-pressed="false"]{color:var(--faint)}
 
-/* ---------- 7. 备案信息页脚 ---------- */
+/* ---------- 6. 备案信息页脚 ---------- */
 .foot{
   position:fixed;left:0;right:0;bottom:0;z-index:4;
   padding:0 16px calc(10px + env(safe-area-inset-bottom,0px));
   text-align:center;font-size:11px;line-height:1.8;letter-spacing:.05em;
-  /* 11px 是小字，对比度门槛 4.5 —— 用实色而不是半透明 */
-  color:#8FA3B8;pointer-events:none;
+  color:var(--faint);pointer-events:none;
 }
 .foot a{
-  color:#B6C7D8;pointer-events:auto;text-decoration:none;
-  border-bottom:1px solid rgba(182,199,216,.36);padding-bottom:1px;
+  color:var(--muted);pointer-events:auto;text-decoration:none;
+  border-bottom:1px solid var(--line2);padding-bottom:1px;
   transition:color .2s ease,border-color .2s ease;
 }
-.foot a:hover{color:#E4EFF8;border-bottom-color:rgba(228,239,248,.66)}
-.site-info-sep{margin:0 8px;color:rgba(143,163,184,.5)}
-.site-info-pending{color:#8FA3B8}
+.foot a:hover{color:var(--deep);border-bottom-color:var(--green)}
+.site-info-sep{margin:0 8px;color:var(--line2)}
+.site-info-pending{color:var(--faint)}
 
-/* ---------- 8. 响应式 ---------- */
-/* 窄屏：终端从浮层改为文档流里的横条，标题与 slogan 优先。
-   此时页面允许纵向滚动 —— 内容（标题+文案+CTA+终端）装不进 844px。 */
+/* ---------- 7. 响应式 ---------- */
 @media (max-width:900px){
-  .term{
-    position:static;width:auto;margin:0 16px clamp(18px,3vh,28px);
-    font-size:11px;
-  }
-  .term-body{height:112px;padding:9px 11px 11px}
-  .stage-main{padding-bottom:clamp(16px,3vh,26px)}
-  .pupil{width:min(84vw,520px)}
-  /* 窄屏内容更高，允许滚动；同时给底部页脚留出空间 */
-  body{overflow-y:auto}
-  .wrap{min-height:100dvh}
-  /* 页脚从 fixed 改为 static：容器本身不吃点击，但备案号链接必须可点 */
-  .foot{
-    position:static;display:block;
-    padding:0 16px calc(16px + env(safe-area-inset-bottom,0px));
-  }
-  .foot a{pointer-events:auto}
+  .stage-main{padding-bottom:clamp(64px,12vh,96px)}
+  .glow{width:min(130vw,1000px)}
 }
 @media (max-width:560px){
   .keys{gap:8px}
   .keys li{font-size:11px;padding:5px 11px}
-  .wordmark{width:min(78vw,300px)}
+  .wordmark{width:min(80vw,300px)}
   .note{font-size:11.5px}
+  .brand{font-size:11px;letter-spacing:.24em}
+  .eyemark{width:26px;height:16px}
+  .btn{min-height:44px;padding:0 20px}
 }
 
-/* ---------- 9. 动效降级 ---------- */
+/* ---------- 8. 动效降级 ---------- */
 @media (prefers-reduced-motion:reduce){
   .wordmark .wm-path{transition:none}
-  .term-body .c-cursor{animation:none}
+  .eyemark{animation:none}
   .btn,.toplink,.foot a,.motion-toggle{transition:none}
 }
 </style>
@@ -297,16 +288,35 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 <body>
 
 <div class="stage" id="stage" aria-hidden="true">
-  <canvas id="flow"></canvas>
+  <canvas id="sky"></canvas>
   <div class="grid"></div>
-  <div class="pupil"></div>
+  <div class="glow"></div>
   <div class="vignette"></div>
 </div>
 
 <div class="wrap">
   <header class="topbar">
-    <a class="brand" href="home.html">Persist</a>
-    <div style="display:flex;align-items:center;gap:14px">
+    <a class="brand" href="home.html">
+      <!-- 眼睛标记：eyeTutrial 的「圆 + 上下眼睑 + 虹膜 + 高光」画法。
+           纯 SVG，零外部请求；虹膜由 JS 驱动跟随光标（幅度很小）。 -->
+      <svg class="eyemark" id="eyemark" viewBox="0 0 44 26" aria-hidden="true">
+        <defs>
+          <clipPath id="eyeClip">
+            <path d="M 2,13 C 10,1.5 34,1.5 42,13 C 34,24.5 10,24.5 2,13 Z"></path>
+          </clipPath>
+        </defs>
+        <g clip-path="url(#eyeClip)">
+          <g class="em-eye" id="emEye">
+            <circle class="em-iris" cx="22" cy="13" r="8.6"></circle>
+            <circle class="em-pupil" cx="22" cy="13" r="3.9"></circle>
+            <circle class="em-glint" cx="24.8" cy="10.4" r="1.9"></circle>
+          </g>
+        </g>
+        <path class="em-lid" d="M 2,13 C 10,1.5 34,1.5 42,13 C 34,24.5 10,24.5 2,13 Z"></path>
+      </svg>
+      <span>Persist</span>
+    </a>
+    <div class="top-actions">
       <button class="motion-toggle" id="motionToggle" type="button" aria-pressed="true">
         <span class="motion-dot" aria-hidden="true"></span>
         <span id="motionLabel">动效 开</span>
@@ -316,31 +326,30 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   </header>
 
   <main class="stage-main">
-    <!-- 手写标题：SVG 路径自绘，不依赖任何 webfont，跨浏览器字形一致 -->
-    <svg class="wordmark" id="wordmark" viewBox="-48.3 -180 374.3 196" role="img" aria-label="Persist">
-      <g transform="skewX(-11)">
-        <path class="wm-path" d="M 4,0 C 6,-52 8,-112 10,-158 C 42,-166 60,-148 58,-124 C 56,-102 32,-92 12,-94"></path>
-        <path class="wm-path" d="M -2,-56 L 46,-56" transform="translate(65,0)"></path>
-        <path class="wm-path" d="M 46,-56 C 46,-84 34,-102 18,-100 C 2,-98 -6,-76 0,-56 C 6,-30 26,-16 44,-32" transform="translate(65,0)"></path>
-        <path class="wm-path" d="M 2,0 C 3,-30 5,-60 7,-92" transform="translate(130,0)"></path>
-        <path class="wm-path" d="M 7,-92 C 12,-99 24,-97 28,-86" transform="translate(130,0)"></path>
-        <path class="wm-path" d="M 32,-88 C 24,-102 0,-102 0,-84 C 0,-68 30,-70 30,-46 C 30,-26 8,-16 0,-32" transform="translate(167,0)"></path>
-        <path class="wm-path" d="M 0,0 C 2,-32 3,-66 4,-100" transform="translate(206,0)"></path>
-        <path class="wm-path" d="M 6,-118 C 9,-126 16,-127 19,-122" transform="translate(206,0)"></path>
-        <path class="wm-path" d="M 32,-88 C 24,-102 0,-102 0,-84 C 0,-68 30,-70 30,-46 C 30,-26 8,-16 0,-32" transform="translate(231,0)"></path>
-        <path class="wm-path" d="M 12,-142 C 8,-104 5,-56 5,-24 C 5,-8 20,-4 30,-16" transform="translate(270,0)"></path>
-        <path class="wm-path" d="M -10,-96 C 8,-102 24,-100 38,-94" transform="translate(270,0)"></path>
-      </g>
+    <!-- 手写标题：SVG 路径自绘，倾斜已烘焙进坐标，不依赖任何 webfont，
+         跨浏览器字形完全一致。viewBox 由生成器算出，不会裁掉升部。 -->
+<svg class="wordmark" id="wordmark" viewBox="-16.0 -152.0 320.3 198.0" role="img" aria-label="persist">
+        <path class="wm-path" d="M -6.00,36.00 C 0.83,6.00 11.94,-46.00 23.24,-99.00"></path>
+        <path class="wm-path" d="M 23.05,-98.00 C 44.60,-106.00 67.05,-98.00 61.80,-71.00 C 56.36,-43.00 29.86,-25.00 11.03,-31.00"></path>
+        <path class="wm-path" d="M 10.50,-54.00 L 52.50,-54.00" transform="translate(54,0)"></path>
+        <path class="wm-path" d="M 52.50,-54.00 C 57.94,-82.00 50.63,-101.00 36.24,-99.00 C 20.85,-97.00 7.77,-76.00 10.69,-55.00 C 12.83,-30.00 30.92,-15.00 53.83,-30.00" transform="translate(54,0)"></path>
+        <path class="wm-path" d="M 0.00,0.00 C 6.83,-30.00 14.44,-64.00 22.05,-98.00" transform="translate(104,0)"></path>
+        <path class="wm-path" d="M 21.05,-98.00 C 30.60,-106.00 42.41,-105.00 46.85,-97.00 C 49.08,-93.00 46.30,-89.00 43.88,-92.00" transform="translate(104,0)"></path>
+        <path class="wm-path" d="M 47.49,-90.00 C 42.02,-103.00 20.02,-103.00 16.52,-85.00 C 13.41,-69.00 44.00,-72.00 40.14,-47.00 C 37.25,-27.00 15.50,-18.00 5.83,-30.00" transform="translate(140,0)"></path>
+        <path class="wm-path" d="M 0.00,0.00 C 6.83,-30.00 14.44,-64.00 22.44,-100.00" transform="translate(178,0)"></path>
+        <path class="wm-path" d="M 32.91,-123.00 C 36.69,-127.00 41.69,-127.00 42.91,-123.00" transform="translate(178,0)"></path>
+        <path class="wm-path" d="M 47.49,-90.00 C 42.02,-103.00 20.02,-103.00 16.52,-85.00 C 13.41,-69.00 44.00,-72.00 40.14,-47.00 C 37.25,-27.00 15.50,-18.00 5.83,-30.00" transform="translate(200,0)"></path>
+        <path class="wm-path" d="M 39.60,-142.00 C 28.22,-104.00 15.89,-56.00 9.67,-24.00 C 6.56,-8.00 20.78,-4.00 33.11,-16.00" transform="translate(238,0)"></path>
+        <path class="wm-path" d="M 8.66,-96.00 C 27.83,-102.00 43.44,-100.00 56.27,-94.00" transform="translate(238,0)"></path>
     </svg>
-
     <p class="slogan" id="slogan">把每天的碎片写下来，<em>晚上看懂自己</em>。</p>
 
     <ul class="keys" aria-label="关键词">
       <li><b>记录</b></li>
       <li><b>复盘</b></li>
       <li><b>变化</b></li>
-      <li>本地优先</li>
-      <li>AI 报告</li>
+      <li>离线可用</li>
+      <li>数据自持</li>
     </ul>
 
     <div class="cta" id="cta">
@@ -349,39 +358,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     </div>
     <p class="note">不用注册。演示数据只留在你自己的浏览器里。</p>
   </main>
-
-  <!-- 仿真终端：桌面端浮在右下角，窄屏落回文档流（放在 .wrap 内，
-       否则会被 min-height:100dvh 的 .wrap 推到首屏之外）。 -->
-  <aside class="term" id="term" aria-label="终端演示">
-    <div class="term-bar">
-      <span class="term-dot" aria-hidden="true"></span>
-      <span class="term-dot" aria-hidden="true"></span>
-      <span class="term-dot" aria-hidden="true"></span>
-      <span class="term-title" id="termTitle">~/persist — zsh</span>
-    </div>
-    <pre class="term-body" id="termBody"></pre>
-  </aside>
 </div>
-
-<aside class="term" id="term" aria-label="终端演示">
-  <div class="term-bar">
-    <span class="term-dot" aria-hidden="true"></span>
-    <span class="term-dot" aria-hidden="true"></span>
-    <span class="term-dot" aria-hidden="true"></span>
-    <span class="term-title" id="termTitle">~/persist — zsh</span>
-  </div>
-  <pre class="term-body" id="termBody"></pre>
-</aside>
-
-<aside class="term" id="term" aria-label="终端演示">
-  <div class="term-bar">
-    <span class="term-dot" aria-hidden="true"></span>
-    <span class="term-dot" aria-hidden="true"></span>
-    <span class="term-dot" aria-hidden="true"></span>
-    <span class="term-title" id="termTitle">~/persist — zsh</span>
-  </div>
-  <pre class="term-body" id="termBody"></pre>
-</aside>
 
 <footer class="foot">
   <span class="site-info"><!--site-info--><span class="site-info-pending">备案信息待下发</span><!--/site-info--></span>
@@ -395,38 +372,35 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   var STILL = /[?&]still=1/.test(location.search) || reduce;
 
   /* =========================================================
-     A. Canvas ASCII 字符流（主特效）
+     A. 流星雨（主特效）
      ------------------------------------------------------------
-     字符从中心「瞳孔」向外放射，沿途流动、逐渐淡出消散。
+     为什么是「平行轨迹」而不是随机方向：
+     真实流星雨是同一个辐射点发出的近平行轨迹。随机方向 = 下雨；
+     共享主方向 + 小角度抖动 = 一场流星雨。
 
-     性能要点（这是选 Canvas 而不是 DOM 的原因）：
-       · 字形图集（glyph atlas）：所有 ASCII 字符先预渲染到一张
-         离屏 canvas 上，运行时只做 drawImage —— 比每帧 fillText
-         快一个数量级，这是字符雨能跑满 60fps 的关键。
-       · 按透明度分档批量绘制，减少状态切换。
-       · 粒子上限随视口面积与设备能力缩放，窄屏再砍一档。
+     分层画法（借鉴 eyeTutrial 的「线稿 → 柔光 → 上色 → 高光」）：
+       1. 线稿：拖尾本体，两到三段渐细的描边
+       2. 柔光：头部一圈更宽更淡的描边（bloom）
+       3. 上色：拖尾从透明渐变到深蓝
+       4. 高光：头部一个小亮点 + 预渲染的辉光贴图
+
+     性能：辉光用**预渲染的离屏贴图**（createRadialGradient 每帧新建
+     很贵）；拖尾按时间采样（14ms 一次），帧率变化时长度一致。
      ========================================================= */
-  var canvas = document.getElementById('flow');
+  var canvas = document.getElementById('sky');
   var ctx = canvas.getContext('2d', { alpha: true });
 
-  var GLYPHS = '01{}[]()<>/\\|=+-*#@$%&~^!?.,:;'.split('');
-  var ATLAS_COLS = 16;
-  var CELL = 13;             // 图集单元（CSS px）
-
-  var W = 0, H = 0, DPR = 1, CX = 0, CY = 0;
-  var atlas = null, atlasRows = 0;
-  var waves = [], raf = 0, last = 0, running = false, started = false;
-  var frames = 0, maxChars = 0, isMobile = false;
-  var mouse = { x: -9999, y: -9999, active: false };
-  // 波前平均寿命：用来反推波前周期，保证屏幕上稳定保持 WAVES_ALIVE 道环。
-  // 必须与 makeWave() 里的 life 区间一致（1.9~2.5 → 均值 2.2）。
-  var AVG_TTL = 2.2;
-
-  var ALPHA_LEVELS = [0.22, 0.4, 0.58, 0.78, 0.92, 1.0];
+  var W = 0, H = 0, DPR = 1;
+  var raf = 0, last = 0, running = false, started = false, frames = 0;
+  var meteors = [], meteorAcc = 0, meteorInterval = 520, maxMeteors = 16;
+  var isMobile = false;
+  var guardBox = null;            // 中央内容保护区（resize 时量一次）
+  var glowSprite = null;          // 预渲染的辉光贴图
+  var SPEED_SCALE = 1;            // 窄屏整体降速
+  var TRAIL_DT = 14;              // 拖尾采样间隔 ms
+  var radiant = { x: 0, y: 0 };   // 辐射点：所有流星从这里发出（画外左上方）
 
   function rand(a, b){ return a + Math.random() * (b - a); }
-
-  // 固定种子：静态构图要可复现
   function mulberry32(a){
     return function(){
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -438,79 +412,67 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   var rnd = Math.random;
   function srnd(a, b){ return a + rnd() * (b - a); }
 
-  /* ---------- 字形图集 ---------- */
-  function buildAtlas(){
-    var rows = Math.ceil(GLYPHS.length / ATLAS_COLS);
+  /* ---------- 辉光贴图（预渲染一次） ---------- */
+  function buildGlow(){
+    var s = 64;
     var c = document.createElement('canvas');
-    c.width = ATLAS_COLS * CELL * DPR;
-    c.height = rows * CELL * DPR;
+    c.width = s; c.height = s;
     var g = c.getContext('2d');
-    g.scale(DPR, DPR);
-    g.fillStyle = '#7FD8FF';
-    g.font = '11px ' + 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    for (var i = 0; i < GLYPHS.length; i++){
-      var col = i % ATLAS_COLS, row = Math.floor(i / ATLAS_COLS);
-      g.fillText(GLYPHS[i], col * CELL + CELL / 2, row * CELL + CELL / 2);
-    }
-    atlas = c;
-    atlasRows = rows;
+    var rg = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+    rg.addColorStop(0,   'rgba(120,170,200,.45)');
+    rg.addColorStop(.35, 'rgba(120,170,200,.18)');
+    rg.addColorStop(1,   'rgba(120,170,200,0)');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, s, s);
+    glowSprite = c;
   }
 
-  /* ---------- 粒子 ---------- */
-  // 字符从中心诞生，沿**固定射线**向外加速，抵达屏幕边缘后消散。
-  //
-  // 关键设计：方向必须可见，否则就是「下雨」而不是「从瞳孔放射」。
-  //   · 角度固定（只允许极轻微旋涡，±4°），轨迹是一条条从中心发散的射线
-  //   · 带 2 段拖尾残影 —— 残影是让「流动方向」被眼睛读出来的关键
-  //   · 速度随半径增长：近处慢、远处快，观感是「涌出」而非「平移」
-  /* ---------- 波前（粒子系统） ----------
-     为什么是「波前」而不是独立粒子：
-     独立粒子各随机角度、各随机寿命 —— 任意时刻的快照必然是均匀散布，
-     看起来就是「下雨」，读不出「从中心放射」。
-     改成波前后，同一批字符从中心一起涌出、一起向外扩散、一起消散，
-     任意时刻都存在几道同心环 —— 放射结构才被眼睛读到。
-  */
-  var waves = [];          // 每一道波前
-  var waveAcc = 0;         // 波前生成计时
-  var waveInterval = 420;  // 每隔多久涌出一批
-  var charsPerWave = 26;   // 每批多少个字符
-  var guardBox = null;     // 中心内容保护区（resize 时量一次）
+  /* ---------- 流星 ----------
+     关键：**所有流星从同一个辐射点（画外左上方）发出**。
+     这才是「流星雨」——同一个辐射源、轨迹呈放射状。
+     平行下落的直线流看起来就是「下雨」，不是流星雨。 */
+  function makeMeteor(){
+    var depth = Math.pow(rnd(), 0.62);       // 0 远 → 1 近（偏置：近的更多）
+    // 出生点直接落在画面内（留一点边距）。
+    // 早先按「辐射点周围的环带」取点，结果一半流星生在画布外、
+    // 一生成就出界被回收 → 屏幕上只剩 1~2 颗。
+    var x = srnd(-0.08, 1.08) * W;
+    var y = srnd(-0.42, 1.02) * H;
+    // 方向：从辐射点指向出生点 —— 所有轨迹因此汇聚到同一个源
+    var dx = x - radiant.x, dy = y - radiant.y;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    var speed = (300 + depth * 780) * SPEED_SCALE;
+    var m = {
+      x: x, y: y,
+      vx: ux * speed,
+      vy: uy * speed,
+      depth: depth,
+      len: 80 + depth * 190,                 // 拖尾目标长度 px
+      w: 1.3 + depth * 3.2,                  // 头部线宽
+      alpha: 0.48 + depth * 0.44,
+      trail: [],
+      lastSample: 0,
+      born: 0
+    };
+    // 预填拖尾：让流星一出现就带着完整尾迹。
+    // 否则随机出生点普遍离边缘很近，0.7 秒就飞出屏幕 → 同屏只剩几颗，
+    // 且每一颗都是「从一点长出来」，根本不像流星雨。
+    var steps = 14;
+    for (var s = steps; s >= 0; s--){
+      var t = s / steps;
+      m.trail.push({ x: x - ux * m.len * t, y: y - uy * m.len * t });
+    }
+    return m;
+  }
 
-  // 量一次中心内容块的包围盒，供每帧做保护区淡出判断
+  // 中央内容保护区：流星掠过标题时要软淡出，否则会划过文案。
+  // 尺寸只在 resize 时量一次 —— 每帧 getBoundingClientRect 会强制重排。
   function measureGuard(){
     var el = document.querySelector('.stage-main');
     if (!el){ guardBox = null; return; }
     var b = el.getBoundingClientRect();
-    guardBox = { x0: b.left - 20, y0: b.top - 18, x1: b.right + 20, y1: b.bottom + 18 };
-  }
-
-  function makeWave(){
-    var w = {
-      r: 26,                        // 当前半径
-      speed: srnd(300, 370),        // 扩散速度
-      spin: srnd(-0.30, 0.30),      // 整体旋转（慢螺旋）
-      angle: srnd(0, Math.PI * 2),  // 整体旋转角
-      age: 0,                       // 存活时长
-      life: srnd(1.9, 2.5),         // 寿命：与字符 ttl 同量级
-      chars: []
-    };
-    var a0 = srnd(0, Math.PI * 2);
-    for (var i = 0; i < charsPerWave; i++){
-      w.chars.push({
-        angOff: a0 + (i / charsPerWave) * Math.PI * 2 + srnd(-0.13, 0.13),
-        rOff: srnd(-9, 9),
-        rJit: 0,                    // 鼠标排斥造成的临时径向偏移
-        gi: (Math.random() * GLYPHS.length) | 0,
-        size: srnd(0.8, 1.24),
-        life: 0,
-        ttl: w.life * srnd(0.94, 1.02),   // 与波前同寿命，避免出现空环
-        x: 0, y: 0, t1x: 0, t1y: 0, t2x: 0, t2y: 0,
-        guard: 1            // 中心保护区衰减系数，1 = 完全可见
-      });
-    }
-    return w;
+    guardBox = { x0: b.left - 14, y0: b.top - 12, x1: b.right + 14, y1: b.bottom + 12 };
   }
 
   function resize(){
@@ -523,149 +485,141 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    CX = W / 2; CY = H / 2;
-    buildAtlas();
-    // 字符总预算：桌面密一些，窄屏砍到桌面的一半以内（低端机不卡死）。
-    // 每个字符要画 3 次（头部 + 2 段残影），所以比「纯字符雨」低。
-    var area = Math.min(1, (W * H) / (1440 * 900));
-    maxChars = Math.round((isMobile ? 60 : 130) + area * (isMobile ? 60 : 150));
-    // 同屏波前数固定为 4（决定「几道同心环」这个视觉结构，与屏幕无关），
-    // 每波字符数 = 预算 / 波前数（决定每道环的连续度，随屏幕缩放）。
-    // 注意：波前数不能跟着预算缩放，否则窄屏只剩 2 道环，放射结构就塌了。
-    var WAVES_ALIVE = 4;
-    charsPerWave = Math.max(8, Math.round(maxChars / WAVES_ALIVE));
-    // 波前周期：让一个波前正好活完一轮，屏幕上稳定保持 WAVES_ALIVE 道环
-    waveInterval = (AVG_TTL * 1000) / WAVES_ALIVE;
+    // 流星数量：桌面密一些，窄屏砍到一半以内（低端机不卡死）
+    maxMeteors = isMobile ? 12 : 26;
+    // 生成速率由「稳态数量」反推：平均寿命约 2.4 秒，
+    // 所以间隔 = 2400ms / 数量，屏幕上稳定保持 maxMeteors 道流星。
+    meteorInterval = 2400 / maxMeteors;
+    // 窄屏修正：屏幕窄流星飞不远，整体降速，避免同屏只剩 1 颗。
+    SPEED_SCALE = isMobile ? 0.62 : 1;
+    // 辐射点：画外左上方。放在左上而不是正上方，是为了让轨迹斜穿画面，
+    // 避免所有流星都朝同一个方向压过来。
+    radiant.x = W * 0.14;
+    radiant.y = -H * 0.26;
     measureGuard();
   }
 
   function update(dt, now){
-    // 成批涌出下一道波前
-    waveAcc += dt * 1000;
-    while (waveAcc >= waveInterval){
-      waveAcc -= waveInterval;
-      waves.push(makeWave());
+    meteorAcc += dt * 1000;
+    while (meteorAcc >= meteorInterval){
+      meteorAcc -= meteorInterval;
+      if (meteors.length < maxMeteors) meteors.push(makeMeteor());
     }
 
-    var maxR = Math.sqrt(W * W + H * H) * 0.5 + 40;
+    var margin = 60;
+    for (var i = meteors.length - 1; i >= 0; i--){
+      var m = meteors[i];
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
 
-    // 中心内容保护区：字符经过这里要淡出，否则环经过顶部时会在
-    // 标题上方压出一条水平亮带，破坏中心的留白。
-    // 保护范围是「标题 + slogan + 关键词 + CTA」整块，不是只挡标题。
-    // 尺寸只在 resize 时量一次 —— 每帧调 getBoundingClientRect 会强制
-    // 重排，是 Canvas 页最经典的性能陷阱。
-    var wmBox = guardBox;
-    for (var wi = waves.length - 1; wi >= 0; wi--){
-      var w = waves[wi];
-      w.r += w.speed * dt;
-      w.angle += w.spin * dt;
-      w.age += dt;
-      // 波前的存活按**时间**判定，不按半径。
-      // 若按半径移除，窄屏（视口小、边缘近）会比桌面更早丢掉波前，
-      // 同屏只剩 2 道环 —— 放射结构在窄屏就塌了。
-      var waveDead = w.age >= w.life;
-
-      for (var ci = 0; ci < w.chars.length; ci++){
-        var c = w.chars[ci];
-        c.life += dt;
-        if (c.life >= c.ttl || waveDead){
-          c.dead = true;
-          continue;
-        }
-
-        var ang = w.angle + c.angOff;
-        var r = w.r + c.rOff + c.rJit;
-
-        // 拖尾残影：保存前两帧位置，绘制时补上
-        c.t2x = c.t1x; c.t2y = c.t1y;
-        c.t1x = c.x; c.t1y = c.y;
-
-        // 鼠标排斥：字符被推开一点（不做吸引，吸引会把标题糊住）
-        if (mouse.active){
-          var mx = c.x + CX - mouse.x, my = c.y + CY - mouse.y;
-          var md = Math.sqrt(mx * mx + my * my);
-          if (md < 170 && md > 0.01){
-            c.rJit += (1 - md / 170) * 40 * dt;
-          }
-        }
-        c.rJit *= (1 - 2.6 * dt);   // 弹回原位
-        if (c.rJit > 14) c.rJit = 14; else if (c.rJit < -14) c.rJit = -14;
-
-        c.x = Math.cos(ang) * r;
-        c.y = Math.sin(ang) * r;
-
-        // 落在中心保护区里 → 这一笔不画。
-        // 用软过渡（靠近边缘保留、越深越淡）而不是硬剔除，
-        // 否则环会在保护区边界切出一道生硬的分界线。
-        c.guard = 1;
-        if (wmBox){
-          var sx = c.x + CX, sy = c.y + CY;
-          if (sx > wmBox.x0 && sx < wmBox.x1 && sy > wmBox.y0 && sy < wmBox.y1){
-            var dx = Math.min(sx - wmBox.x0, wmBox.x1 - sx);
-            var dy = Math.min(sy - wmBox.y0, wmBox.y1 - sy);
-            var depth = Math.min(dx, dy);
-            // 边缘 26px 内线性淡出，越深入越透明
-            c.guard = Math.min(1, depth / 26);
-          }
+      // 拖尾按时间采样，帧率变化时长度基本一致
+      if (now - m.lastSample >= TRAIL_DT){
+        m.lastSample = now;
+        m.trail.push({ x: m.x, y: m.y });
+        // 按距离裁剪：太老的点丢掉
+        var head = m.trail[m.trail.length - 1];
+        while (m.trail.length > 2){
+          var d0 = m.trail[0];
+          var dx = head.x - d0.x, dy = head.y - d0.y;
+          if (Math.sqrt(dx*dx + dy*dy) > m.len) m.trail.shift();
+          else break;
         }
       }
 
-      if (waveDead) waves.splice(wi, 1);
+      // 出界即回收。流星只会向右下飞，所以只需要判右边界和下边界 ——
+      // 早先还判了上/左边界（-120px），而生成区在 y ∈ [-0.40H, 0.02H]，
+      // 出生在上方的流星一生成就被回收 → 屏幕上只剩 2~3 颗。
+      if (m.x > W + margin || m.y > H + margin){
+        meteors.splice(i, 1);
+      }
     }
+  }
+
+  function guardFade(x, y){
+    if (!guardBox) return 1;
+    if (x < guardBox.x0 || x > guardBox.x1 || y < guardBox.y0 || y > guardBox.y1) return 1;
+    var dx = Math.min(x - guardBox.x0, guardBox.x1 - x);
+    var dy = Math.min(y - guardBox.y0, guardBox.y1 - y);
+    var depth = Math.min(dx, dy);
+    return Math.min(1, depth / 34);   // 边缘 34px 内线性淡出
   }
 
   function draw(){
     ctx.clearRect(0, 0, W, H);
 
-    // 按透明度分档批量绘制：一次 setAlpha 画一批，减少状态切换
-    var buckets = [];
-    for (var b = 0; b < ALPHA_LEVELS.length; b++) buckets.push([]);
+    for (var i = 0; i < meteors.length; i++){
+      var m = meteors[i];
+      var t = m.trail;
+      if (t.length < 2) continue;
 
-    function push(x, y, gi, size, a){
-      if (a <= 0.02) return;
-      var lv = Math.min(ALPHA_LEVELS.length - 1, (a * ALPHA_LEVELS.length) | 0);
-      buckets[lv].push(x, y, gi, size);
-    }
+      var n = t.length;
+      var head = t[n - 1];
 
-    var maxR = Math.sqrt(W * W + H * H) * 0.5 + 40;
+      // 分段索引必须钳在 [1, n-1] 内 —— 拖尾刚成形时只有 2 个点，
+      // 越界会取到 undefined，随后 draw() 抛异常把整个 rAF 循环打死
+      // （症状：屏幕上只剩 1 颗流星、帧数停在几十）。
+      var segs;
+      var i1 = Math.min(n - 1, Math.max(1, Math.round(n * 0.48)));
+      var i2 = Math.min(n - 1, Math.max(i1, Math.round(n * 0.80)));
+      if (n < 4){
+        segs = [{ a: 0, b: n - 1, w: m.w, al: m.alpha }];
+      } else {
+        // 三段：越靠头越粗越亮 —— 做出锥形
+        segs = [
+          { a: 0,  b: i1, w: m.w * 0.42, al: m.alpha * 0.42 },
+          { a: i1, b: i2, w: m.w * 0.75, al: m.alpha * 0.78 },
+          { a: i2, b: n - 1, w: m.w,  al: m.alpha }
+        ];
+      }
 
-    for (var wi = 0; wi < waves.length; wi++){
-      var w = waves[wi];
-      // 越往外越淡 —— 「消散」发生在环的外缘。
-      // 衰减起点放在 55% 半径处：环在到达外缘前始终保有足够亮度，
-      // 边缘才有清晰的一圈，而不是整屏均匀的雾。
-      var edge = 1 - Math.min(1, Math.max(0, (w.r - maxR * 0.55) / (maxR * 0.45)));
-      edge = edge * edge;
-      for (var ci = 0; ci < w.chars.length; ci++){
-        var c = w.chars[ci];
-        if (c.dead) continue;
-        var t = c.life / c.ttl;
-        var fadeIn = Math.min(1, t / 0.09);   // 出瞳孔时迅速亮起
-        var fadeOut = Math.min(1, (1 - t) / 0.28);
-        var a = fadeIn * fadeOut * edge * c.guard;
-        if (a <= 0.02) continue;
-        push(c.x + CX, c.y + CY, c.gi, c.size, a);
-        // 两段拖尾残影：让「往哪飞」被眼睛读出来
-        push(c.t1x + CX, c.t1y + CY, c.gi, c.size * 0.92, a * 0.42);
-        push(c.t2x + CX, c.t2y + CY, c.gi, c.size * 0.84, a * 0.18);
+      var fade = guardFade(head.x, head.y);
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (var s = 0; s < segs.length; s++){
+        var sg = segs[s];
+        if (sg.b <= sg.a) continue;
+        var p0 = t[sg.a], p1 = t[sg.b];
+        var g = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+        g.addColorStop(0, 'rgba(70,118,146,0)');
+        g.addColorStop(1, 'rgba(52,102,128,' + (sg.al * fade).toFixed(3) + ')');
+        ctx.strokeStyle = g;
+        ctx.lineWidth = sg.w;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        for (var k = sg.a + 1; k <= sg.b; k++) ctx.lineTo(t[k].x, t[k].y);
+        ctx.stroke();
+      }
+
+      // 柔光（bloom）：头部一段更宽更淡的描边，让流星有空气感。
+      // 宽度不能太大 —— 宽到 3.6 倍时头部会糊成一个「蓝色圆球」，
+      // 看起来像彗星而不像流星。
+      var bh = head, bt = t[Math.max(0, i2)];
+      var bg = ctx.createLinearGradient(bt.x, bt.y, bh.x, bh.y);
+      bg.addColorStop(0, 'rgba(120,170,200,0)');
+      bg.addColorStop(1, 'rgba(120,170,200,' + (0.16 * fade).toFixed(3) + ')');
+      ctx.strokeStyle = bg;
+      ctx.lineWidth = m.w * 2.0;
+      ctx.beginPath();
+      ctx.moveTo(bt.x, bt.y);
+      ctx.lineTo(bh.x, bh.y);
+      ctx.stroke();
+
+      // 高光：头部亮点 + 预渲染辉光
+      if (m.depth > 0.38 && fade > 0.05){
+        var gs = (12 + m.depth * 20) * fade;
+        if (glowSprite){
+          ctx.globalAlpha = 0.45 * fade;
+          ctx.drawImage(glowSprite, bh.x - gs/2, bh.y - gs/2, gs, gs);
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = 'rgba(45,92,116,' + (0.82 * fade).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(bh.x, bh.y, m.w * 0.78, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
-
-    for (var lv2 = 0; lv2 < buckets.length; lv2++){
-      var arr = buckets[lv2];
-      if (!arr.length) continue;
-      ctx.globalAlpha = ALPHA_LEVELS[lv2];
-      for (var s = 0; s < arr.length; s += 4){
-        var gx = arr[s], gy = arr[s + 1], gi = arr[s + 2], gs = arr[s + 3];
-        var cc = gi % ATLAS_COLS, rr = (gi / ATLAS_COLS) | 0;
-        ctx.drawImage(
-          atlas,
-          cc * CELL * DPR, rr * CELL * DPR, CELL * DPR, CELL * DPR,
-          gx - CELL * gs / 2, gy - CELL * gs / 2, CELL * gs, CELL * gs
-        );
-      }
-    }
-    ctx.globalAlpha = 1;
   }
 
   function frame(now){
@@ -675,6 +629,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     last = now;
     update(dt, now);
     draw();
+    updateEye();
     raf = requestAnimationFrame(frame);
   }
 
@@ -682,16 +637,28 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     if (started) return;
     started = true;
     resize();
-    waves = [];
+    buildGlow();
+    meteors = [];
 
     if (STILL){
-      // 静态终帧：固定种子造几道波前，推进一段固定时间后停帧。
-      // 推进 1.9 秒 ≈ 一个完整波前周期，环的层次才铺得开。
+      // 静态终帧：固定种子造一批流星，头部落在画布内，拖尾沿反方向
+      // （朝向辐射点）铺开 —— 一帧就能看到完整的「流星雨」构图。
       rnd = mulberry32(20261120);
-      for (var i = 0; i < 4; i++){
-        waves.push(makeWave());
-        // 让每道波前已经扩散到不同半径
-        for (var s = 0; s < 24; s++) update(1 / 60, s * 22);
+      for (var i = 0; i < maxMeteors; i++){
+        var m = makeMeteor();
+        m.x = srnd(0.05, 0.95) * W;
+        m.y = srnd(0.05, 0.92) * H;
+        var dx = m.x - radiant.x, dy = m.y - radiant.y;
+        var l = Math.sqrt(dx * dx + dy * dy) || 1;
+        var sp = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
+        m.vx = dx / l * sp; m.vy = dy / l * sp;
+        var back = srnd(0.5, 1.1);
+        var steps = 22;
+        for (var s = steps; s >= 0; s--){
+          var t = s / steps;
+          m.trail.push({ x: m.x - m.vx * back * t / 60, y: m.y - m.vy * back * t / 60 });
+        }
+        meteors.push(m);
       }
       draw();
       return;
@@ -711,11 +678,6 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     }, 180);
   });
 
-  window.addEventListener('mousemove', function(e){
-    mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
-  });
-  window.addEventListener('mouseout', function(){ mouse.active = false; });
-
   document.addEventListener('visibilitychange', function(){
     if (document.hidden){
       running = false;
@@ -728,11 +690,10 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   });
 
   /* =========================================================
-     B. 手写标题逐字浮现（点缀 1）
+     B. 手写标题逐笔浮现（点缀 1）
      ------------------------------------------------------------
-     做法：给每条路径量出总长度设为 dasharray，dashoffset 从
-     长度归零 —— 描边就「写」出来了。按字母顺序依次启动，
-     视觉上就是笔在写字。
+     给每条路径量出总长度设为 dasharray，dashoffset 从长度归零 ——
+     描边就「写」出来了。按笔画顺序依次启动，视觉上就是笔在写字。
      ========================================================= */
   var wmPaths = Array.prototype.slice.call(document.querySelectorAll('.wm-path'));
   function pathLen(p){
@@ -753,86 +714,40 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   }
 
   /* =========================================================
-     C. 仿真终端（点缀 2）
+     C. 眼睛标记：虹膜跟随光标（点缀 2）
      ------------------------------------------------------------
-     自动敲一段命令并输出日志。用 DOM 文本节点逐字推进，
-     不做真终端 —— 这里的重点是「氛围」，不是执行能力。
+     幅度很小（最大 ±2.6px），只是让标记「活着」，不去抢文案。
+     触摸设备无光标 → 静止。减动效 → 静止。
      ========================================================= */
-  var termBody = document.getElementById('termBody');
-  var TERM_SCRIPT = [
-    { t: '$ git clone persist', c: 'c-cmd', d: 0 },
-    { t: '', c: 'c-dim', d: 260 },
-    { t: 'Cloning into \'persist\'...', c: 'c-dim', d: 120 },
-    { t: 'remote: Enumerating objects: 1284, done.', c: 'c-dim', d: 60 },
-    { t: 'Receiving objects: 100% (1284/1284), 2.41 MiB', c: 'c-dim', d: 60 },
-    { t: 'Resolving deltas: 100% (312/312), done.', c: 'c-dim', d: 300 },
-    { t: '$ npm install', c: 'c-cmd', d: 0 },
-    { t: 'added 412 packages in 9s', c: 'c-ok', d: 60 },
-    { t: '$ npm run dev', c: 'c-cmd', d: 0 },
-    { t: '  ▲ Next.js 15.2.1', c: 'c-dim', d: 80 },
-    { t: '  - Local:        http://localhost:3000', c: 'c-dim', d: 40 },
-    { t: '', c: 'c-dim', d: 100 },
-    { t: '  ✓ ready in 1.4s', c: 'c-ok', d: 200 }
-  ];
+  var emEye = document.getElementById('emEye');
+  var emTarget = { x: 0, y: 0 };
+  var emCur = { x: 0, y: 0 };
 
-  function runTerminal(){
-    if (!termBody) return;
-    if (reduce) {
-      // 减动效：直接给最终态，不逐字敲
-      var lines = TERM_SCRIPT.map(function(l){
-        var s = document.createElement('span');
-        s.className = l.c; s.textContent = l.t;
-        return s;
-      });
-      termBody.textContent = '';
-      lines.forEach(function(s){ termBody.appendChild(s); termBody.appendChild(document.createTextNode('\n')); });
-      trimTerm();
-      return;
-    }
-    var idx = 0;
-    function nextLine(){
-      if (idx >= TERM_SCRIPT.length) return;
-      var line = TERM_SCRIPT[idx++];
-      var span = document.createElement('span');
-      span.className = line.c;
-      termBody.appendChild(span);
-      var chars_ = line.t, ci = 0;
-      function type(){
-        if (ci < chars_.length){
-          span.textContent += chars_[ci++];
-          setTimeout(type, 14);
-        } else {
-          termBody.appendChild(document.createTextNode('\n'));
-          // 光标跟在最后一行
-          var cur = termBody.querySelector('.c-cursor');
-          if (cur) cur.remove();
-          var c = document.createElement('span');
-          c.className = 'c-cursor';
-          termBody.appendChild(c);
-          trimTerm();
-          setTimeout(nextLine, line.d);
-        }
-      }
-      type();
-    }
-    nextLine();
-  }
+  window.addEventListener('mousemove', function(e){
+    if (reduce || !emEye) return;
+    var b = emEye.getBoundingClientRect();
+    if (!b.width) return;
+    var cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+    var nx = (e.clientX - cx) / Math.max(240, window.innerWidth * 0.32);
+    var ny = (e.clientY - cy) / Math.max(240, window.innerHeight * 0.32);
+    var d = Math.sqrt(nx*nx + ny*ny);
+    if (d > 1){ nx /= d; ny /= d; }
+    emTarget.x = nx * 2.6;
+    emTarget.y = ny * 2.6;
+  });
 
-  // 终端可视高度有限：行数超出时从顶部移除最早的一行，
-  // 保证最新的输出始终可见（像真实终端滚屏），而不是被裁掉。
-  function trimTerm(){
-    if (!termBody) return;
-    var maxH = termBody.clientHeight;
-    while (termBody.scrollHeight > maxH && termBody.firstChild){
-      termBody.removeChild(termBody.firstChild);
-    }
+  function updateEye(){
+    if (!emEye) return;
+    emCur.x += (emTarget.x - emCur.x) * 0.12;
+    emCur.y += (emTarget.y - emCur.y) * 0.12;
+    emEye.setAttribute('transform', 'translate(' + emCur.x.toFixed(2) + ',' + emCur.y.toFixed(2) + ')');
   }
 
   /* =========================================================
      D. 动效开关
      ------------------------------------------------------------
-     用户可以随时关掉动效：字符流停在当前帧、手写标题直接显示
-     终态、终端直接给最终输出。选择记在 localStorage。
+     用户可以随时关掉动效：流星雨停在当前帧、手写标题直接显示终态。
+     选择记在 localStorage。
      ========================================================= */
   var toggle = document.getElementById('motionToggle');
   var motionLabel = document.getElementById('motionLabel');
@@ -867,13 +782,11 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     try { drawTitle(); } catch (e) {
       for (var i = 0; i < wmPaths.length; i++) wmPaths[i].classList.add('is-drawn');
     }
-    try { runTerminal(); } catch (e) { /* 终端失败不阻断页面 */ }
 
     // 动效开关：默认开；系统减动效偏好或用户上次选择关 → 尊重之
     var stored = readStored();
     var wantOn = stored === null ? !reduce : stored === 'on';
     if (!wantOn){
-      // 关动效：手写标题直接终态，终端直接终态
       wmPaths.forEach(function(p){ p.classList.add('is-drawn'); });
       applyMotion(false);
     } else {
@@ -904,18 +817,33 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     var wr = wm ? wm.getBoundingClientRect() : null;
     var cta = document.getElementById('cta');
     var cr = cta ? cta.getBoundingClientRect() : null;
-    var term = document.getElementById('term');
-    var tr = term ? term.getBoundingClientRect() : null;
-    // 活字符数：所有波前里还没死的字符
-    var alive = 0;
-    for (var i = 0; i < waves.length; i++){
-      var wc = waves[i].chars;
-      for (var j = 0; j < wc.length; j++) if (!wc[j].dead) alive++;
+    // 流星方向分布：用来验证「都从同一个辐射点发出」
+    var angles = [];
+    var maxDev = 0;
+    for (var i = 0; i < meteors.length; i++){
+      var m = meteors[i];
+      if (m.trail.length < 2) continue;
+      var h = m.trail[m.trail.length - 1];
+      var dx = h.x - radiant.x, dy = h.y - radiant.y;
+      var l = Math.sqrt(dx * dx + dy * dy) || 1;
+      var vl = Math.sqrt(m.vx * m.vx + m.vy * m.vy) || 1;
+      var dot = (dx / l) * (m.vx / vl) + (dy / l) * (m.vy / vl);
+      var dev = Math.acos(Math.max(-1, Math.min(1, dot)));
+      if (dev > maxDev) maxDev = dev;
+      angles.push(+(Math.atan2(m.vy, m.vx)).toFixed(3));
     }
     return {
       dpr: DPR, wrapW: W, wrapH: H,
-      chars: alive, maxChars: maxChars, frames: frames, isMobile: isMobile,
-      waves: waves.length, charsPerWave: charsPerWave,
+      meteors: meteors.length, maxMeteors: maxMeteors,
+      frames: frames, isMobile: isMobile,
+      angles: angles,
+      radiant: { x: +radiant.x.toFixed(1), y: +radiant.y.toFixed(1) },
+      radialDev: +maxDev.toFixed(3),
+      trails: (function(){
+        var n = 0;
+        for (var i = 0; i < meteors.length; i++) n += meteors[i].trail.length;
+        return n;
+      })(),
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
       wmPaths: wmPaths.length,
@@ -924,8 +852,8 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
       ctaRect: cr ? { top: +cr.top.toFixed(1), bottom: +cr.bottom.toFixed(1) } : null,
       wmInViewport: wr ? (wr.top >= 0 && wr.bottom <= window.innerHeight) : null,
       ctaInViewport: cr ? (cr.top >= 0 && cr.bottom <= window.innerHeight) : null,
-      termRect: tr ? { top: +tr.top.toFixed(1), bottom: +tr.bottom.toFixed(1) } : null,
-      termText: termBody ? termBody.textContent.length : 0,
+      hasTerminal: !!document.querySelector('.term'),
+      hasEyemark: !!document.getElementById('eyemark'),
       keys: document.querySelectorAll('.keys li').length,
       narrow: W <= 900,
       reduce: reduce, still: STILL,
@@ -939,11 +867,13 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     setTimeout(function(){
       var d = document.createElement('pre');
       d.id = 'selftest';
-      d.style.cssText = 'position:fixed;left:0;bottom:0;z-index:9;font:11px monospace;color:#8f8;background:#000a;padding:6px;max-width:100vw;white-space:pre-wrap';
+      d.style.cssText = 'position:fixed;left:0;bottom:0;z-index:9;font:11px monospace;color:#046;background:#fffc;padding:6px;max-width:100vw;white-space:pre-wrap';
       d.textContent = JSON.stringify(liveState(), null, 2);
       document.body.appendChild(d);
     }, 2600);
   })();
+
+  // 眼睛跟随光标的插值放在主 rAF 里（与流星共用），不另开循环
 })();
 </script>
 </body>
