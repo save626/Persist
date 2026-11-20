@@ -40,11 +40,13 @@
    浅底 #F4F7F9、低饱和蓝灰、强调色 #467692 / #6D9FBD。
    背景渐变与 app 的 body 背景逐字对齐，落地页和���品是同一张纸。
 
-   动效预算（1 主 + 2 点缀，刻意克制）：
-     主特效 · Canvas 流星雨（平行轨迹 + 拖尾 + 头部高光）
-     点缀 1 · 手写 SVG 标题「persist」逐笔浮现
-     点缀 2 · 眼睛标记（借鉴 eyeTutrial 的「圆 + 眼睑 + 虹膜 + 高光」画法，
-              虹膜跟随光标微动，入场眨一次眼）
+   动效预算（刻意克制）：
+     · 手写 SVG 标题「persist」逐笔浮现
+     · 眼睛标记（借鉴 eyeTutrial 的「圆 + 眼睑 + 虹膜 + 高光」画法，
+       虹膜跟随光标微动，入场眨一次眼）
+
+   流星雨已移到**入场层**（intro 的 6.9s–8.5s 满屏 3D 粒子流星雨）——
+   落地页本身不再跑常驻动画，是一张安静的纸。
    不做：Shader、视差堆叠、滚动依赖、频闪、自定义光标、仿真终端。
 
    所有元素零外部请求。
@@ -97,7 +99,6 @@ body{
     radial-gradient(circle at 105% 110%, rgba(126,173,200,.14), transparent 36%),
     var(--bg);
 }
-#sky{position:absolute;inset:0;width:100%;height:100%;display:block}
 
 /* 极细网格：给浅底一点结构，不抢戏 */
 .grid{
@@ -303,22 +304,48 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 .intro{
   position:fixed;inset:0;z-index:60;overflow:hidden;
   display:flex;align-items:center;justify-content:center;
-  background:radial-gradient(125% 92% at 50% 44%, #1d3c4f 0%, #142a37 46%, #0b1a23 100%);
+  /* 灰蓝：与产品令牌 --ink:#202830 / --deep:#467692 同族，
+     比原先的青蓝 #1d3c4f 更中性 —— 和落地页、产品是同一张纸。 */
+  background:radial-gradient(125% 92% at 50% 44%, #2a3945 0%, #1b2732 48%, #111a22 100%);
   opacity:0;transition:opacity .8s ease;
 }
 .intro[hidden]{display:none!important}
 .intro.is-on{opacity:1}
 .intro.is-out{opacity:0;pointer-events:none}
-/* 引擎画布：字符画的承载容器。
+/* 引擎画布：字符画的承载容器（居中、留边，保持原版字符格）。
    画布的 CSS 尺寸 = 网格列数 × 字符格宽（JS 精确设置），
    所以字符不会被浏览器二次缩放 —— 那样会糊成一片。 */
 .intro-canvas{
   position:absolute;inset:0;width:100%;height:100%;display:block;
   image-rendering:pixelated;
-  /* 画布是「黑底 + 字符」，页面底色是深蓝灰；不加这层柔和外晕的话，
+  /* 画布是「深底 + 字符」，页面底色是灰蓝；不加这层柔和外晕的话，
      两者之间会是一条硬邦邦的矩形边界。 */
-  box-shadow:0 0 170px 90px rgba(4,11,17,.92);
+  box-shadow:0 0 170px 90px rgba(12,20,27,.92);
+  transition:opacity .7s ease;
 }
+/* 交棒段：铺满整个视口的 3D 粒子流星雨。
+   与字符画布分层 —— 眼睛阶段不受影响，满屏只在瞳孔铺满后发生。 */
+.intro-meteor{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  opacity:0;pointer-events:none;transition:opacity .9s ease;
+}
+/* 字符画淡出、粒子层淡入 */
+.intro.is-meteor .intro-canvas{opacity:0}
+.intro.is-meteor .intro-meteor{opacity:1}
+/* 交棒完成后停在粒子层，等用户点一下才进落地页 */
+.intro-enter{
+  position:absolute;left:50%;bottom:clamp(52px,11vh,104px);z-index:4;
+  transform:translateX(-50%);
+  font-family:var(--num);font-size:12px;letter-spacing:.2em;
+  color:#c6dae7;white-space:nowrap;
+  padding:12px 22px;border:1px solid rgba(174,205,224,.34);
+  border-radius:999px;background:rgba(20,31,40,.46);
+  opacity:0;pointer-events:none;transition:opacity .6s ease;
+}
+.intro.is-waiting .intro-enter{opacity:1;animation:intro-breathe 2.2s ease-in-out infinite}
+/* 等待点击时「跳过开场」已完成使命，淡出避免与「点击进入」语义重复 */
+.intro.is-waiting .intro-skip{opacity:0;pointer-events:none}
+@keyframes intro-breathe{0%,100%{border-color:rgba(174,205,224,.30)}50%{border-color:rgba(174,205,224,.68)}}
 
 /* 跳过按钮：开场是暗场，按钮用浅色文字（与深底对比 ≥ 4.5:1） */
 .intro-skip{
@@ -339,17 +366,21 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 </head>
 <body>
 
-<!-- 开场动画：eyeTutorial 复刻版的 ASCII 眼睛 → 穿过星场 → 落地页
+<!-- 开场动画：eyeTutorial 复刻版的 ASCII 眼睛 → 满屏 3D 粒子流星雨 → 点击进落地页
      （默认隐藏，无 JS 时整层不出现） -->
 <div class="intro" id="intro" hidden>
   <!-- 引擎输出的字符画。尺寸由 JS 按「字符格」精确设置，
        画布只是承载字符的容器 —— 真正的画面是这些字符。 -->
   <canvas class="intro-canvas" id="introCanvas" aria-hidden="true"></canvas>
+  <!-- 交棒段：独立的一层铺满整个视口的 3D 粒子流星雨，
+       与字符画布分层 —— 这样满屏不会牺牲眼睛阶段的字符格比例。 -->
+  <canvas class="intro-meteor" id="introMeteor" aria-hidden="true"></canvas>
+  <!-- 等待点击时才出现：不自动进落地页 -->
+  <div class="intro-enter" id="introEnter" aria-hidden="true">点击任意位置进入</div>
   <button class="intro-skip" id="introSkip" type="button">跳过开场</button>
 </div>
 
 <div class="stage" id="stage" aria-hidden="true">
-  <canvas id="sky"></canvas>
   <div class="grid"></div>
   <div class="glow"></div>
   <div class="vignette"></div>
@@ -439,324 +470,6 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   var STILL = /[?&]still=1/.test(location.search) || reduce;
 
   /* =========================================================
-     A. 流星雨（主特效）
-     ------------------------------------------------------------
-     为什么是「平行轨迹」而不是随机方向：
-     真实流星雨是同一个辐射点发出的近平行轨迹。随机方向 = 下雨；
-     共享主方向 + 小角度抖动 = 一场流星雨。
-
-     分层画法（借鉴 eyeTutrial 的「线稿 → 柔光 → 上色 → 高光」）：
-       1. 线稿：拖尾本体，两到三段渐细的描边
-       2. 柔光：头部一圈更宽更淡的描边（bloom）
-       3. 上色：拖尾从透明渐变到深蓝
-       4. 高光：头部一个小亮点 + 预渲染的辉光贴图
-
-     性能：辉光用**预渲染的离屏贴图**（createRadialGradient 每帧新建
-     很贵）；拖尾按时间采样（14ms 一次），帧率变化时长度一致。
-     ========================================================= */
-  var canvas = document.getElementById('sky');
-  var ctx = canvas.getContext('2d', { alpha: true });
-
-  var W = 0, H = 0, DPR = 1;
-  var raf = 0, last = 0, running = false, started = false, frames = 0;
-  var meteors = [], meteorAcc = 0, meteorInterval = 520, maxMeteors = 16;
-  var isMobile = false;
-  var guardBox = null;            // 中央内容保护区（resize 时量一次）
-  var glowSprite = null;          // 预渲染的辉光贴图
-  var SPEED_SCALE = 1;            // 窄屏整体降速
-  var TRAIL_DT = 14;              // 拖尾采样间隔 ms
-  var radiant = { x: 0, y: 0 };   // 辐射点：所有流星从这里发出（画外左上方）
-
-  function rand(a, b){ return a + Math.random() * (b - a); }
-  function mulberry32(a){
-    return function(){
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      var t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-  var rnd = Math.random;
-  function srnd(a, b){ return a + rnd() * (b - a); }
-
-  /* ---------- 辉光贴图（预渲染一次） ---------- */
-  function buildGlow(){
-    var s = 64;
-    var c = document.createElement('canvas');
-    c.width = s; c.height = s;
-    var g = c.getContext('2d');
-    var rg = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
-    rg.addColorStop(0,   'rgba(120,170,200,.45)');
-    rg.addColorStop(.35, 'rgba(120,170,200,.18)');
-    rg.addColorStop(1,   'rgba(120,170,200,0)');
-    g.fillStyle = rg;
-    g.fillRect(0, 0, s, s);
-    glowSprite = c;
-  }
-
-  /* ---------- 流星 ----------
-     关键：**所有流星从同一个辐射点（画外左上方）发出**。
-     这才是「流星雨」——同一个辐射源、轨迹呈放射状。
-     平行下落的直线流看起来就是「下雨」，不是流星雨。 */
-  function makeMeteor(){
-    var depth = Math.pow(rnd(), 0.62);       // 0 远 → 1 近（偏置：近的更多）
-    // 出生点直接落在画面内（留一点边距）。
-    // 早先按「辐射点周围的环带」取点，结果一半流星生在画布外、
-    // 一生成就出界被回收 → 屏幕上只剩 1~2 颗。
-    var x = srnd(-0.08, 1.08) * W;
-    var y = srnd(-0.42, 1.02) * H;
-    // 方向：从辐射点指向出生点 —— 所有轨迹因此汇聚到同一个源
-    var dx = x - radiant.x, dy = y - radiant.y;
-    var len = Math.sqrt(dx * dx + dy * dy) || 1;
-    var ux = dx / len, uy = dy / len;
-    var speed = (300 + depth * 780) * SPEED_SCALE;
-    var m = {
-      x: x, y: y,
-      vx: ux * speed,
-      vy: uy * speed,
-      depth: depth,
-      len: 80 + depth * 190,                 // 拖尾目标长度 px
-      w: 1.3 + depth * 3.2,                  // 头部线宽
-      alpha: 0.48 + depth * 0.44,
-      trail: [],
-      lastSample: 0,
-      born: 0
-    };
-    // 预填拖尾：让流星一出现就带着完整尾迹。
-    // 否则随机出生点普遍离边缘很近，0.7 秒就飞出屏幕 → 同屏只剩几颗，
-    // 且每一颗都是「从一点长出来」，根本不像流星雨。
-    var steps = 14;
-    for (var s = steps; s >= 0; s--){
-      var t = s / steps;
-      m.trail.push({ x: x - ux * m.len * t, y: y - uy * m.len * t });
-    }
-    return m;
-  }
-
-  // 中央内容保护区：流星掠过标题时要软淡出，否则会划过文案。
-  // 尺寸只在 resize 时量一次 —— 每帧 getBoundingClientRect 会强制重排。
-  function measureGuard(){
-    var el = document.querySelector('.stage-main');
-    if (!el){ guardBox = null; return; }
-    var b = el.getBoundingClientRect();
-    guardBox = { x0: b.left - 14, y0: b.top - 12, x1: b.right + 14, y1: b.bottom + 12 };
-  }
-
-  function resize(){
-    W = window.innerWidth;
-    H = window.innerHeight;
-    isMobile = W < 760;
-    DPR = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
-    canvas.width = Math.floor(W * DPR);
-    canvas.height = Math.floor(H * DPR);
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    // 流星数量：桌面要「密」——密集流星雨；窄屏砍到接近一半以内（低端机不卡死）
-    maxMeteors = isMobile ? 20 : 44;
-    // 生成速率由「稳态数量」反推：按 0.8 秒的期望在屏寿命折算间隔，
-    // 让屏幕稳定铺满 maxMeteors 道流星（寿命比这短就说明间隔偏大）。
-    meteorInterval = 800 / maxMeteors;
-    // 窄屏修正：屏幕窄流星飞不远，整体降速，避免同屏只剩 1 颗。
-    SPEED_SCALE = isMobile ? 0.62 : 1;
-    // 辐射点：画外左上方。放在左上而不是正上方，是为了让轨迹斜穿画面，
-    // 避免所有流星都朝同一个方向压过来。
-    radiant.x = W * 0.14;
-    radiant.y = -H * 0.26;
-    measureGuard();
-  }
-
-  function update(dt, now){
-    meteorAcc += dt * 1000;
-    while (meteorAcc >= meteorInterval){
-      meteorAcc -= meteorInterval;
-      if (meteors.length < maxMeteors) meteors.push(makeMeteor());
-    }
-
-    var margin = 60;
-    for (var i = meteors.length - 1; i >= 0; i--){
-      var m = meteors[i];
-      m.x += m.vx * dt;
-      m.y += m.vy * dt;
-
-      // 拖尾按时间采样，帧率变化时长度基本一致
-      if (now - m.lastSample >= TRAIL_DT){
-        m.lastSample = now;
-        m.trail.push({ x: m.x, y: m.y });
-        // 按距离裁剪：太老的点丢掉
-        var head = m.trail[m.trail.length - 1];
-        while (m.trail.length > 2){
-          var d0 = m.trail[0];
-          var dx = head.x - d0.x, dy = head.y - d0.y;
-          if (Math.sqrt(dx*dx + dy*dy) > m.len) m.trail.shift();
-          else break;
-        }
-      }
-
-      // 出界即回收。流星只会向右下飞，所以只需要判右边界和下边界 ——
-      // 早先还判了上/左边界（-120px），而生成区在 y ∈ [-0.40H, 0.02H]，
-      // 出生在上方的流星一生成就被回收 → 屏幕上只剩 2~3 颗。
-      if (m.x > W + margin || m.y > H + margin){
-        meteors.splice(i, 1);
-      }
-    }
-  }
-
-  function guardFade(x, y){
-    if (!guardBox) return 1;
-    if (x < guardBox.x0 || x > guardBox.x1 || y < guardBox.y0 || y > guardBox.y1) return 1;
-    var dx = Math.min(x - guardBox.x0, guardBox.x1 - x);
-    var dy = Math.min(y - guardBox.y0, guardBox.y1 - y);
-    var depth = Math.min(dx, dy);
-    return Math.min(1, depth / 34);   // 边缘 34px 内线性淡出
-  }
-
-  function draw(){
-    ctx.clearRect(0, 0, W, H);
-
-    for (var i = 0; i < meteors.length; i++){
-      var m = meteors[i];
-      var t = m.trail;
-      if (t.length < 2) continue;
-
-      var n = t.length;
-      var head = t[n - 1];
-
-      // 分段索引必须钳在 [1, n-1] 内 —— 拖尾刚成形时只有 2 个点，
-      // 越界会取到 undefined，随后 draw() 抛异常把整个 rAF 循环打死
-      // （症状：屏幕上只剩 1 颗流星、帧数停在几十）。
-      var segs;
-      var i1 = Math.min(n - 1, Math.max(1, Math.round(n * 0.48)));
-      var i2 = Math.min(n - 1, Math.max(i1, Math.round(n * 0.80)));
-      if (n < 4){
-        segs = [{ a: 0, b: n - 1, w: m.w, al: m.alpha }];
-      } else {
-        // 三段：越靠头越粗越亮 —— 做出锥形
-        segs = [
-          { a: 0,  b: i1, w: m.w * 0.42, al: m.alpha * 0.42 },
-          { a: i1, b: i2, w: m.w * 0.75, al: m.alpha * 0.78 },
-          { a: i2, b: n - 1, w: m.w,  al: m.alpha }
-        ];
-      }
-
-      var fade = guardFade(head.x, head.y);
-
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      for (var s = 0; s < segs.length; s++){
-        var sg = segs[s];
-        if (sg.b <= sg.a) continue;
-        var p0 = t[sg.a], p1 = t[sg.b];
-        var g = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
-        g.addColorStop(0, 'rgba(70,118,146,0)');
-        g.addColorStop(1, 'rgba(52,102,128,' + (sg.al * fade).toFixed(3) + ')');
-        ctx.strokeStyle = g;
-        ctx.lineWidth = sg.w;
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        for (var k = sg.a + 1; k <= sg.b; k++) ctx.lineTo(t[k].x, t[k].y);
-        ctx.stroke();
-      }
-
-      // 柔光（bloom）：头部一段更宽更淡的描边，让流星有空气感。
-      // 宽度不能太大 —— 宽到 3.6 倍时头部会糊成一个「蓝色圆球」，
-      // 看起来像彗星而不像流星。
-      var bh = head, bt = t[Math.max(0, i2)];
-      var bg = ctx.createLinearGradient(bt.x, bt.y, bh.x, bh.y);
-      bg.addColorStop(0, 'rgba(120,170,200,0)');
-      bg.addColorStop(1, 'rgba(120,170,200,' + (0.16 * fade).toFixed(3) + ')');
-      ctx.strokeStyle = bg;
-      ctx.lineWidth = m.w * 2.0;
-      ctx.beginPath();
-      ctx.moveTo(bt.x, bt.y);
-      ctx.lineTo(bh.x, bh.y);
-      ctx.stroke();
-
-      // 高光：头部亮点 + 预渲染辉光
-      if (m.depth > 0.38 && fade > 0.05){
-        var gs = (12 + m.depth * 20) * fade;
-        if (glowSprite){
-          ctx.globalAlpha = 0.45 * fade;
-          ctx.drawImage(glowSprite, bh.x - gs/2, bh.y - gs/2, gs, gs);
-          ctx.globalAlpha = 1;
-        }
-        ctx.fillStyle = 'rgba(45,92,116,' + (0.82 * fade).toFixed(3) + ')';
-        ctx.beginPath();
-        ctx.arc(bh.x, bh.y, m.w * 0.78, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
-
-  function frame(now){
-    if (!running) return;
-    frames++;
-    var dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    update(dt, now);
-    draw();
-    updateEye();
-    raf = requestAnimationFrame(frame);
-  }
-
-  function start(){
-    if (started) return;
-    started = true;
-    resize();
-    buildGlow();
-    meteors = [];
-
-    if (STILL){
-      // 静态终帧：固定种子造一批流星，头部落在画布内，拖尾沿反方向
-      // （朝向辐射点）铺开 —— 一帧就能看到完整的「流星雨」构图。
-      rnd = mulberry32(20261120);
-      for (var i = 0; i < maxMeteors; i++){
-        var m = makeMeteor();
-        m.x = srnd(0.05, 0.95) * W;
-        m.y = srnd(0.05, 0.92) * H;
-        var dx = m.x - radiant.x, dy = m.y - radiant.y;
-        var l = Math.sqrt(dx * dx + dy * dy) || 1;
-        var sp = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
-        m.vx = dx / l * sp; m.vy = dy / l * sp;
-        var back = srnd(0.5, 1.1);
-        var steps = 22;
-        for (var s = steps; s >= 0; s--){
-          var t = s / steps;
-          m.trail.push({ x: m.x - m.vx * back * t / 60, y: m.y - m.vy * back * t / 60 });
-        }
-        meteors.push(m);
-      }
-      draw();
-      return;
-    }
-
-    last = performance.now();
-    running = true;
-    raf = requestAnimationFrame(frame);
-  }
-
-  var resizeTimer = 0;
-  window.addEventListener('resize', function(){
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function(){
-      resize();          // resize 内部会重量保护区
-      if (STILL) draw();
-    }, 180);
-  });
-
-  document.addEventListener('visibilitychange', function(){
-    if (document.hidden){
-      running = false;
-      cancelAnimationFrame(raf);
-    } else if (!STILL && started){
-      running = true;
-      last = performance.now();
-      raf = requestAnimationFrame(frame);
-    }
-  });
-
-  /* =========================================================
      B. 手写标题逐笔浮现（点缀 1）
      ------------------------------------------------------------
      给每条路径量出总长度设为 dasharray，dashoffset 从长度归零 ——
@@ -787,9 +500,8 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
      触摸设备无光标 → 静止。减动效 → 静止。
      ========================================================= */
   var emEye = document.getElementById('emEye');
-  var emTarget = { x: 0, y: 0 };
-  var emCur = { x: 0, y: 0 };
-
+  // 落地页已去掉流星雨主 rAF —— 眼睛跟随改用 CSS transition 直接驱动。
+  // 幅度只有 ±2.6px，transition .18s 的平滑度足够，不必再跑一条动画循环。
   window.addEventListener('mousemove', function(e){
     if (reduce || !emEye) return;
     var b = emEye.getBoundingClientRect();
@@ -799,16 +511,8 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     var ny = (e.clientY - cy) / Math.max(240, window.innerHeight * 0.32);
     var d = Math.sqrt(nx*nx + ny*ny);
     if (d > 1){ nx /= d; ny /= d; }
-    emTarget.x = nx * 2.6;
-    emTarget.y = ny * 2.6;
+    emEye.setAttribute('transform', 'translate(' + (nx*2.6).toFixed(2) + ',' + (ny*2.6).toFixed(2) + ')');
   });
-
-  function updateEye(){
-    if (!emEye) return;
-    emCur.x += (emTarget.x - emCur.x) * 0.12;
-    emCur.y += (emTarget.y - emCur.y) * 0.12;
-    emEye.setAttribute('transform', 'translate(' + emCur.x.toFixed(2) + ',' + emCur.y.toFixed(2) + ')');
-  }
 
   /* =========================================================
      D. 动效开关
@@ -825,12 +529,8 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
       toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
       if (motionLabel) motionLabel.textContent = on ? '动效 开' : '动效 关';
     }
-    if (on){
-      if (!STILL && started){ running = true; last = performance.now(); raf = requestAnimationFrame(frame); }
-    } else {
-      running = false;
-      cancelAnimationFrame(raf);
-    }
+    // 落地页不再有常驻动画（流星雨已移到入场层），动效开关现在只控制
+    // 手写标题：关掉时立即显示终态；开启时由 drawTitle 逐笔写。
     document.documentElement.setAttribute('data-motion', on ? 'on' : 'off');
   }
 
@@ -869,7 +569,6 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   setTimeout(function(){ window.__persistReady.fire(); }, 15000);
 
   function boot(){
-    try { start(); } catch (e) { /* 画布失败不阻断文案 */ }
     try {
       window.__persistReady.add(function(){
         try { drawTitle(); } catch (e) {
@@ -906,41 +605,15 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   }
 
   /* ---------- 自检：?selftest=1 输出真实测量值 ---------- */
-  // 注意：状态必须能被**实时**读取。动效开关的验收要比较「关掉前后帧数
-  // 是否还在涨」，一次性快照做不到这件事 —— 所以对外暴露一个实时取值函数，
-  // 自检块只是它在某一时刻的打印。
+  // 对外暴露实时取值函数，自检块只是它在某一时刻的打印。
   function liveState(){
     var wm = document.getElementById('wordmark');
     var wr = wm ? wm.getBoundingClientRect() : null;
     var cta = document.getElementById('cta');
     var cr = cta ? cta.getBoundingClientRect() : null;
-    // 流星方向分布：用来验证「都从同一个辐射点发出」
-    var angles = [];
-    var maxDev = 0;
-    for (var i = 0; i < meteors.length; i++){
-      var m = meteors[i];
-      if (m.trail.length < 2) continue;
-      var h = m.trail[m.trail.length - 1];
-      var dx = h.x - radiant.x, dy = h.y - radiant.y;
-      var l = Math.sqrt(dx * dx + dy * dy) || 1;
-      var vl = Math.sqrt(m.vx * m.vx + m.vy * m.vy) || 1;
-      var dot = (dx / l) * (m.vx / vl) + (dy / l) * (m.vy / vl);
-      var dev = Math.acos(Math.max(-1, Math.min(1, dot)));
-      if (dev > maxDev) maxDev = dev;
-      angles.push(+(Math.atan2(m.vy, m.vx)).toFixed(3));
-    }
     return {
-      dpr: DPR, wrapW: W, wrapH: H,
-      meteors: meteors.length, maxMeteors: maxMeteors,
-      frames: frames, isMobile: isMobile,
-      angles: angles,
-      radiant: { x: +radiant.x.toFixed(1), y: +radiant.y.toFixed(1) },
-      radialDev: +maxDev.toFixed(3),
-      trails: (function(){
-        var n = 0;
-        for (var i = 0; i < meteors.length; i++) n += meteors[i].trail.length;
-        return n;
-      })(),
+      wrapW: window.innerWidth, wrapH: window.innerHeight,
+      hasSkyCanvas: !!document.getElementById('sky'),
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
       wmPaths: wmPaths.length,
@@ -952,7 +625,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
       hasTerminal: !!document.querySelector('.term'),
       hasEyemark: !!document.getElementById('eyemark'),
       keys: document.querySelectorAll('.keys li').length,
-      narrow: W <= 900,
+      narrow: window.innerWidth <= 900,
       reduce: reduce, still: STILL,
       motion: document.documentElement.getAttribute('data-motion')
     };
@@ -2068,8 +1741,9 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
           注意：CFG.T_HEART = 1e6 只能保证「心形」不出现，
           云雾本体照样会生成 —— 真正的开关是上面这条时间线约束。
 
-     取值：T_Z0 = 4.6（睁眼 + 眨眼之后开始推进）、T_ZD = 3.2、T_SPACE = 7.8、
-          T.end = 8.5 —— 全程约 8.5 秒：瞳孔扩大完直接交给落地页。 */
+     取值：T_Z0 = 4.6（睁眼 + 眨眼之后开始推进）、T_ZD = 3.2、T_SPACE = 7.8。
+     6.9s 瞳孔铺满 → 满屏 3D 粒子流星雨淡入（字符画淡出）；
+     8.5s 停在粒子层等用户点击，点任意位置才交棒落地页。 */
   var CFG = engine.CFG;
   var T_Z0 = 4.6, T_ZD = 3.2, T_SPACE = T_Z0 + T_ZD;
   CFG.T_Z0 = T_Z0;
@@ -2084,7 +1758,8 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   CFG.ZEND = 20;
 
   var T = {
-    end: T_SPACE + 0.7      // 交棒落地页（此时才开始写手写标题）
+    meteor: 6.9,   // 瞳孔铺满 → 满屏 3D 粒子流星雨淡入（字符画淡出）
+    wait:   8.5    // 粒子层完全接管；停引擎，停在粒子层等用户点击进落地页
   };
 
   /* ---------- 网格：Python 原版的字符格 ----------
@@ -2133,25 +1808,179 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     };
   }
 
-  /* ---------- 配色：原版的 ASCII 调色板 ----------
+  /* ---------- 配色：灰蓝（与产品令牌同族） ----------
      引擎输出两张表：
        · `idx` —— 每格显示 RAMP 里的第几个字符（亮度档 0..69）
        · `q`   —— 每格的量化颜色（三通道各 0..QL-1）
-     这里只做一件事：把 q 原样翻译成 RGB，与原版 `preview.py` 的
-     `rgb = int(v) * 255 // (QL - 1)` 完全一致。
-
-     原版的暖调（琥珀虹膜 + 棕褐皮肤）配深蓝黑底本来就是原设计，
-     落地页沿用它 —— 眼睛成为画面里唯一的暖色焦点。 */
+     这里不再照搬原版的琥珀虹膜 + 棕褐皮肤 —— 用户要求灰蓝统一。
+     做法：把 q 的亮度（Rec.601 权重，与原版字符亮度一致）映射到灰蓝色阶，
+     明暗层次原样保留（虹膜亮、皮肤中、瞳孔暗），只是色相换成冷灰蓝。
+     暗端 #1d2833 → 亮端 #dbeaf3，与产品 --ink:#202830 / --blue:#78aac8 同族。 */
   var QL = engine.QL;
-  /* 原版的取色公式（preview.py）：rgb = int(v) * 255 // (QL - 1)
-     ★ 别再乘 1.15 —— 引擎的 q 已经是 clip(cells*1.15) 量化后的结果，
-       原版渲染器里那一次 1.15 已经含在里面了。
-       再乘一次 = 暗部皮肤被系统性抬高 → 满屏亮橙字符、纯黑留白消失，
-       这正是「过于密集」的第二个成因。 */
   function palette(q0, q1, q2, out){
-    out[0] = Math.floor(q0 * 255 / (QL - 1));
-    out[1] = Math.floor(q1 * 255 / (QL - 1));
-    out[2] = Math.floor(q2 * 255 / (QL - 1));
+    var lum = (0.30 * q0 + 0.60 * q1 + 0.10 * q2) / (QL - 1);
+    // 0.72 次幂提亮暗部（原版做法），再压一档让皮肤沉下去 —— 保住疏朗感
+    var v = Math.pow(Math.max(0, Math.min(1, lum)), 0.72) * 0.80;
+    out[0] = Math.min(255, Math.round(29 + v * 190));
+    out[1] = Math.min(255, Math.round(40 + v * 190));
+    out[2] = Math.min(255, Math.round(51 + v * 191));
+  }
+
+  /* =========================================================
+     满屏 3D 粒子流星雨（交棒段专用，独立全屏 canvas）
+     ------------------------------------------------------------
+     瞳孔铺满（6.9s）后：字符画淡出、这层淡入，铺满整个视口。
+     「3D」来自每个粒子的深度 d：远的小/慢/暗/尾短，近的大/快/亮/尾长；
+     再加一层缓慢飘移的深空粒子做视差，强化空间纵深。
+     所有轨迹从画外左上同一辐射点发出 —— 近平行 = 流星雨，随机 = 下雨。
+     灰蓝色阶 #467692 → #78aac8 → #dbeaf3，与产品同族。
+     ========================================================= */
+  var mCanvas = document.getElementById('introMeteor');
+  var mctx = mCanvas ? mCanvas.getContext('2d', { alpha: true }) : null;
+  var mW = 0, mH = 0, mDPR = 1;
+  var meteors = [], dust = [], mAcc = 0, mInterval = 60, mMax = 46;
+  var mRaf = 0, mRunning = false, mLast = 0, mFrames = 0;
+  var mGlow = null;
+  var mRadiant = { x: 0, y: 0 };
+
+  function mRand(a, b){ return a + Math.random() * (b - a); }
+
+  function buildMeteorGlow(){
+    var s = 64;
+    var c = document.createElement('canvas');
+    c.width = s; c.height = s;
+    var g = c.getContext('2d');
+    var rg = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+    rg.addColorStop(0,   'rgba(219,234,243,.60)');
+    rg.addColorStop(.32, 'rgba(120,170,200,.24)');
+    rg.addColorStop(1,   'rgba(70,118,146,0)');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, s, s);
+    mGlow = c;
+  }
+
+  function mResize(){
+    mW = window.innerWidth; mH = window.innerHeight;
+    mDPR = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
+    mCanvas.width = Math.floor(mW * mDPR);
+    mCanvas.height = Math.floor(mH * mDPR);
+    mCanvas.style.width = mW + 'px';
+    mCanvas.style.height = mH + 'px';
+    mctx.setTransform(mDPR, 0, 0, mDPR, 0, 0);
+    mMax = mW < 760 ? 24 : 46;
+    mInterval = 900 / mMax;
+    mRadiant.x = mW * 0.14; mRadiant.y = -mH * 0.26;
+    var want = Math.min(120, Math.round(mW * mH / 14000));
+    dust.length = 0;
+    for (var i = 0; i < want; i++){
+      dust.push({ x: mRand(0, mW), y: mRand(0, mH), z: mRand(.25, 1), r: mRand(.4, 1.5) });
+    }
+  }
+
+  function makeMeteor(){
+    var d = Math.pow(Math.random(), .62);   // 0 远 → 1 近，近的更多
+    var x = mRand(-.05, 1.06) * mW;
+    var y = mRand(-.38, 1.02) * mH;
+    var dx = x - mRadiant.x, dy = y - mRadiant.y;
+    var l = Math.sqrt(dx*dx + dy*dy) || 1;
+    var ux = dx/l, uy = dy/l;
+    var speed = 280 + d * 900;
+    var m = {
+      x:x, y:y, vx:ux*speed, vy:uy*speed,
+      d:d, len:70 + d*220, w:.9 + d*2.6, alpha:.42 + d*.52,
+      trail:[], last:0
+    };
+    var steps = 12;
+    for (var s = steps; s >= 0; s--){
+      var t = s/steps;
+      m.trail.push({ x:x - ux*m.len*t, y:y - uy*m.len*t });
+    }
+    return m;
+  }
+
+  function mDraw(){
+    mctx.clearRect(0, 0, mW, mH);
+    // 深空粒子：近的落得快 —— 视差底，给流星雨空间纵深
+    for (var i = 0; i < dust.length; i++){
+      var p = dust[i];
+      p.y += p.z * 7;
+      if (p.y > mH + 2){ p.y = -2; p.x = mRand(0, mW); }
+      mctx.fillStyle = 'rgba(150,190,214,' + (.12 + p.z*.34).toFixed(3) + ')';
+      mctx.beginPath(); mctx.arc(p.x, p.y, p.r * p.z, 0, Math.PI*2); mctx.fill();
+    }
+    // 流星
+    for (var i = 0; i < meteors.length; i++){
+      var m = meteors[i];
+      var t = m.trail;
+      if (t.length < 2) continue;
+      var n = t.length, head = t[n-1];
+      var i1 = Math.min(n-1, Math.max(1, Math.round(n*.5)));
+      var segs = [
+        {a:0, b:i1, w:m.w*.4, al:m.alpha*.34},
+        {a:i1, b:n-1, w:m.w, al:m.alpha}
+      ];
+      mctx.lineCap = 'round'; mctx.lineJoin = 'round';
+      for (var s = 0; s < segs.length; s++){
+        var sg = segs[s];
+        if (sg.b <= sg.a) continue;
+        var p0 = t[sg.a], p1 = t[sg.b];
+        var g = mctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+        g.addColorStop(0, 'rgba(70,118,146,0)');
+        g.addColorStop(1, 'rgba(108,158,189,' + sg.al.toFixed(3) + ')');
+        mctx.strokeStyle = g; mctx.lineWidth = sg.w;
+        mctx.beginPath(); mctx.moveTo(p0.x, p0.y);
+        for (var k = sg.a + 1; k <= sg.b; k++) mctx.lineTo(t[k].x, t[k].y);
+        mctx.stroke();
+      }
+      if (m.d > .3 && mGlow){
+        var gs = 14 + m.d*26;
+        mctx.globalAlpha = .5 * m.alpha;
+        mctx.drawImage(mGlow, head.x - gs/2, head.y - gs/2, gs, gs);
+        mctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  function mFrame(now){
+    if (!mRunning) return;
+    var dt = Math.min(.05, (now - mLast)/1000);
+    mLast = now; mFrames++;
+    mAcc += dt * 1000;
+    while (mAcc >= mInterval){
+      mAcc -= mInterval;
+      if (meteors.length < mMax) meteors.push(makeMeteor());
+    }
+    for (var i = meteors.length - 1; i >= 0; i--){
+      var m = meteors[i];
+      m.x += m.vx*dt; m.y += m.vy*dt;
+      if (now - m.last >= 16){
+        m.last = now;
+        m.trail.push({x:m.x, y:m.y});
+        var head = m.trail[m.trail.length-1];
+        while (m.trail.length > 2){
+          var p0 = m.trail[0];
+          var dx = head.x-p0.x, dy = head.y-p0.y;
+          if (Math.sqrt(dx*dx+dy*dy) > m.len) m.trail.shift(); else break;
+        }
+      }
+      if (m.x > mW+70 || m.y > mH+70) meteors.splice(i, 1);
+    }
+    mDraw();
+    mRaf = requestAnimationFrame(mFrame);
+  }
+
+  function startMeteors(){
+    if (!mctx || mRunning) return;
+    mResize(); buildMeteorGlow();
+    meteors.length = 0; mAcc = 0; mFrames = 0;
+    // 预填：一上场就是一整场流星雨，不是从 zero 长出来
+    for (var i = 0; i < Math.round(mMax*.6); i++) meteors.push(makeMeteor());
+    mLast = performance.now();
+    mRunning = true;
+    mRaf = requestAnimationFrame(mFrame);
+  }
+  function stopMeteors(){
+    mRunning = false; cancelAnimationFrame(mRaf);
   }
 
   /* ---------- 播放器 ---------- */
@@ -2161,6 +1990,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   var prevIdx = null, prevQ = null;
   var raf = 0, running = false, t0 = 0, lastT = 0, lastDraw = 0;
   var frames = 0;
+  var meteorOn = false, waiting = false;
   var rgb = [0, 0, 0];
   // 颜色缓存：key = q0*QL² + q1*QL + q2（颜色只有 QL³ = 13824 种组合），
   // 用 Map 存，避免每帧重复算色。
@@ -2212,7 +2042,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   }
 
   function clearCanvas(){
-    ctx.fillStyle = '#010203';
+    ctx.fillStyle = '#0d151d';
     ctx.fillRect(0, 0, cssW, cssH);
   }
 
@@ -2248,7 +2078,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
       var x = c * cellW, y = r * cellH;
       if (charChanged){
         // 擦掉旧字形（多擦 1px，兜住字形边缘的抗锯齿溢出）
-        ctx.fillStyle = '#010203';
+        ctx.fillStyle = '#0d151d';
         ctx.fillRect(x - 1, y - 1, cellW + 2, cellH + 2);
       }
       if (i0 !== 0){
@@ -2273,10 +2103,17 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     drawFrame(f.idx, f.q);
     frames++;
 
-    if (t >= T.end){
+    if (!meteorOn && t >= T.meteor){
+      meteorOn = true;
+      overlay.classList.add('is-meteor');
+      startMeteors();
+    }
+    if (t >= T.wait){
+      // 停在满屏粒子层，不自动进落地页 —— 等用户点任意位置
       running = false;
-      finish();
-      return;
+      waiting = true;
+      overlay.classList.add('is-waiting');
+      return;   // 引擎 rAF 到此为止；粒子层自己继续跑
     }
     raf = requestAnimationFrame(frame);
   }
@@ -2291,8 +2128,10 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
     done = true;
     clearTimers();
     running = false;
+    waiting = false;
     cancelAnimationFrame(raf);
-    overlay.classList.remove('is-on');
+    stopMeteors();
+    overlay.classList.remove('is-on', 'is-meteor', 'is-waiting');
     overlay.classList.add('is-out');
     setTimeout(function(){ overlay.hidden = true; }, 520);
     if (stage) stage.inert = false;
@@ -2326,8 +2165,13 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   if (wrap) wrap.inert = true;
 
   if (skipBtn) skipBtn.addEventListener('click', skip);
+  // 满屏粒子层停住后：点任意位置 / 按回车空格 才进落地页
+  document.addEventListener('click', function(){ if (waiting && !done) finish(); });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape') skip();
+    else if (waiting && !done && (e.key === 'Enter' || e.key === ' ')){
+      e.preventDefault(); finish();
+    }
   });
 
   build();
@@ -2341,6 +2185,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   window.addEventListener('resize', function(){
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function(){
+      if (mRunning) mResize();
       if (!running) return;
       var keep = renderer ? renderer.lastT : 0;
       build();
@@ -2365,7 +2210,14 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
       frames: frames,
       heartDisabled: CFG.T_HEART > 1e5,
       tSpace: T_SPACE,
-      end: T.end,
+      meteorAt: T.meteor,
+      waitAt: T.wait,
+      meteorOn: meteorOn,
+      waiting: waiting,
+      meteorFrames: mFrames,
+      meteorCount: meteors.length,
+      meteorIsFullscreen: mCanvas ? (mCanvas.width >= window.innerWidth) : false,
+      hasMeteorCanvas: !!mCanvas,
       introAttr: document.documentElement.getAttribute('data-intro')
     };
   };

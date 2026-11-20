@@ -4,14 +4,16 @@
 // 掉帧、或在手机上卡死。这个脚本把「炫技但不失控」变成可复现的断言：
 //   · 6 个视口下不出现横向滚动，标题与 CTA 落在首屏内
 //   · 手写标题的每条路径都被逐条画出（不是一下子全出现）
-//   · 流星雨真的在跑，且轨迹是**近平行**的（共享主方向 = 流星雨，不是下雨）
+//   · 落地页自身安静：不再有常驻流星雨 canvas（流星雨已移到入场层）
 //   · 页面里不再残留仿真终端
 //   · 关掉 JS 时内容完整可读（渐进增强的硬要求）
 //   · prefers-reduced-motion 下出静态终帧，不空屏
-//   · 「动效关」时流星雨真的停住、标题直接是终态
+//   · 「动效关」时标题直接显示终态
 //   · 眼睛标记存在，且虹膜跟随光标但不越界
 //   · 关键色对对比度达标（正文 4.5 / 图形 3.0）
-//   · 开场动画：眼睛画出来 → 星空有内容 → 交棒给落地页 → 跳过可用
+//   · 开场动画：字符画眼睛 → 满屏 3D 粒子流星雨 → 等点击 → 进落地页
+//     满屏用独立全屏 canvas（1440×900）；流星雨灰蓝无暖色；
+//     点击任意位置后才交棒；跳过按钮可直接交棒
 //     （减动效 / ?intro=0 / 关 JS 时都不该出现开场层）
 //
 // 用法：
@@ -182,37 +184,13 @@ try {
     if (data.keys < 3) fail(vp.name, `关键词应为至少 3 个，实际 ${data.keys}`)
     if (data.hasTerminal) fail(vp.name, '页面里仍残留仿真终端元素')
     if (!data.hasEyemark) fail(vp.name, '缺少眼睛标记（点缀 2）')
-    if (data.meteors < 1) fail(vp.name, `流星数为 0（流星雨没跑起来）`)
-    if (data.frames < 10) fail(vp.name, `渲染帧数 ${data.frames} 太少，动画可能没推进`)
-    if (data.trails < data.meteors) fail(vp.name, `拖尾点数 ${data.trails} < 流星数 ${data.meteors}，拖尾没成形`)
+    if (data.hasSkyCanvas) fail(vp.name, '落地页仍有 #sky 流星雨 canvas（流星雨应只在入场层）')
     if (consoleErrors.length) {
       fail(vp.name, `控制台报错：${consoleErrors.join(' | ')}`)
     }
 
-    // 流星必须是「从同一个辐射点发出」的：每道轨迹的方向与「辐射点→头部」
-    // 的夹角都必须很小。偏差大 = 各飞各的 = 下雨，不是流星雨。
-    const angles = data.angles || []
-    if (angles.length >= 2) {
-      if (data.radialDev > 0.2) {
-        fail(vp.name, `流星没有汇聚到同一辐射点（最大偏角 ${data.radialDev} rad，应 ≤0.2）`)
-      }
-      const min = Math.min(...angles)
-      const max = Math.max(...angles)
-      const spread = max - min
-      if (spread < 0.1) {
-        fail(vp.name, `流星方向完全一致（跨度 ${spread.toFixed(2)} rad），没有放射感`)
-      }
-    } else {
-      fail(vp.name, `可测方向的流星只有 ${angles.length} 道，拖尾可能没铺开`)
-    }
-
-    // 窄屏预算：低端机不能和桌面一样密
-    if (vp.width <= 390 && data.maxMeteors > 22) {
-      fail(vp.name, `窄屏流星预算过高：${data.maxMeteors}`)
-    }
-
     notes.push(
-      `${vp.name.padEnd(13)} 流星 ${String(data.meteors).padStart(2)}/${data.maxMeteors} · 拖尾点 ${String(data.trails).padStart(3)} · 帧 ${String(data.frames).padStart(3)} · 标题 ${data.wmDrawn}/${data.wmPaths} · 横向 ${data.scrollWidth}/${data.clientWidth}`,
+      `${vp.name.padEnd(13)} 无常驻动画 · 标题 ${data.wmDrawn}/${data.wmPaths} · 横向 ${data.scrollWidth}/${data.clientWidth}`,
     )
 
     if (WANT_SHOTS) {
@@ -295,35 +273,28 @@ try {
     const data = await page.evaluate(() => {
       const el = document.getElementById('selftest')
       const j = el ? JSON.parse(el.textContent) : {}
-      const canvas = document.getElementById('sky')
-      let nonEmpty = false
-      if (canvas) {
-        const c = canvas.getContext('2d')
-        const d = c.getImageData(0, 0, canvas.width, canvas.height).data
-        for (let i = 3; i < d.length; i += 4 * 97) {
-          if (d[i] > 0) {
-            nonEmpty = true
-            break
-          }
-        }
-      }
       const paths = Array.prototype.slice.call(document.querySelectorAll('.wm-path'))
       return {
         ...j,
-        canvasNonEmpty: nonEmpty,
+        titleVisible: (() => {
+          const wm = document.getElementById('wordmark')
+          if (!wm) return false
+          const s = getComputedStyle(wm)
+          return s.display !== 'none' && Number(s.opacity) > 0.9
+        })(),
         wmAllDrawn: paths.length > 0 && paths.every((p) => p.classList.contains('is-drawn')),
       }
     })
     if (!data.reduce) fail('reduced-motion', '没有识别到 prefers-reduced-motion')
     if (!data.still) fail('reduced-motion', '减动效下没有进入静态终帧')
-    if (!data.canvasNonEmpty) fail('reduced-motion', '减动效下画布是空的（首屏没有视觉）')
+    if (data.hasSkyCanvas) fail('reduced-motion', '减动效下仍有流星雨 canvas')
+    if (!data.titleVisible) fail('reduced-motion', '减动效下标题不可见（首屏没有视觉）')
     if (!data.wmAllDrawn) fail('reduced-motion', '减动效下手写标题没有直接显示终态')
-    if (data.meteors < 1) fail('reduced-motion', `减动效下流星数为 ${data.meteors}，静态终帧没有流星`)
-    notes.push(`reduced-motion 静态终帧：流星 ${data.meteors} · 画布有内容 ${data.canvasNonEmpty} · 标题全显 ${data.wmAllDrawn}`)
+    notes.push(`reduced-motion 静态终帧：无流星雨 canvas · 标题可见 ${data.titleVisible} · 全显 ${data.wmAllDrawn}`)
     await ctx.close()
   }
 
-  /* ---------- 4. 动效开关：关掉后流星雨真的停住 ---------- */
+  /* ---------- 4. 动效开关：关掉后标题直接显示终态 ---------- */
   {
     const ctx = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -332,7 +303,7 @@ try {
     const page = await ctx.newPage()
     await page.goto(`${fileUrl}?selftest=1&intro=0`, { waitUntil: 'load' })
     await page.waitForTimeout(1500)
-    // 实时状态函数：自检块是一次性快照，比较帧数必须读实时值
+    // 实时状态函数：自检块是一次性快照，验证标题状态必须读实时值
     const readState = () => page.evaluate(() => {
       if (typeof window.__persistLandingState !== 'function') return null
       return window.__persistLandingState()
@@ -349,28 +320,19 @@ try {
       if (pressed !== 'false') fail('motion-toggle', `开关的 aria-pressed 应为 false，实为 ${pressed}`)
       if (off.motion !== 'off') fail('motion-toggle', `data-motion 应为 off，实为 ${off.motion}`)
 
-      // 等一拍，帧数不应再涨
-      await page.waitForTimeout(900)
-      const after = await readState()
-      if (after.frames !== off.frames) {
-        fail('motion-toggle', `关掉动效后帧数仍在增长（${off.frames} → ${after.frames}），流星雨没停`)
-      }
-
       // 关掉动效后，手写标题必须直接是终态（不能还停在半途）
       if (off.wmDrawn !== off.wmPaths) {
         fail('motion-toggle', `关掉动效后标题只画出了 ${off.wmDrawn}/${off.wmPaths} 条`)
       }
 
-      // 开回去应该还能再动
+      // 开回去：开关状态要恢复
       await page.click('#motionToggle')
-      await page.waitForTimeout(800)
+      await page.waitForTimeout(300)
       const on = await readState()
       const pressedOn = await page.getAttribute('#motionToggle', 'aria-pressed')
       if (pressedOn !== 'true') fail('motion-toggle', `重新开启后 aria-pressed 应为 true，实为 ${pressedOn}`)
-      if (on.frames <= after.frames) {
-        fail('motion-toggle', `重新开启后帧数没有继续增长（${after.frames} → ${on.frames}）`)
-      }
-      notes.push(`动效开关：关 → 帧数冻结于 ${off.frames}；再开 → ${on.frames}`)
+      if (on.motion !== 'on') fail('motion-toggle', `重新开启后 data-motion 应为 on，实为 ${on.motion}`)
+      notes.push('动效开关：关 → 标题终态；再开 → 状态恢复 on')
     }
     await ctx.close()
   }
@@ -437,14 +399,15 @@ try {
         playing: st ? st.playing : null,
         hasCanvas: st ? st.hasCanvas : null,
         hasSkip: st ? st.hasSkip : null,
+        hasMeteorCanvas: st ? st.hasMeteorCanvas : null,
         cellW: st ? st.cellW : 0,
         cellH: st ? st.cellH : 0,
         cols: st ? st.cols : 0,
         rows: st ? st.rows : 0,
         frames: st ? st.frames : 0,
         heartDisabled: st ? st.heartDisabled : null,
-        tSpace: st ? st.tSpace : 0,
-        end: st ? st.end : 0,
+        meteorAt: st ? st.meteorAt : 0,
+        waitAt: st ? st.waitAt : 0,
         wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
       }
     })
@@ -453,65 +416,111 @@ try {
     if (early.canvasW < 400 || early.canvasH < 300) fail('intro', `开场画布尺寸异常 ${early.canvasW}×${early.canvasH}`)
     if (!early.playing) fail('intro', '开场状态没有标记为 playing')
     if (!early.hasCanvas || !early.hasSkip) fail('intro', '开场层缺少画布/跳过按钮')
-    if (early.wmDrawn !== 0) fail('intro', `开场期间手写标题已经画了 ${early.wmDrawn} 条（应等交棒后再写）`)
+    if (!early.hasMeteorCanvas) fail('intro', '开场层缺少满屏粒子画布 #introMeteor')
+    if (early.wmDrawn !== 0) fail('intro', `开场期间手写标题已经画了 ${early.wmDrawn} 条（应等点击交棒后再写）`)
 
     // 6.2 网格必须与 Python 原版一致：78 列 × 30 行、字符格 8:15。
-    //     行数或格宽一改，眼睛在画面里占的字符行数就变了，密度观感立刻跑偏。
     if (early.rows !== 30) fail('intro', `字符行数应为原版的 30，实为 ${early.rows}`)
     if (early.cols !== 78) fail('intro', `字符列数应为原版的 78，实为 ${early.cols}`)
     const ratio = early.cellW / early.cellH
     if (Math.abs(ratio - 8 / 15) > 0.06) fail('intro', `字符格比例应为 8:15（0.533），实为 ${ratio.toFixed(3)}`)
     if (early.frames < 10) fail('intro', `1.3s 只画了 ${early.frames} 帧（引擎没在跑）`)
     if (!early.heartDisabled) fail('intro', '心形星云没有被禁用')
-    if (Math.abs(early.end - 8.5) > 0.8) fail('intro', `开场总时长应为 ~8.5s，实为 ${early.end}s`)
+    if (Math.abs(early.meteorAt - 6.9) > 0.8) fail('intro', `粒子流星雨起点应 ~6.9s，实为 ${early.meteorAt}s`)
+    if (Math.abs(early.waitAt - 8.5) > 0.8) fail('intro', `等待点击时点应 ~8.5s，实为 ${early.waitAt}s`)
 
-    // 6.3 疏朗度：画面近黑占比要贴近 Python 原版（~72%~75%）。
-    //     这是「字符过于密集」最直接的量化指标 ——
-    //     字体加粗 / 色阶拉伸(contrast) / 颜色重复乘 1.15，都会把它压下来。
+    // 6.3 灰蓝色调：字符色不再是原版琥珀（暖色像素应为 0）。
+    //     底色已由近黑改成深灰蓝 #0d151d，所以「近黑占比」改用「近底色占比」——
+    //     字符之间有大量留白底，这正是疏朗感的量化。
     await page.waitForTimeout(1300)   // ≈ 2.6s，眼睛已睁开
     const density = await page.evaluate(() => {
       const c = document.getElementById('introCanvas')
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
       const lums = []
-      let nearBlack = 0
+      let nearBase = 0, warm = 0, blueish = 0
       for (let i = 0; i < d.length; i += 4) {
-        const L = 0.30 * d[i] + 0.60 * d[i + 1] + 0.10 * d[i + 2]
+        const R = d[i], G = d[i + 1], B = d[i + 2]
+        const L = 0.30 * R + 0.60 * G + 0.10 * B
         lums.push(L)
-        if (L < 12) nearBlack++
+        // 底色 #0d151d = (13,21,29)，容差 10
+        if (Math.abs(R - 13) < 10 && Math.abs(G - 21) < 10 && Math.abs(B - 29) < 10) nearBase++
+        if (R > 140 && G > 80 && B < 90 && R > B * 1.8) warm++
+        if (B > R + 8) blueish++
       }
       lums.sort((a, b) => a - b)
       const q = (p) => lums[Math.floor(lums.length * p)]
       return {
-        nearBlack: +(nearBlack / lums.length * 100).toFixed(1),
+        nearBase: +(nearBase / lums.length * 100).toFixed(1),
+        warm, blueish,
         p90: +q(0.9).toFixed(1),
         p99: +q(0.99).toFixed(1),
       }
     })
-    if (density.nearBlack < 58) fail('intro', `画面近黑占比只有 ${density.nearBlack}%（原版 ~72%），字符过于密集`)
-    if (density.nearBlack > 88) fail('intro', `画面近黑占比 ${density.nearBlack}% 过高，画面可能是空的`)
-    if (density.p90 < 70) fail('intro', `画面 90 分位亮度只有 ${density.p90}，整体太暗`)
+    if (density.nearBase < 40) fail('intro', `留白底色占比只有 ${density.nearBase}%，字符过于密集`)
+    if (density.warm > 3000) fail('intro', `字符里还有 ${density.warm} 个暖色像素（应统一为灰蓝）`)
+    if (density.blueish < density.warm) fail('intro', '字符没有偏蓝（灰蓝色调未生效）')
 
-    // 6.4 推进到瞳孔铺满后：画面应切到星空，不能残留虹膜色块（差量重绘漏擦旧字形
-    //     就会在这里露馅），也不能出现原版那团粉紫星云。
-    await page.waitForTimeout(5000)   // ≈ 7.6s
+    // 6.4 满屏 3D 粒子流星雨：6.9s 后独立全屏 canvas 接管，铺满整个视口、
+    //     灰蓝无暖色、有星点拖尾（不是空白）。
+    await page.waitForTimeout(5100)   // ≈ 7.7s，粒子层已淡入
     const deep = await page.evaluate(() => {
-      const c = document.getElementById('introCanvas')
-      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
-      let warm = 0, magenta = 0, lit = 0
+      const cv = document.getElementById('introMeteor')
+      const st = window.__persistIntroState()
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let warm = 0, magenta = 0, lit = 0, blueish = 0, total = d.length / 4
       for (let i = 0; i < d.length; i += 4) {
         const R = d[i], G = d[i + 1], B = d[i + 2]
         if (R > 140 && G > 80 && B < 90 && R > B * 1.8) warm++
         if (R > 70 && B > 55 && G < R * 0.72 && B > G * 1.25) magenta++
-        if (R + G + B > 150) lit++
+        if (R + G + B > 60) lit++
+        if (B > R) blueish++
       }
-      return { warm, magenta, lit, total: d.length / 4 }
+      const ov = document.getElementById('intro')
+      return {
+        fullscreen: st.meteorIsFullscreen,
+        cssW: cv.clientWidth, cssH: cv.clientHeight,
+        vw: window.innerWidth, vh: window.innerHeight,
+        meteorOn: st.meteorOn, meteorCount: st.meteorCount,
+        meteorFrames: st.meteorFrames,
+        isMeteor: ov.classList.contains('is-meteor'),
+        warm, magenta, lit, blueish, total,
+      }
     })
+    if (!deep.fullscreen || deep.cssW !== deep.vw || deep.cssH !== deep.vh) {
+      fail('intro', `粒子层未铺满视口：canvas ${deep.cssW}×${deep.cssH} vs 视口 ${deep.vw}×${deep.vh}`)
+    }
+    if (!deep.isMeteor || !deep.meteorOn) fail('intro', '7.7s 时粒子层没有接管（is-meteor / meteorOn 未置位）')
+    if (deep.meteorFrames < 20) fail('intro', `粒子层只画了 ${deep.meteorFrames} 帧（粒子动画没在跑）`)
+    if (deep.meteorCount < 5) fail('intro', `粒子数只有 ${deep.meteorCount}（流星雨没生成）`)
+    if (deep.magenta > 3000) fail('intro', `粒子层出现 ${deep.magenta} 个粉紫像素（星云残留）`)
+    if (deep.warm > 3000) fail('intro', `粒子层出现 ${deep.warm} 个暖色像素（应统一灰蓝）`)
     const litPct = deep.lit / deep.total * 100
-    if (litPct > 12) fail('intro', `推进后画面仍有 ${litPct.toFixed(1)}% 亮像素（旧字形残影没擦掉）`)
-    if (deep.magenta > 3000) fail('intro', `推进后出现 ${deep.magenta} 个粉紫像素（星云没禁干净）`)
+    if (litPct < 0.1) fail('intro', `粒子层几乎全空（亮像素 ${litPct.toFixed(2)}%）`)
 
-    // 6.5 交棒：开场结束后标题才开始写，最终全部画完
-    await page.waitForTimeout(2200)   // ≈ 9.8s
+    // 6.5 等待点击：8.5s 后停在粒子层，不自动进落地页
+    await page.waitForTimeout(1600)   // ≈ 9.3s
+    const waiting = await page.evaluate(() => {
+      const st = window.__persistIntroState()
+      const ov = document.getElementById('intro')
+      return {
+        waiting: st.waiting,
+        done: st.done,
+        introHidden: ov.hidden,
+        promptOpacity: Number(getComputedStyle(document.getElementById('introEnter')).opacity),
+        wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
+        wmTotal: document.querySelectorAll('.wm-path').length,
+      }
+    })
+    if (!waiting.waiting) fail('intro', '9.3s 没有进入等待点击状态')
+    if (waiting.done) fail('intro', '开场自动交棒了（应等用户点击）')
+    if (waiting.introHidden) fail('intro', '等待期间开场层被隐藏了')
+    if (waiting.promptOpacity < 0.5) fail('intro', `「点击任意位置进入」提示没显示（opacity ${waiting.promptOpacity}）`)
+    if (waiting.wmDrawn !== 0) fail('intro', `等待点击时标题已经画了 ${waiting.wmDrawn}/${waiting.wmTotal} 条`)
+
+    // 6.6 点击任意位置 → 交棒落地页，标题才开始写
+    await page.mouse.click(720, 300)
+    // 11 条笔画延迟 260+10×115 ≈ 1.4s，留足缓冲到 1.9s
+    await page.waitForTimeout(1900)
     const done = await page.evaluate(() => {
       const overlay = document.getElementById('intro')
       const paths = Array.prototype.slice.call(document.querySelectorAll('.wm-path'))
@@ -521,14 +530,16 @@ try {
         wmDrawn: paths.filter((p) => p.classList.contains('is-drawn')).length,
         wmTotal: paths.length,
         ctaVisible: !!document.querySelector('.cta'),
+        hasSkyCanvas: !!document.getElementById('sky'),
       }
     })
-    if (!done.overlayHidden) fail('intro', '开场结束后开场层没有隐藏')
-    if (done.introAttr !== 'off') fail('intro', `data-intro 应为 off，实为 ${done.introAttr}`)
-    if (done.wmDrawn !== done.wmTotal) fail('intro', `交棒后标题只画了 ${done.wmDrawn}/${done.wmTotal} 条`)
-    if (!done.ctaVisible) fail('intro', '交棒后 CTA 不见了')
+    if (!done.overlayHidden) fail('intro', '点击后开场层没有隐藏')
+    if (done.introAttr !== 'off') fail('intro', `点击后 data-intro 应为 off，实为 ${done.introAttr}`)
+    if (done.wmDrawn !== done.wmTotal) fail('intro', `点击后标题只画了 ${done.wmDrawn}/${done.wmTotal} 条`)
+    if (!done.ctaVisible) fail('intro', '点击后 CTA 不见了')
+    if (done.hasSkyCanvas) fail('intro', '落地页仍有流星雨 canvas')
     if (consoleErrors.length) fail('intro', `控制台报错：${consoleErrors.join(' | ')}`)
-    notes.push(`开场：${early.cols}×${early.rows} 格 ${early.cellW}×${early.cellH} · 2.6s 近黑 ${density.nearBlack}% · 7.6s 亮像素 ${litPct.toFixed(1)}% · 9.8s 标题 ${done.wmDrawn}/${done.wmTotal}`)
+    notes.push(`开场：${early.cols}×${early.rows} 格 ${early.cellW}×${early.cellH} · 粒子层 ${deep.cssW}×${deep.cssH} 铺满 · 粒子 ${deep.meteorCount} 颗/${deep.meteorFrames} 帧 · 暖色 ${deep.warm} · 等点击后交棒 标题 ${done.wmDrawn}/${done.wmTotal}`)
     await ctx.close()
   }
 
