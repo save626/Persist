@@ -1,0 +1,411 @@
+﻿/* 手势粒子融合 —— 简约现代深色界面 */
+
+:root {
+  --bg: #05080d;
+  --panel: rgba(11, 18, 28, 0.72);
+  --panel-border: rgba(150, 200, 240, 0.16);
+  --text: #e9f2fa;
+  --muted: #93a7ba;
+  --accent: #6fb6e8;
+  --accent-2: #b98bff;
+  --danger: #ff9a9a;
+  --font: "Inter", "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+}
+
+/* —— 画面层 —— */
+.cam {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  opacity: 0;
+  pointer-events: none;
+  filter: saturate(0.4) brightness(0.5);
+  transition: opacity 600ms ease;
+  z-index: 0;
+}
+
+.cam.is-live {
+  opacity: 0.22;
+}
+
+.hand-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 3;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 50% 40%, transparent 45%, rgba(3, 6, 10, 0.55) 100%),
+    linear-gradient(to bottom, rgba(3, 6, 10, 0.55), transparent 22%, transparent 78%, rgba(3, 6, 10, 0.6));
+}
+
+/* —— 顶栏 —— */
+.topbar {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: clamp(16px, 3vw, 36px);
+  right: clamp(16px, 3vw, 36px);
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #d9f0ff, var(--accent) 45%, rgba(111, 182, 232, 0.12) 70%);
+  box-shadow: 0 0 22px rgba(111, 182, 232, 0.55);
+  flex: none;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: clamp(17px, 2vw, 21px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.hint {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.status {
+  margin: 0;
+  padding: 7px 13px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.status[data-tone="error"] {
+  color: var(--danger);
+  border-color: rgba(255, 154, 154, 0.35);
+}
+
+/* —— 场景切换 —— */
+.scene-nav {
+  position: absolute;
+  left: clamp(14px, 3vw, 34px);
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 68px);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: min(92vw, 720px);
+}
+
+.scene-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px 9px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.scene-btn:hover {
+  border-color: rgba(111, 182, 232, 0.5);
+  transform: translateY(-1px);
+}
+
+.scene-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.scene-btn.is-active {
+  border-color: rgba(111, 182, 232, 0.75);
+  background: linear-gradient(180deg, rgba(28, 58, 84, 0.9), rgba(12, 22, 33, 0.9));
+  box-shadow: 0 0 0 1px rgba(111, 182, 232, 0.25), 0 12px 30px -18px rgba(111, 182, 232, 0.9);
+}
+
+.scene-idx {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(111, 182, 232, 0.16);
+  color: var(--accent);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.scene-btn.is-active .scene-idx {
+  background: rgba(111, 182, 232, 0.32);
+  color: #eaf6ff;
+}
+
+/* —— 底部操作 —— */
+.actions {
+  position: absolute;
+  right: clamp(16px, 3vw, 34px);
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 6;
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 11px 20px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: rgba(111, 182, 232, 0.55);
+  transform: translateY(-1px);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.btn-primary {
+  border-color: rgba(111, 182, 232, 0.5);
+  background: linear-gradient(180deg, rgba(34, 70, 100, 0.92), rgba(14, 26, 38, 0.92));
+}
+
+.btn[data-state="on"] {
+  border-color: rgba(185, 139, 255, 0.6);
+}
+
+.btn[data-state="error"] {
+  border-color: rgba(255, 154, 154, 0.5);
+}
+
+/* —— 颜色选择器 —— */
+.color-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.color-field input[type="color"] {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(150, 200, 240, 0.35);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.color-field input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.color-field input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+/* —— HUD —— */
+.hud {
+  position: absolute;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: min(60vw, 680px);
+  padding: 8px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+/* —— 提示条 —— */
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 88px;
+  z-index: 7;
+  transform: translate(-50%, -10px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(92vw, 460px);
+  padding: 12px 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: rgba(14, 22, 32, 0.95);
+  font-size: 12.5px;
+  line-height: 1.6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+.toast.is-open {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.toast strong {
+  color: #ffd9d9;
+  font-weight: 600;
+}
+
+.toast span {
+  color: var(--muted);
+}
+
+.noscript {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  background: var(--bg);
+  color: var(--muted);
+  text-align: center;
+  padding: 32px;
+}
+
+/* —— 窄屏 —— */
+@media (max-width: 720px) {
+  .topbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .scene-nav {
+    left: 12px;
+    right: 12px;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 62px);
+    gap: 6px;
+  }
+
+  .scene-btn {
+    padding: 8px 12px 8px 8px;
+    font-size: 12px;
+  }
+
+  .hud {
+    display: none;
+  }
+
+  .actions {
+    right: 12px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cam,
+  .toast {
+    transition: none;
+  }
+}
+
+/* —— 背景流星雨 / 星轨（只在花瓣场景显示）—— */
+.meteors {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  display: none;
+}
+
+body.has-meteors .meteors {
+  display: block;
+}

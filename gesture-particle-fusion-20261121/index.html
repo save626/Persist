@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#05080d" />
+    <title>手势粒子融合 · Gesture Particle Fusion</title>
+    <meta name="description" content="六个粒子场景，一套 Three.js 渲染与手势管线：张手、握拳、捏合、双手张距。" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="app" class="app">
+      <video id="cam" class="cam" playsinline muted autoplay aria-hidden="true"></video>
+      <canvas id="meteors" class="meteors" aria-hidden="true"></canvas>
+      <canvas id="hand-overlay" class="hand-overlay" aria-hidden="true"></canvas>
+      <canvas id="stage" class="stage" aria-label="手势控制的粒子场景"></canvas>
+      <div class="scrim" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <h1 id="scene-title">花瓣</h1>
+            <p id="scene-hint" class="hint">张手散开 · 捏合聚花</p>
+          </div>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite">自动循环 · 无需摄像头</p>
+      </header>
+
+      <nav id="scene-nav" class="scene-nav" aria-label="场景切换"></nav>
+
+      <footer class="actions">
+        <label class="color-field" title="粒子颜色">
+          <span>颜色</span>
+          <input id="color" type="color" value="#ffffff" aria-label="粒子颜色" />
+        </label>
+        <button id="btn-hands" class="btn btn-primary" type="button">开启手势</button>
+        <button id="btn-fullscreen" class="btn" type="button" aria-pressed="false">全屏</button>
+      </footer>
+
+      <output id="hud" class="hud" aria-live="off"></output>
+      <div id="toast" class="toast" role="alert"></div>
+    </main>
+
+    <noscript>
+      <div class="noscript">这些场景靠 JavaScript 与 WebGL 绘制粒子，请开启 JS。</div>
+    </noscript>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

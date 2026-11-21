@@ -58,3 +58,30 @@ test-results/
 picture/
 产品/
 .workbuddy/
+
+# npm 缓存：默认 cache 在用户目录会被沙箱拒绝，脚本会把它指到仓库内
+.npm-cache/
+# 依赖探测的临时解包目录（bloom/scripts/vendor-mediapipe.mjs 不产生这个，人工排查时才用）
+.deps-probe/
+
+# 外部融合工程：只入库代码 / 文档 / vendored 依赖 / 圣诞树部署目录。
+# 下面这些不入库（体积大，或可从上游 / 脚本重新得到）：
+#   · sources/01-05 五个上游仓库快照（来源见 ATTRIBUTION.md，可重新 clone）
+#   · _archives 里的三个 zip 副本（与 sources 内容重复）
+#   · preview 预览截图（验收时由 scripts/shoot.mjs 重新生成）
+#   · 圣诞树部署目录里的 .venv（36 MB Python 虚拟环境）与它自己的 .git
+gesture-particle-fusion-20261121/sources/01-*/
+gesture-particle-fusion-20261121/sources/02-*/
+gesture-particle-fusion-20261121/sources/03-*/
+gesture-particle-fusion-20261121/sources/04-*/
+gesture-particle-fusion-20261121/sources/05-*/
+gesture-particle-fusion-20261121/_archives/
+gesture-particle-fusion-20261121/preview/
+# 圣诞树部署目录本身是一个 git clone（含 .git 与 36 MB .venv），整目录不入库；
+# 实际入库的是 sources/06-christmas-tree-zekangli-snapshot/（文件快照，见该目录说明）
+gesture-particle-fusion-20261121/sources/06-christmas-tree-zekangli/
+bloom/preview/
+
+# Python 产物
+__pycache__/
+*.pyc
