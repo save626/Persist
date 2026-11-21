@@ -5,9 +5,15 @@
  *
  * 所有已验收参数保持不变：
  *   · 网格 78 列 × 30 行、字符格 8:15（Python 原版物理尺寸）
- *   · 配色灰蓝 #1d2833 → #dbeaf3（暖色像素 0）
  *   · 心形星云禁用（T_HEART=1e6）+ 时间线约束（T_ZD=3.2 < 3.5）
- *   · 4.6s 瞳孔推进开始 → 6.9s 切粒子层（由外层 IntroOverlay 决定切换点）
+ *
+ * 本轮改动（用户拍板，第十一轮）：
+ *   · 眼睛颜色改「产品首页灰蓝家族」：深底 #010203 与星空底图保留（第十轮成果），
+ *     但虹膜/巩膜/瞳孔从原生琥珀改为不同灰蓝色相（产品蓝 #467692 / 浅灰蓝
+ *     #c7dae6 / 深墨蓝 #1a2a36），与产品介绍首页色调统一，同时保留颜色对比。
+ *     不是第九轮那种单蓝亮度映射（会把色相抹成只有深浅）。
+ *   · 瞳孔居中：画布 CSS 已用 margin:auto 修正（见 landing.css）；引擎 gaze
+ *     在推进阶段仍锁 (0,0) 消除视线放大偏移。两处都修，vendored 引擎不动。
  */
 
 export class EyePlayer {
@@ -21,6 +27,8 @@ export class EyePlayer {
     this.raf = 0
     this.t0 = 0
     this.visible = true
+    // 参考版 web/index.html 的近黑画布底色（深色系原版观感）
+    this.paper = '#010203'
 
     this._configure()
     this._layout()
@@ -82,7 +90,7 @@ export class EyePlayer {
     this.rgb = [0, 0, 0]
     // 先铺满底色，避免首帧字符格之间有透明缝露出 intro 底色
     if (this.ctx) {
-      this.ctx.fillStyle = '#0d151d'
+      this.ctx.fillStyle = this.paper
       this.ctx.fillRect(0, 0, this.cols * this.cellW, this.rows * this.cellH)
     }
     this.renderer = null
@@ -90,16 +98,40 @@ export class EyePlayer {
       this.renderer = new this.engine.Renderer(this.cellW, this.cellH, this.rows, {
         smooth: 0, contrast: 0, levels: 0, hash: 0.07,
       })
+      // ★ 瞳孔居中：包装实例的 gaze()（不动 vendored 引擎源码）。
+      //   推进阶段（≥ T_Z0）返回 (0,0)，瞳孔中心锁在网格几何中心；
+      //   推进之前保留引擎自带的轻微视线游移，观感不变。
+      const rawGaze = this.renderer.gaze.bind(this.renderer)
+      const z0 = this.T_Z0
+      this.renderer.gaze = (t) => (t >= z0 ? [0, 0] : rawGaze(t))
     }
   }
 
   _palette(q0, q1, q2, out) {
     const QL = this.QL || 24
-    const lum = (0.30 * q0 + 0.60 * q1 + 0.10 * q2) / (QL - 1)
-    const v = Math.pow(Math.max(0, Math.min(1, lum)), 0.72) * 0.80
-    out[0] = Math.min(255, Math.round(29 + v * 190))
-    out[1] = Math.min(255, Math.round(40 + v * 190))
-    out[2] = Math.min(255, Math.round(51 + v * 191))
+    const inv = 255 / (QL - 1)
+    const R = q0 * inv, G = q1 * inv, B = q2 * inv
+    // 引擎原生 q0/q1/q2 = R/G/B，琥珀虹膜是 R>G>B（irR≈.8 irG≈.45 irB≈.1），
+    // 巩膜 R≈G≈B 高值，瞳孔三通道都低。第十一轮：不用原生琥珀，也不做单蓝亮度
+    // 映射（那会把色相抹成深浅）——而是按「暖度识别虹膜 + 亮度区分瞳孔/巩膜」
+    // 重新映射到产品首页的灰蓝家族，且三者色相不同，保住颜色对比：
+    //   瞳孔 → 深墨蓝 #1a2a36    虹膜 → 产品蓝 #467692    巩膜 → 浅灰蓝 #c7dae6
+    const lum = (0.30 * R + 0.60 * G + 0.10 * B) / 255
+    const warm = Math.max(0, (R - B) / 255)
+    const t = Math.pow(Math.max(0, Math.min(1, lum)), 0.82)
+    // 灰蓝主轴：暗部深墨蓝 → 亮部浅灰蓝
+    let r = 26 + t * (199 - 26)
+    let g = 42 + t * (218 - 42)
+    let b = 54 + t * (230 - 54)
+    // 虹膜区（暖度高）压 R/G，落到产品蓝一带 → 冷蓝青色相，与巩膜/瞳孔拉开
+    const iris = Math.min(1, warm * 1.25)
+    r -= iris * 92
+    g -= iris * 34
+    b -= iris * 10
+    const cl = (v) => Math.max(0, Math.min(255, Math.round(v)))
+    out[0] = cl(r)
+    out[1] = cl(g)
+    out[2] = cl(b)
   }
 
   _colorOf(q0, q1, q2) {
@@ -130,11 +162,11 @@ export class EyePlayer {
       const c = p % this.cols, r = (p / this.cols) | 0
       const x = c * this.cellW, y = r * this.cellH
       if (i0 === 0) {
-        ctx.fillStyle = '#0d151d'
+        ctx.fillStyle = this.paper
         ctx.fillRect(x - 1, y - 1, this.cellW + 2, this.cellH + 2)
       } else {
         // 关键：字符一变先擦旧字形，否则残笔层层堆积 → 画面糊成一片
-        ctx.fillStyle = '#0d151d'
+        ctx.fillStyle = this.paper
         ctx.fillRect(x - 1, y - 1, this.cellW + 2, this.cellH + 2)
         ctx.fillStyle = this._colorOf(q[po], q[po + 1], q[po + 2])
         ctx.fillText(this.engine.RAMP[i0], x + this.cellW / 2, y + this.cellH / 2)
@@ -199,6 +231,10 @@ export class EyePlayer {
       frames: this.frames,
       heartDisabled: this.CFG ? this.CFG.T_HEART > 1e5 : true,
       tSpace: this.T_SPACE,
+      // 推进阶段视线锁定为 (0,0) → 瞳孔严格居中（验收用）
+      gazeLocked: this.renderer
+        ? (this.renderer.gaze(this.T_Z0 + 1)[0] === 0 && this.renderer.gaze(this.T_Z0 + 1)[1] === 0)
+        : true,
     }
   }
 

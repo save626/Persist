@@ -14,6 +14,25 @@
 这样任何时候都能回到源头比对。改造都发生在**调用侧**（落地页的播放器），
 而不是引擎内部 —— 引擎保持可替换。
 
+## 观感基线（本目录内的基线图）
+
+`reference/preview-python-original.png`
+
+| 项 | 值 |
+| --- | --- |
+| 内容 | Python 复刻版 `preview.py` 输出的 9 格分镜（t = 2 / 4 / 6 / 8 / 10 / 17 / 22 / 27 / 42s 拼成两行） |
+| 来源 | 本地 Python 复刻工程 `D:/Work/geo-web/eyeTutorial-replica/docs/preview.png`，**逐字节复制** |
+| 尺寸 / 体积 | 2546×966 px · 1 037 118 B |
+| SHA256 | `176C306AF9A844F09FD71574CE53C222476C1295A29D4DFAF7A047251E58F251` |
+
+**这是眼睛观感的唯一标尺**，落地页的复刻版一律对它比对，不是对 `web/index.html`（字符过密）。
+
+- 入库的原因：原先各文档直接写本机绝对路径 `D:/Work/...`，换机器、换人就永久失效，
+  验收依据不可复现。
+- **不要重编码、不要缩放、不要压缩**；要换基线就整份替换并同步更新上表的体积与 SHA256
+  （`Get-FileHash -Algorithm SHA256 reference/preview-python-original.png`）。
+- 它**不是**自测截图，所以不放在 `landing/preview/`（那里由 `scripts/shoot-intro.mjs` 重拍覆盖）。
+
 ## 许可
 
 - 上游 `iremcnar/eyeTutorial` **未声明许可证**。

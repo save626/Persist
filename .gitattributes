@@ -30,3 +30,8 @@
 *.jks binary
 *.zip binary
 *.gz binary
+
+# MediaPipe 的 wasm 与模型：必须逐字节入库，任何文本转换都会损坏
+*.wasm binary
+*.task binary
+*.tflite binary

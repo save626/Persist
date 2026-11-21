@@ -272,9 +272,10 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 .intro{
   position:fixed;inset:0;z-index:60;overflow:hidden;
   display:flex;align-items:center;justify-content:center;
-  /* 灰蓝：与产品令牌 --ink:#202830 / --deep:#467692 同族，
-     比原先的青蓝 #1d3c4f 更中性 —— 和落地页、产品是同一张纸。 */
-  background:radial-gradient(125% 92% at 50% 44%, #2a3945 0%, #1b2732 48%, #111a22 100%);
+  /* 深色系原版观感：眼睛阶段是近黑画布底（#010203，与参考版 web/index.html 一致），
+     4.6s 起流星雨画布（星空照片底图 + 星轨 + 流星）逐渐盖上来。
+     与浅色产品首页形成反差 —— 开场是沉浸式深色，首页仍是安静的浅灰蓝纸。 */
+  background:#010203;
   opacity:0;transition:opacity .8s ease;
 }
 .intro[hidden]{display:none!important}
@@ -284,20 +285,36 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
    画布的 CSS 尺寸 = 网格列数 × 字符格宽（JS 精确设置），
    所以字符不会被浏览器二次缩放 —— 那样会糊成一片。 */
 .intro-canvas{
-  position:absolute;inset:0;width:100%;height:100%;display:block;
+  /* ★ 居中关键：绝对定位元素不参与父级 flex 的 align/justify 居中。
+     画布宽高由 JS 以 inline style 精确设置（cssW×cssH，字符不被二次缩放），
+     用 inset:0 + margin:auto 让浏览器把剩余空间均分到四边 → 真正水平垂直居中。
+     （原来只写 inset:0 会被钉在视口左上角，瞳孔因此偏左上 146×36px。） */
+  position:absolute;inset:0;margin:auto;display:block;
   image-rendering:pixelated;
-  /* 画布是「深底 + 字符」，页面底色是灰蓝；不加这层柔和外晕的话，
-     两者之间会是一条硬邦邦的矩形边界。 */
-  box-shadow:0 0 170px 90px rgba(12,20,27,.92);
-  transition:opacity .7s ease;
+  transition:opacity 1.1s ease;
 }
-/* 交棒段：铺满整个视口的 3D 粒子流星雨。
-   与字符画布分层 —— 眼睛阶段不受影响，满屏只在瞳孔铺满后发生。 */
+/* 交棒段：服务器部署版的「星空照片底图 + 压暗层 + Canvas 2D 星轨/流星」，铺满视口。
+   · 底图 = 部署版 starfield-*.webp（内嵌 data URI，见 build.mjs 注入 --intro-starfield），
+     保留部署版的中心稍亮、边缘压暗（scrim 两层渐变），星云与星点清晰可见。
+   · canvas 本身透明：星轨/流星用 lighter 叠加在照片之上（与部署版 #sky 层同构）。
+   · 4.6s 起整层淡入，从眼睛阶段的近黑 #010203 自然过渡到星空。 */
 .intro-meteor{
   position:absolute;inset:0;width:100%;height:100%;display:block;
-  opacity:0;pointer-events:none;transition:opacity .9s ease;
+  /* 第十二轮：完整显示原图零裁剪、零黑边 —— 用 100% 100% 拉伸铺满（cover 会裁掉
+     约 10% 的银河/流星轨迹；contain 会在 16:10 视口留下明显黑边，因原图边缘
+     顶部近黑、底部亮蓝，纯色填充无法同时匹配）。3000×1688 原始档逐字节内联，
+     16:10 下横向压缩仅 10%，随机星点肉眼难辨；DPR=2 下也够清晰。 */
+  background-color:#05070d;
+  background-image:
+    linear-gradient(180deg, rgba(3,5,10,.26) 0%, rgba(3,5,10,.02) 33%, rgba(2,3,7,.04) 62%, rgba(2,3,7,.34) 100%),
+    radial-gradient(122% 92% at 50% 44%, rgba(4,6,12,0) 32%, rgba(3,5,10,.14) 74%, rgba(2,3,7,.42) 100%),
+    var(--intro-starfield, none);
+  background-position:center, center, center;
+  background-size:cover, cover, 100% 100%;
+  background-repeat:no-repeat;
+  opacity:0;pointer-events:none;transition:opacity 1.5s ease;
 }
-/* 字符画淡出、粒子层淡入 */
+/* 4.6s 瞳孔推进开始：字符画淡出、流星雨淡入（逐渐进入，不是硬切） */
 .intro.is-meteor .intro-canvas{opacity:0}
 .intro.is-meteor .intro-meteor{opacity:1}
 /* 交棒完成后停在粒子层，等用户点一下才进落地页 */
@@ -315,17 +332,22 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 .intro.is-waiting .intro-skip{opacity:0;pointer-events:none}
 @keyframes intro-breathe{0%,100%{border-color:rgba(174,205,224,.30)}50%{border-color:rgba(174,205,224,.68)}}
 
-/* 跳过按钮：开场是暗场，按钮用浅色文字（与深底对比 ≥ 4.5:1） */
+/* 关闭按钮：整段开场是深色沉浸（眼睛阶段近黑 #010203 → 流星雨星空底图），
+   始终用浅色字，深底上对比 ≥ 4.5:1。 */
 .intro-skip{
   position:absolute;right:clamp(16px,4vw,40px);bottom:clamp(16px,4vw,40px);z-index:3;
   display:inline-flex;align-items:center;gap:8px;
   font-family:var(--num);font-size:12px;letter-spacing:.12em;color:#d3e6f1;
   background:rgba(255,255,255,.07);border:1px solid rgba(160,200,225,.3);
   border-radius:999px;padding:10px 16px;cursor:pointer;
-  transition:background-color .2s ease,border-color .2s ease,color .2s ease;
+  transition:background-color .4s ease,border-color .4s ease,color .4s ease;
 }
 .intro-skip:hover{background:rgba(255,255,255,.13);border-color:rgba(160,200,225,.55);color:#fff}
 .intro-skip:focus-visible{outline:2px solid #8fc0dd;outline-offset:3px}
+.intro.is-meteor .intro-skip{
+  color:#d3e6f1;background:rgba(255,255,255,.07);border-color:rgba(160,200,225,.3);
+}
+.intro.is-meteor .intro-skip:hover{background:rgba(255,255,255,.13);border-color:rgba(160,200,225,.55);color:#fff}
 
 @media (prefers-reduced-motion:reduce){
   .intro{display:none!important}

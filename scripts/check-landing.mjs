@@ -11,9 +11,11 @@
 //   · 「动效关」时标题直接显示终态
 //   · 眼睛标记存在，且虹膜跟随光标但不越界
 //   · 关键色对对比度达标（正文 4.5 / 图形 3.0）
-//   · 开场动画：字符画眼睛 → 满屏 3D 粒子流星雨 → 等点击 → 进落地页
-//     满屏用 Three.js WebGL（独立全屏 canvas，1440×900）；灰蓝无暖色；
-//     PC 开 Bloom、移动端减粒子关 Bloom；页面隐藏暂停渲染；
+//   · 开场动画：深色字符画眼睛（产品灰蓝家族：瞳孔深墨蓝/虹膜产品蓝/巩膜浅灰蓝，
+//     三色色相有对比、居中）→ 4.6s 起淡入服务器部署版流星雨（原画质星空照片底图
+//     + Canvas 2D 星轨/渐变尾迹流星，去 Hello World SVG，铺满视口）
+//     → 7.8s 完全接管等点击 → 进落地页；
+//     画布必须真正居中（第十轮修 absolute flex 居中失效）；页面隐藏暂停渲染；
 //     点击任意位置后才交棒；「关闭动画」按钮立即停止并清理资源
 //     （减动效 / ?intro=0 / 关 JS 时都不该出现开场层）
 //
@@ -397,6 +399,9 @@ try {
         overlayOpacity: overlay ? Number(getComputedStyle(overlay).opacity) : 0,
         canvasW: r ? r.width : 0,
         canvasH: r ? r.height : 0,
+        // 瞳孔居中：绝对定位画布必须真正居中（不能钉在左上角）
+        canvasOffsetX: r ? Math.round(r.x + r.width / 2 - window.innerWidth / 2) : 999,
+        canvasOffsetY: r ? Math.round(r.y + r.height / 2 - window.innerHeight / 2) : 999,
         playing: st ? st.playing : null,
         hasCanvas: st ? st.hasCanvas : null,
         hasSkip: st ? st.hasSkip : null,
@@ -407,6 +412,7 @@ try {
         rows: st ? st.rows : 0,
         frames: st ? st.frames : 0,
         heartDisabled: st ? st.heartDisabled : null,
+        gazeLocked: st ? st.gazeLocked : null,
         meteorAt: st ? st.meteorAt : 0,
         waitAt: st ? st.waitAt : 0,
         wmDrawn: document.querySelectorAll('.wm-path.is-drawn').length,
@@ -427,77 +433,113 @@ try {
     if (Math.abs(ratio - 8 / 15) > 0.06) fail('intro', `字符格比例应为 8:15（0.533），实为 ${ratio.toFixed(3)}`)
     if (early.frames < 10) fail('intro', `1.3s 只画了 ${early.frames} 帧（引擎没在跑）`)
     if (!early.heartDisabled) fail('intro', '心形星云没有被禁用')
-    if (Math.abs(early.meteorAt - 4.6) > 0.8) fail('intro', `粒子流星雨起点应 ~4.6s，实为 ${early.meteorAt}s`)
-    if (Math.abs(early.waitAt - 6.4) > 0.8) fail('intro', `等待点击时点应 ~6.4s，实为 ${early.waitAt}s`)
+    if (Math.abs(early.meteorAt - 4.6) > 0.8) fail('intro', `流星雨淡入起点应 ~4.6s（与瞳孔推进同步），实为 ${early.meteorAt}s`)
+    if (Math.abs(early.waitAt - 7.8) > 0.8) fail('intro', `等待点击时点应 ~7.8s（推进结束），实为 ${early.waitAt}s`)
+    if (early.gazeLocked !== true) fail('intro', '推进阶段视线未锁定为 (0,0)（瞳孔会偏离画面中心）')
+    // 第十轮真因：画布 absolute+inset:0 被钉在视口左上角，父级 flex 对绝对定位元素无效。
+    // 现在用 margin:auto 居中，实测画布中心应≈视口中心（容差 3px）。
+    if (Math.abs(early.canvasOffsetX) > 3 || Math.abs(early.canvasOffsetY) > 3) {
+      fail('intro', `眼睛画布未居中：中心偏离视口 ${early.canvasOffsetX}×${early.canvasOffsetY}px（瞳孔会偏位）`)
+    }
 
-    // 6.3 灰蓝色调：字符色不再是原版琥珀（暖色像素应为 0）。
-    //     底色已由近黑改成深灰蓝 #0d151d，所以「近黑占比」改用「近底色占比」——
-    //     字符之间有大量留白底，这正是疏朗感的量化。
+    // 6.3 深色系 + 产品灰蓝色相：底色 #010203，字符映射到灰蓝家族的三个色相 ——
+    //     瞳孔深墨蓝 #1a2a36 / 虹膜产品蓝 #467692 / 巩膜浅灰蓝 #c7dae6。
+    //     必须三者都有像素（保留颜色对比），且暖色（琥珀）应基本消失。
+    //     「近底色占比」= 亮度接近近黑底的像素比例，仍是疏朗感的量化。
     await page.waitForTimeout(1300)   // ≈ 2.6s，眼睛已睁开
     const density = await page.evaluate(() => {
       const c = document.getElementById('introCanvas')
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
       const lums = []
-      let nearBase = 0, warm = 0, blueish = 0
+      let nearBase = 0, warm = 0, lit = 0, irisBlue = 0, paleBlue = 0, deepBlue = 0
       for (let i = 0; i < d.length; i += 4) {
         const R = d[i], G = d[i + 1], B = d[i + 2]
         const L = 0.30 * R + 0.60 * G + 0.10 * B
         lums.push(L)
-        // 底色 #0d151d = (13,21,29)，容差 10
-        if (Math.abs(R - 13) < 10 && Math.abs(G - 21) < 10 && Math.abs(B - 29) < 10) nearBase++
-        if (R > 140 && G > 80 && B < 90 && R > B * 1.8) warm++
-        if (B > R + 8) blueish++
+        // 近黑底 #010203 = (1,2,3)，容差 8
+        if (R < 9 && G < 10 && B < 11) nearBase++
+        else if (B > R + 12 && G > R + 5) {
+          // 灰蓝家族：B 明显大于 R（区别于底色/暖色），按亮度分三段
+          if (L > 150) paleBlue++        // 巩膜 浅灰蓝白
+          else if (L > 60) irisBlue++    // 虹膜 产品蓝 #467692
+          else if (L > 15) deepBlue++    // 瞳孔 深墨蓝 #1a2a36
+        }
+        if (R > 60 && R > B * 1.5 && R > G * 1.15) warm++
+        if (L > 18) lit++
       }
       lums.sort((a, b) => a - b)
       const q = (p) => lums[Math.floor(lums.length * p)]
       return {
         nearBase: +(nearBase / lums.length * 100).toFixed(1),
-        warm, blueish,
+        warm, lit, irisBlue, paleBlue, deepBlue,
         p90: +q(0.9).toFixed(1),
         p99: +q(0.99).toFixed(1),
       }
     })
-    if (density.nearBase < 40) fail('intro', `留白底色占比只有 ${density.nearBase}%，字符过于密集`)
-    if (density.warm > 3000) fail('intro', `字符里还有 ${density.warm} 个暖色像素（应统一为灰蓝）`)
-    if (density.blueish < density.warm) fail('intro', '字符没有偏蓝（灰蓝色调未生效）')
+    if (density.nearBase < 40) fail('intro', `近黑底留白占比只有 ${density.nearBase}%，字符过于密集`)
+    // 三种灰蓝色相都要有像素（第十一轮统一到产品灰蓝，但保留色相对比）
+    if (density.irisBlue < 200) fail('intro', `虹膜产品蓝像素只有 ${density.irisBlue} 个（灰蓝配色未生效）`)
+    if (density.paleBlue < 200) fail('intro', `巩膜浅灰蓝像素只有 ${density.paleBlue} 个（灰蓝配色未生效）`)
+    if (density.deepBlue < 200) fail('intro', `瞳孔深墨蓝像素只有 ${density.deepBlue} 个（灰蓝配色未生效）`)
+    // 琥珀已去除（原生的暖色像素应基本归零）
+    if (density.warm > 2000) fail('intro', `还有 ${density.warm} 个琥珀暖色像素（应统一为产品灰蓝）`)
+    if (density.lit < 3000) fail('intro', `亮字符像素只有 ${density.lit} 个（深底上应有清晰字符）`)
 
-    // 6.4 满屏 3D 粒子流星雨：6.9s 后独立全屏 canvas 接管，铺满整个视口、
-    //     灰蓝无暖色、有星点拖尾（不是空白）。
-    await page.waitForTimeout(5100)   // ≈ 7.7s（含 headless 渲染开销），粒子层已淡入
+    // 6.4 服务器部署版流星雨：Canvas 2D 星轨 + 渐变尾迹流星，铺满整个视口、
+    //     冷蓝无暖色、有星点拖尾（不是空白）。4.6s 起淡入，7.8s 完全接管。
+    await page.waitForTimeout(5100)   // ≈ 7.7s（含 headless 渲染开销），流星雨层已淡入
     const deep = await page.evaluate(() => {
       const cv = document.getElementById('introMeteor')
       const st = window.__persistIntroState()
-      // Three.js 的 canvas 是 WebGL，不能再取 2d context。
-      // 像素统计由 MeteorField.samplePixels() 用离屏 RenderTarget + readRenderTargetPixels 提供。
+      // 新版是 Canvas 2D（服务器部署版流星雨），像素由 samplePixels() 直接 getImageData
       const px = st.meteorPixels || { warm: 0, magenta: 0, lit: 0, blueish: 0, total: 0 }
-      // 同时确认 WebGL 上下文真实存在且非 2d
-      const gl = cv.getContext('webgl2') || cv.getContext('webgl')
+      const ctx2d = cv.getContext('2d')
       const ov = document.getElementById('intro')
+      // 星空照片底图：内嵌 data URI 的 CSS 变量，必须存在且是 webp
+      const starfield = getComputedStyle(document.documentElement).getPropertyValue('--intro-starfield').trim()
+      const meteorBg = getComputedStyle(cv)
       return {
+        starfield: starfield.startsWith('url("data:image/webp;base64,'),
+        starfieldLen: starfield.length,
+        // 第十二轮：完整显示不裁剪 → 图片层用 100% 100%（cover 裁掉银河/流星轨迹，
+        // contain 留黑边），零裁剪零黑边
+        bgSize: meteorBg.backgroundSize,
         fullscreen: st.meteorIsFullscreen,
         cssW: cv.clientWidth, cssH: cv.clientHeight,
         vw: window.innerWidth, vh: window.innerHeight,
         meteorOn: st.meteorOn, meteorCount: st.meteorCount,
         meteorFrames: st.meteorFrames,
         isMeteor: ov.classList.contains('is-meteor'),
-        webgl: !!gl,
+        canvas2d: !!ctx2d,
         bloom: st.meteorBloom, mobile: st.meteorMobile,
         warm: px.warm, magenta: px.magenta, lit: px.lit, blueish: px.blueish, total: px.total,
       }
     })
     if (!deep.fullscreen || deep.cssW !== deep.vw || deep.cssH !== deep.vh) {
-      fail('intro', `粒子层未铺满视口：canvas ${deep.cssW}×${deep.cssH} vs 视口 ${deep.vw}×${deep.vh}`)
+      fail('intro', `流星雨层未铺满视口：canvas ${deep.cssW}×${deep.cssH} vs 视口 ${deep.vw}×${deep.vh}`)
     }
-    if (!deep.isMeteor || !deep.meteorOn) fail('intro', '7.7s 时粒子层没有接管（is-meteor / meteorOn 未置位）')
-    if (!deep.webgl) fail('intro', '粒子层没有 WebGL 上下文（Three.js 未初始化）')
+    if (!deep.isMeteor || !deep.meteorOn) fail('intro', '7.7s 时流星雨层没有接管（is-meteor / meteorOn 未置位）')
+    if (!deep.canvas2d) fail('intro', '流星雨层没有 2D 画布上下文（Canvas 2D 引擎未初始化）')
     if (deep.mobile !== false) fail('intro', `PC 端不应判定为移动端，实为 ${deep.mobile}`)
-    if (deep.bloom !== true) fail('intro', `PC 端应开启 Bloom 辉光，实为 ${deep.bloom}`)
-    if (deep.meteorFrames < 20) fail('intro', `粒子层只画了 ${deep.meteorFrames} 帧（粒子动画没在跑）`)
-    if (deep.meteorCount < 5) fail('intro', `粒子数只有 ${deep.meteorCount}（流星雨没生成）`)
-    if (deep.magenta > 3000) fail('intro', `粒子层出现 ${deep.magenta} 个粉紫像素（星云残留）`)
-    if (deep.warm > 3000) fail('intro', `粒子层出现 ${deep.warm} 个暖色像素（应统一灰蓝）`)
+    if (deep.bloom !== true) fail('intro', `PC 端应保留完整效果（useBloom 兼容字段），实为 ${deep.bloom}`)
+    if (deep.meteorFrames < 20) fail('intro', `流星雨层只画了 ${deep.meteorFrames} 帧（动画没在跑）`)
+    // 第十二轮：数量翻倍（PC 上限 40），7.7s 时应明显多于旧的 ~11 颗
+    if (deep.meteorCount < 18) fail('intro', `流星数只有 ${deep.meteorCount}（翻倍后应 ≥18）`)
+    if (deep.magenta > 3000) fail('intro', `流星雨层出现 ${deep.magenta} 个粉紫像素（星云残留）`)
+    if (deep.warm > 3000) fail('intro', `流星雨层出现 ${deep.warm} 个暖色像素（应统一冷蓝）`)
     const litPct = deep.lit / deep.total * 100
-    if (litPct < 0.1) fail('intro', `粒子层几乎全空（亮像素 ${litPct.toFixed(2)}%）`)
+    if (litPct < 0.1) fail('intro', `流星雨层几乎全空（亮像素 ${litPct.toFixed(2)}%）`)
+    if (!deep.starfield) fail('intro', '流星雨层缺少星空照片底图（--intro-starfield data URI）')
+    // 第十二轮：3000×1688 原始档逐字节 base64 ≈ 200 万字符，完整画质零重编码。
+    // 不许再 canvas 重编码压缩（第十轮压缩版 ~12 万、第十一轮 1920 档 ~84 万）
+    if (deep.starfieldLen < 1900000) {
+      fail('intro', `星空底图只有 ${deep.starfieldLen} 字符，疑似降级到 1920 档或被压缩（3000 档原画质应 ≥ 1900000）`)
+    }
+    // 完整显示、零裁剪零黑边：图片层 background-size 必须是 100% 100%
+    // （cover 裁掉约 10% 银河/流星轨迹，contain 在 16:10 视口留黑边）
+    if (!/100%\s+100%/.test(deep.bgSize)) {
+      fail('intro', `星空底图 background-size 为 ${deep.bgSize}，应为 100% 100%（零裁剪零黑边完整显示）`)
+    }
 
     // 6.5 等待点击：8.5s 后停在粒子层，不自动进落地页
     await page.waitForTimeout(1600)   // ≈ 9.3s
@@ -541,7 +583,7 @@ try {
     if (!done.ctaVisible) fail('intro', '点击后 CTA 不见了')
     if (done.hasSkyCanvas) fail('intro', '落地页仍有流星雨 canvas')
     if (consoleErrors.length) fail('intro', `控制台报错：${consoleErrors.join(' | ')}`)
-    notes.push(`开场：${early.cols}×${early.rows} 格 ${early.cellW}×${early.cellH} · 粒子层 ${deep.cssW}×${deep.cssH} 铺满 · 粒子 ${deep.meteorCount} 颗/${deep.meteorFrames} 帧 · 暖色 ${deep.warm} · 等点击后交棒 标题 ${done.wmDrawn}/${done.wmTotal}`)
+    notes.push(`开场：${early.cols}×${early.rows} 格 ${early.cellW}×${early.cellH} · 近黑底留白 ${density.nearBase}% · 灰蓝三色 虹膜${density.irisBlue}/巩膜${density.paleBlue}/瞳孔${density.deepBlue}px 琥珀${density.warm} · 画布居中偏差 ${early.canvasOffsetX}×${early.canvasOffsetY}px · 星轨+流星雨 ${deep.cssW}×${deep.cssH} 铺满 ${deep.meteorCount} 颗/${deep.meteorFrames} 帧（上限40/寿命翻倍） · 星空底图3000档零裁剪零黑边 ${deep.starfieldLen}字符 · 等点击后交棒 标题 ${done.wmDrawn}/${done.wmTotal}`)
     await ctx.close()
   }
 

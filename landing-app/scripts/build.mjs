@@ -3,9 +3,10 @@
  *
  * 流程：
  *   1. Vite SSR：把 App.vue 渲染成静态 HTML（无 JS 时完整可读）
- *   2. Vite client：把 main.js + Three.js 打包成单 IIFE + CSS
- *   3. 读取 vendored 引擎源码（third_party/.../engine.js），原样内联
- *   4. 组装：head（meta/OG 原样保留）+ CSS + 静态 HTML + 引擎 + 客户端 JS
+ *   2. Vite client：把 main.js + Vue 打包成单 IIFE + CSS
+ *   3. 读取 vendored 引擎源码（third_party/.../engine.js），原样内联；
+ *      读取星空底图 data URI（src/three/starfield.datauri.txt）注入 CSS 变量
+ *   4. 组装：head（meta/OG 原样保留）+ CSS（含星空变量）+ 静态 HTML + 引擎 + 客户端 JS
  *   5. 写入 landing/index.html；--check 时只校验产物存在与体积
  *
  * 为什么要 SSR：验收要求「关掉 JS 后内容完整可读」。纯客户端渲染会空白，
@@ -83,10 +84,17 @@ const appCss = readFileSync(resolve(ROOT, 'dist', 'app.css'), 'utf8')
 const engine = readFileSync(ENGINE, 'utf8').replace(/\r\n/g, '\n')
 const head = readFileSync(HEAD_TPL, 'utf8').replace(/\r\n/g, '\n')
 
+// 服务器部署版的星空照片底图：从历史 4be7a0f 取 starfield-wide-3000.webp
+// （3000×1688 原始档 1.5 MB）逐字节 base64，作为 CSS 变量注入 —— 完整画质、
+// 零重编码，同时保住「单文件 / 零外部请求 / file:// 可开」。
+// 生成方式：git show 4be7a0f:landing/assets/starfield-wide-3000.webp | base64 -w0。
+const starfield = readFileSync(resolve(ROOT, 'src', 'three', 'starfield.datauri.txt'), 'utf8').trim()
+const starfieldCss = `:root{--intro-starfield:url("${starfield}")}\n`
+
 // ---------- 3. 组装 ----------
 const html = `${head}
 <style>
-${appCss}
+${starfieldCss}${appCss}
 </style>
 </head>
 <body>

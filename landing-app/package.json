@@ -9,7 +9,6 @@
     "check": "node scripts/build.mjs --check"
   },
   "dependencies": {
-    "three": "0.187.0",
     "vue": "3.5.46"
   },
   "devDependencies": {

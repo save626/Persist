@@ -19,8 +19,11 @@ let waiting = false
 let timers = []
 let clickBound = false
 
-// 时间线（需求：4.6s 瞳孔推进 → 立刻切满屏粒子）
-const T = { meteor: 4.6, wait: 6.4 }
+// 时间线（本轮需求）：
+//   4.6s  = 瞳孔推进开始，流星雨画布开始逐渐淡入（与推进同步）
+//   7.8s  = 推进结束（T_Z0 4.6 + T_ZD 3.2），流星雨完全接管、停眼睛引擎
+//   之后不再自动变化，等点击任意位置才进落地页
+const T = { meteor: 4.6, wait: 7.8 }
 
 function at(sec, fn) { timers.push(setTimeout(fn, sec * 1000)) }
 function clearTimers() { timers.forEach(clearTimeout); timers = [] }
@@ -43,21 +46,23 @@ function play() {
   eye.start()
   document.documentElement.setAttribute('data-intro', 'on')
 
-  // 4.6s：瞳孔推进 → 字符画淡出、Three 粒子层淡入铺满
+  // 4.6s：瞳孔开始推进 → 字符画淡出、流星雨画布逐渐淡入铺满（服务器部署版星轨+流星）
   at(T.meteor, () => {
     meteorOn = true
     if (overlay.value) overlay.value.classList.add('is-meteor')
-    if (eye) eye.freeze()
+    // 不立即 freeze 眼睛：推进的 3.2s 里字符画与流星雨交叉淡入，
+    // 瞳孔居中的推进帧依然可见，直到 7.8s 眼睛引擎才停。
     try {
       meteor = new MeteorField(meteorCanvas.value, { mobile: detectMobile() })
       meteor.start()
     } catch (e) {
-      // WebGL 不可用时降级：保留深底，不阻塞交棒
-      console.warn('[intro] Three.js 粒子层初始化失败，降级为纯色底：', e)
+      // 2D 画布不可用时降级：保留深底，不阻塞交棒
+      console.warn('[intro] 流星雨画布初始化失败，降级为纯色底：', e)
     }
   })
 
-  // 6.4s：粒子层完全接管，停眼睛引擎，显示「点击任意位置进入」
+  // 7.8s：推进结束、流星雨完全接管 → 停眼睛引擎，显示「点击任意位置进入」
+  //       之后界面不再自动变化，只等点击
   at(T.wait, () => {
     waiting = true
     if (overlay.value) overlay.value.classList.add('is-waiting')
@@ -118,7 +123,7 @@ function state() {
     meteorPixels: meteor ? meteor.samplePixels() : null,
     meteorMobile: meteor ? meteor.mobile : null,
     meteorBloom: meteor ? meteor.useBloom : null,
-    ...(eye ? eye.state() : { cellW: 8, cellH: 15, cols: 78, rows: 30, frames: 0, heartDisabled: true, tSpace: 7.8 }),
+    ...(eye ? eye.state() : { cellW: 8, cellH: 15, cols: 78, rows: 30, frames: 0, heartDisabled: true, tSpace: 7.8, gazeLocked: true, paper: '#010203' }),
     meteorAt: T.meteor,
     waitAt: T.wait,
   }
