@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#010203" />
+    <title>指尖绽放 · Persist</title>
+    <meta name="description" content="摄像头识别手掌开合，握拳时花朵收成花苞，张开时粒子向外绽放。" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="stage" class="stage">
+      <!-- 摄像头画面：镜像 + 压暗 + 边缘羽化，只做「有手在场」的暗示，不抢主体 -->
+      <video id="cam" class="cam" playsinline muted autoplay aria-hidden="true"></video>
+
+      <!-- 背景流星雨：独立的一层 2D 粒子，与花朵粒子完全隔离 -->
+      <canvas id="meteors" class="meteors" aria-hidden="true"></canvas>
+
+      <!-- 骨架连线：独立 2D 画布，比画进 WebGL 便宜，关掉时零成本 -->
+      <canvas id="hand-overlay" class="hand-overlay" aria-hidden="true"></canvas>
+
+      <!-- 主体：粒子花朵 -->
+      <canvas id="webgl" class="webgl" role="img" aria-label="粒子构成的花朵，会随手掌开合绽放或收拢"></canvas>
+
+      <div class="vignette" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <p class="brand">Persist</p>
+        <p class="tagline">把手张开，花就开了</p>
+      </header>
+
+      <section id="fallback" class="fallback" hidden>
+        <h1>这里需要 WebGL2</h1>
+        <p>请换 Chrome / Edge / Safari 的较新版本，或确认浏览器已开启硬件加速。</p>
+      </section>
+
+      <footer class="controls">
+        <button id="btn-hand" class="btn" type="button" data-state="idle">开启手势</button>
+        <p id="status" class="status" role="status" aria-live="polite">自动模式 · 花朵自己呼吸</p>
+      </footer>
+
+      <div id="hud" class="hud" hidden aria-hidden="true"></div>
+      <div id="toast" class="toast" role="alert"></div>
+    </main>
+
+    <noscript>
+      <div class="noscript">
+        <p>这个页面靠 JavaScript 绘制粒子花朵。开启 JS 后可以看到「握拳成苞、张开绽放」的效果。</p>
+      </div>
+    </noscript>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

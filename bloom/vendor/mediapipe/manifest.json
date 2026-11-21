@@ -1,0 +1,16 @@
+{
+  "package": "@mediapipe/tasks-vision@1.2.3",
+  "tarball": "https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-1.2.3.tgz",
+  "model": {
+    "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+    "sha256": "FBC2A30080C3C557093B5DDFC334698132EB341044CCEE322CCF8BCF3607CDE1",
+    "bytes": 7819105
+  },
+  "generatedAt": "2026-11-21T03:41:21.360Z",
+  "files": {
+    "vision_bundle.mjs": 155990,
+    "wasm/vision_wasm_internal.js": 336624,
+    "wasm/vision_wasm_internal.wasm": 14665716,
+    "hand_landmarker.task": 7819105
+  }
+}

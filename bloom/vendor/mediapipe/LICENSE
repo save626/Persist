@@ -1,0 +1,15 @@
+MediaPipe Tasks（@mediapipe/tasks-vision）与 hand_landmarker 模型
+Copyright 2023–2026 Google LLC
+Licensed under the Apache License, Version 2.0
+http://www.apache.org/licenses/LICENSE-2.0
+
+本目录下的文件为原包逐字节复制（未修改）：
+  vision_bundle.mjs
+  wasm/vision_wasm_internal.js
+  wasm/vision_wasm_internal.wasm
+hand_landmarker.task 来自 MediaPipe 官方模型托管（Model Card 同为 Apache-2.0）。
+
+注意：
+1. npm 包与模型分发物内均未附带 LICENSE / NOTICE 文件，故在此补充声明。
+2. Apache-2.0 不授予商标许可 —— 不得用 MediaPipe / Google 的名称或标识做背书宣传。
+3. 若修改了上述文件，需在修改处标注，并按 Apache-2.0 §4 说明改动。

@@ -1,0 +1,353 @@
+/* 指尖绽放 —— 深色舞台（延续开场层的 #010203 近黑，与落地页浅色纸面形成交接） */
+
+:root {
+  --deep: #467692;
+  --green: #6d9fbd;
+  --mist: #c7dae6;
+  --ink-0: #010203;
+  --ink-1: #04080c;
+  --ink-2: #08131c;
+  --text: #e8f2f8;
+  --muted: #9db4c4;
+  --line: rgba(199, 218, 230, 0.16);
+  --font: "Inter", "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Code", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--ink-0);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+.stage {
+  position: fixed;
+  inset: 0;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 92% at 50% 38%, var(--ink-2) 0%, var(--ink-1) 44%, var(--ink-0) 100%);
+}
+
+/* —— 摄像头画面 —— */
+.cam {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* 镜像：抬手的方向和画面一致 */
+  filter: saturate(0.5) brightness(0.62) contrast(1.05);
+  opacity: 0;
+  transition: opacity 900ms ease;
+  pointer-events: none;
+  z-index: 1;
+  -webkit-mask-image: radial-gradient(76% 72% at 50% 46%, #000 42%, transparent 100%);
+  mask-image: radial-gradient(76% 72% at 50% 46%, #000 42%, transparent 100%);
+}
+
+.cam.is-live {
+  opacity: 0.32;
+}
+
+/* —— 背景流星雨：独立一层，垫在花朵下面 —— */
+.meteors {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* —— 骨架层 —— */
+.hand-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.85;
+}
+
+/* —— 粒子层 —— */
+.webgl {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(78% 68% at 50% 46%, transparent 52%, rgba(1, 2, 3, 0.72) 100%);
+}
+
+/* —— 文案 —— */
+.topbar {
+  position: absolute;
+  top: max(20px, env(safe-area-inset-top));
+  left: clamp(18px, 4vw, 44px);
+  z-index: 6;
+  pointer-events: none;
+}
+
+.brand {
+  margin: 0;
+  font-size: clamp(15px, 1.6vw, 18px);
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  color: var(--mist);
+  text-transform: uppercase;
+}
+
+.tagline {
+  margin: 6px 0 0;
+  font-size: clamp(12px, 1.3vw, 14px);
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+/* —— 控制条 —— */
+.controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 11px 26px;
+  background: rgba(8, 19, 28, 0.55);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: rgba(142, 195, 224, 0.55);
+  background: rgba(13, 32, 46, 0.72);
+  box-shadow: 0 0 0 1px rgba(142, 195, 224, 0.14), 0 10px 32px -14px rgba(142, 195, 224, 0.7);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.btn:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.btn[data-state="on"] {
+  border-color: rgba(142, 195, 224, 0.6);
+  color: #eaf6ff;
+}
+
+.btn[data-state="error"] {
+  border-color: rgba(220, 140, 140, 0.5);
+}
+
+.status {
+  margin: 0;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.status[data-tone="error"] {
+  color: #e7b4b4;
+}
+
+/* —— 兜底 —— */
+.fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  background: rgba(1, 2, 3, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+/* 关键：`display:grid` 会盖掉 [hidden] 的 UA 默认 display:none，必须显式收回 */
+.fallback[hidden] {
+  display: none;
+}
+
+.fallback h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.fallback p {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.stage.is-unsupported .webgl,
+.stage.is-unsupported .hand-overlay {
+  opacity: 0;
+}
+
+/* —— 调试 HUD —— */
+.hud {
+  position: absolute;
+  right: clamp(14px, 3vw, 30px);
+  bottom: calc(max(22px, env(safe-area-inset-bottom)) + 74px);
+  z-index: 9;
+  min-width: 190px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(4, 8, 12, 0.72);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--mist);
+  backdrop-filter: blur(8px);
+}
+
+.hud-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.hud-row b {
+  font-weight: 500;
+  color: rgba(157, 180, 196, 0.85);
+}
+
+.hud-fingers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.hud-f {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(142, 195, 224, calc(0.08 + 0.34 * var(--v, 0)));
+}
+
+.hud-dim {
+  color: rgba(157, 180, 196, 0.6);
+}
+
+/* —— 提示条 —— */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(22px, env(safe-area-inset-bottom)) + 92px);
+  z-index: 11;
+  transform: translate(-50%, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(92vw, 460px);
+  padding: 12px 16px;
+  border: 1px solid rgba(199, 218, 230, 0.22);
+  border-radius: 12px;
+  background: rgba(10, 22, 32, 0.94);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.65;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.toast.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  cursor: pointer;
+}
+
+.toast strong {
+  font-weight: 600;
+  color: #f0d9d9;
+}
+
+.toast span {
+  color: var(--muted);
+}
+
+/* —— 无 JS —— */
+.noscript {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  padding: 32px;
+  background: var(--ink-0);
+  text-align: center;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+/* —— 移动端 —— */
+@media (max-width: 640px) {
+  .tagline {
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+  }
+
+  .hud {
+    right: 12px;
+    left: 12px;
+    min-width: 0;
+    font-size: 10.5px;
+  }
+}
+
+/* —— 尊重「减少动效」：不跑呼吸和视差，只留一张安静的花 —— */
+@media (prefers-reduced-motion: reduce) {
+  .cam {
+    transition: none;
+  }
+
+  .toast {
+    transition: none;
+  }
+}
