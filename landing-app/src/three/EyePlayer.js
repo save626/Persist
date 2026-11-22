@@ -17,7 +17,7 @@
  */
 
 export class EyePlayer {
-  constructor(canvas) {
+  constructor(canvas, options = {}) {
     this.canvas = canvas
     this.ctx = canvas ? canvas.getContext('2d') : null
     this.engine = typeof window !== 'undefined' ? window.EyeEngine : null
@@ -27,6 +27,9 @@ export class EyePlayer {
     this.raf = 0
     this.t0 = 0
     this.visible = true
+    // 推进起点/时长可配置：默认 4.6/3.2，开场想拉长眼睛段时传更大的 tZ0 即可
+    this.optTZ0 = typeof options.tZ0 === 'number' ? options.tZ0 : 4.6
+    this.optTZD = typeof options.tZd === 'number' ? options.tZd : 3.2
     // 参考版 web/index.html 的近黑画布底色（深色系原版观感）
     this.paper = '#010203'
 
@@ -40,8 +43,8 @@ export class EyePlayer {
     const E = this.engine
     if (!E) return
     const CFG = E.CFG
-    this.T_Z0 = 4.6
-    this.T_ZD = 3.2
+    this.T_Z0 = this.optTZ0
+    this.T_ZD = this.optTZD
     this.T_SPACE = this.T_Z0 + this.T_ZD
     CFG.T_Z0 = this.T_Z0
     CFG.T_ZD = this.T_ZD

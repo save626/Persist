@@ -17,7 +17,7 @@
  */
 import { build, createServer } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, statSync, cpSync, readdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,11 +39,16 @@ if (CHECK) {
 }
 
 // ---------- 1. SSR 预渲染 ----------
+// 粒子舞台复用仓库内的融合工程（同一份着色器/场景代码，不复制一份到 landing-app）
+const FUSION_SRC = resolve(ROOT, '..', 'gesture-particle-fusion-20261121', 'src')
+const alias = { '@fusion': FUSION_SRC }
+
 const ssrServer = await createServer({
   root: ROOT,
   configFile: false,
   logLevel: 'warn',
   plugins: [vue()],
+  resolve: { alias },
   server: { middlewareMode: true, hmr: false },
   appType: 'custom',
 })
@@ -61,10 +66,13 @@ await build({
   configFile: false,
   logLevel: 'warn',
   plugins: [vue()],
+  resolve: { alias },
   build: {
     outDir: resolve(ROOT, 'dist'),
     emptyOutDir: true,
     cssCodeSplit: false,
+    // IIFE 单文件：关掉 modulePreload，避免动态 import 被注入 import.meta.url 的预加载 helper
+    modulePreload: false,
     write: true,
     rollupOptions: {
       input: resolve(ROOT, 'src/main.js'),
@@ -116,3 +124,27 @@ ${appJs}
 
 writeFileSync(OUT, html.replace(/\r\n/g, '\n'))
 console.log(`已生成 ${OUT}（${Buffer.byteLength(html)} B）`)
+
+// ---------- 4. 手势资源：同源静态目录 ----------
+// 开场里的「开启手势」要 MediaPipe：wasm + 模型无法塞进单文件（约 22 MB），
+// 所以按目录同源提供，运行时由 HandTracker({ base: './fusion/mediapipe' }) 取。
+// 代价（必须写进文档）：这一版不再「单文件可双击打开」，手势也只在 http(s) 下可用；
+// 不点「开启手势」就不会请求这些文件，也不申请摄像头。
+const FUSION_MP = resolve(REPO, 'gesture-particle-fusion-20261121', 'vendor', 'mediapipe')
+const LANDING_MP = resolve(REPO, 'landing', 'fusion', 'mediapipe')
+if (existsSync(FUSION_MP)) {
+  cpSync(FUSION_MP, LANDING_MP, { recursive: true })
+  const bytes = readdirBytes(LANDING_MP)
+  console.log(`已同步手势资源 ${LANDING_MP}（${(bytes / 1048576).toFixed(1)} MB）`)
+} else {
+  console.warn('⚠ 未找到 fusion vendor/mediapipe，跳过手势资源同步（开场的手势按钮会报缺文件）')
+}
+
+function readdirBytes(dir) {
+  let total = 0
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = resolve(dir, e.name)
+    total += e.isDirectory() ? readdirBytes(p) : statSync(p).size
+  }
+  return total
+}

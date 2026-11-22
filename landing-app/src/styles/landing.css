@@ -296,10 +296,12 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 /* 交棒段：服务器部署版的「星空照片底图 + 压暗层 + Canvas 2D 星轨/流星」，铺满视口。
    · 底图 = 部署版 starfield-*.webp（内嵌 data URI，见 build.mjs 注入 --intro-starfield），
      保留部署版的中心稍亮、边缘压暗（scrim 两层渐变），星云与星点清晰可见。
-   · canvas 本身透明：星轨/流星用 lighter 叠加在照片之上（与部署版 #sky 层同构）。
+   · 照片底图和流星 canvas **拆成两层**：花瓣段要把照片底图淡掉（用户要求花瓣层不要
+     星空背景图），只留深色底 + 流星；两层拆开才能各自独立淡入淡出。
+   · canvas 本身透明：星轨/流星用 lighter 叠加在底图之上（与部署版 #sky 层同构）。
    · 4.6s 起整层淡入，从眼睛阶段的近黑 #010203 自然过渡到星空。 */
-.intro-meteor{
-  position:absolute;inset:0;width:100%;height:100%;display:block;
+.intro-sky{
+  position:absolute;inset:0;display:block;
   /* 第十二轮：完整显示原图零裁剪、零黑边 —— 用 100% 100% 拉伸铺满（cover 会裁掉
      约 10% 的银河/流星轨迹；contain 会在 16:10 视口留下明显黑边，因原图边缘
      顶部近黑、底部亮蓝，纯色填充无法同时匹配）。3000×1688 原始档逐字节内联，
@@ -314,12 +316,47 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   background-repeat:no-repeat;
   opacity:0;pointer-events:none;transition:opacity 1.5s ease;
 }
-/* 4.6s 瞳孔推进开始：字符画淡出、流星雨淡入（逐渐进入，不是硬切） */
+.intro-meteor{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  opacity:0;pointer-events:none;transition:opacity 1.5s ease;
+}
+/* 4.6s 瞳孔推进开始：字符画淡出、星空底图 + 流星淡入（逐渐进入，不是硬切） */
 .intro.is-meteor .intro-canvas{opacity:0}
+.intro.is-meteor .intro-sky{opacity:1}
 .intro.is-meteor .intro-meteor{opacity:1}
+/* 花瓣段：星空**照片底图**淡掉，粒子直接落在近黑底上；流星保留（用户只要求去掉背景图） */
+.intro.is-particle .intro-sky{opacity:0;transition:opacity 1.8s ease}
+
+/* ── 粒子舞台（桌面端）───────────────────────────────────────────────
+   第三层画布：WebGL 花瓣粒子，透明清屏叠在流星雨之上。
+   入场用「径向遮罩从瞳孔中心涨开 + 整体淡入 + 场景缩放 0.55→1」三件事叠加，
+   读起来是瞳孔碎裂成粒子、而不是一张图淡入。
+   移动端不挂这层（IntroOverlay 里按 pointer/宽度判定），所以这里不做小屏版本。 */
+.intro-particles{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  z-index:2;pointer-events:none;opacity:0;
+  -webkit-mask-image:radial-gradient(circle at 50% 50%, #000 0 46%, rgba(0,0,0,.62) 64%, transparent 82%);
+          mask-image:radial-gradient(circle at 50% 50%, #000 0 46%, rgba(0,0,0,.62) 64%, transparent 82%);
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:50% 50%;mask-position:50% 50%;
+  /* 起点留 24%：从一个瞳孔大小的小圆开始涨，0% 会像"凭空出现" */
+  -webkit-mask-size:24% 24%;mask-size:24% 24%;
+  transition:opacity 2.6s ease,
+             -webkit-mask-size 3s cubic-bezier(.22,.61,.36,1),
+             mask-size 3s cubic-bezier(.22,.61,.36,1);
+}
+.intro.is-particle .intro-particles{
+  opacity:1;
+  -webkit-mask-size:340% 340%;mask-size:340% 340%;
+}
+/* 定格后不再随鼠标/手势变化，只保留动画层自己的极轻呼吸 */
+.intro.is-waiting .intro-particles{
+  transition:none;
+}
+
 /* 交棒完成后停在粒子层，等用户点一下才进落地页 */
 .intro-enter{
-  position:absolute;left:50%;bottom:clamp(52px,11vh,104px);z-index:4;
+  position:absolute;left:50%;bottom:clamp(86px,16vh,126px);z-index:4;
   transform:translateX(-50%);
   font-family:var(--num);font-size:12px;letter-spacing:.2em;
   color:#c6dae7;white-space:nowrap;
@@ -331,6 +368,54 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 /* 等待点击时「跳过开场」已完成使命，淡出避免与「点击进入」语义重复 */
 .intro.is-waiting .intro-skip{opacity:0;pointer-events:none}
 @keyframes intro-breathe{0%,100%{border-color:rgba(174,205,224,.30)}50%{border-color:rgba(174,205,224,.68)}}
+
+/* ── 融合界面壳：场景切换 / 开启手势 / 全屏 ──────────────────────────
+   7.6s 起淡入；按钮全部 stopPropagation，所以「点任意位置进落地页」不会误触。
+   没有颜色选择器（用户明确不要）。 */
+.intro-actions{
+  position:absolute;left:50%;bottom:clamp(18px,3.6vh,34px);z-index:5;
+  transform:translateX(-50%);
+  display:flex;align-items:center;gap:4px;
+  padding:5px;border-radius:999px;
+  background:rgba(9,15,23,.52);border:1px solid rgba(150,200,240,.16);
+  backdrop-filter:blur(10px);
+  opacity:0;pointer-events:none;transition:opacity .7s ease;
+}
+.intro.is-ui .intro-actions{opacity:1;pointer-events:auto}
+.intro-scenes{display:flex;gap:2px}
+.intro-act{
+  font-family:var(--num);font-size:12px;letter-spacing:.1em;
+  color:#b9cdda;background:transparent;border:0;border-radius:999px;
+  padding:8px 14px;cursor:pointer;
+  transition:color .3s ease,background-color .3s ease;
+}
+.intro-act:hover{color:#eaf6ff;background:rgba(255,255,255,.06)}
+.intro-act:focus-visible{outline:2px solid #8fc0dd;outline-offset:2px}
+.intro-act.is-active{color:#eaf6ff;background:rgba(111,182,232,.18);box-shadow:inset 0 0 0 1px rgba(143,192,221,.35)}
+.intro-act.is-on{color:#eaf6ff;background:rgba(111,182,232,.22);box-shadow:inset 0 0 0 1px rgba(143,192,221,.45)}
+.intro-sep{width:1px;height:16px;background:rgba(150,200,240,.18);margin:0 4px}
+.intro-cam{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.intro-tip{
+  position:absolute;left:50%;top:clamp(22px,6vh,64px);z-index:6;
+  transform:translateX(-50%);
+  max-width:min(76vw,520px);text-align:center;
+  font-family:var(--num);font-size:12px;letter-spacing:.08em;color:#cfe3f2;
+  padding:9px 16px;border-radius:12px;
+  background:rgba(9,15,23,.72);border:1px solid rgba(150,200,240,.18);
+  opacity:0;pointer-events:none;transition:opacity .3s ease;
+}
+.intro-tip.is-on{opacity:1}
+
+/* 全屏 = 只看画面：状态栏、点击提示、临时提示一律收起。
+   退出全屏（ESC 或再点一次）后自动恢复。 */
+.intro.is-fullscreen .intro-actions,
+.intro.is-fullscreen .intro-enter,
+.intro.is-fullscreen .intro-tip,
+.intro.is-fullscreen .intro-skip{
+  opacity:0!important;
+  pointer-events:none!important;
+  transition:none!important;
+}
 
 /* 关闭按钮：整段开场是深色沉浸（眼睛阶段近黑 #010203 → 流星雨星空底图），
    始终用浅色字，深底上对比 ≥ 4.5:1。 */
