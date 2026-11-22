@@ -9,10 +9,10 @@ import { chromium } from '../app/node_modules/playwright-core/index.mjs'
 const FILE = 'file:///D:/Persist/landing/index.html'
 const SHOTS = [
   { name: 'intro-1-eye-drawn.png', at: 2600, note: '近黑底上，产品灰蓝三色眼睛（瞳孔深墨蓝/虹膜产品蓝/巩膜浅灰蓝），居中' },
-  { name: 'intro-2-gaze.png', at: 4000, note: '眨眼后，瞳孔推进开始（视线锁定居中）' },
-  { name: 'intro-3-push-pupil.png', at: 4800, note: '瞳孔推进到顶点，流星雨开始淡入' },
-  { name: 'intro-4-meteor-fullscreen.png', at: 7000, note: '3000档星空底图零裁剪零黑边完整显示 + 翻倍流星(40颗/寿命延长)铺满视口' },
-  { name: 'intro-5-waiting-click.png', at: 8400, note: '停在流星雨界面不再变化，显示「点击任意位置进入」' },
+  { name: 'intro-2-gaze.png', at: 5200, note: '眨眼后，瞳孔推进开始（视线锁定居中）' },
+  { name: 'intro-3-push-pupil.png', at: 7000, note: '瞳孔推进中，星空与粒子开始进入' },
+  { name: 'intro-4-meteor-fullscreen.png', at: 8800, note: '3000档星空底图零裁剪零黑边完整显示 + 翻倍流星(40颗/寿命延长)铺满视口' },
+  { name: 'intro-5-waiting-click.png', at: 10200, note: '停在流星雨界面不再变化，显示「点击任意位置进入」' },
 ]
 const LANDSCAPE_SHOT = { name: 'intro-6-handoff-landing.png', note: '点击交棒后的落地页' }
 

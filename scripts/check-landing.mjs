@@ -433,8 +433,10 @@ try {
     if (Math.abs(ratio - 8 / 15) > 0.06) fail('intro', `字符格比例应为 8:15（0.533），实为 ${ratio.toFixed(3)}`)
     if (early.frames < 10) fail('intro', `1.3s 只画了 ${early.frames} 帧（引擎没在跑）`)
     if (!early.heartDisabled) fail('intro', '心形星云没有被禁用')
-    if (Math.abs(early.meteorAt - 4.6) > 0.8) fail('intro', `流星雨淡入起点应 ~4.6s（与瞳孔推进同步），实为 ${early.meteorAt}s`)
-    if (Math.abs(early.waitAt - 7.8) > 0.8) fail('intro', `等待点击时点应 ~7.8s（推进结束），实为 ${early.waitAt}s`)
+    if (early.meteorAt < 5.4 || early.meteorAt > 8.2) fail('intro', `流星雨淡入起点应随瞳孔推进（5.4–8.2s），实为 ${early.meteorAt}s`)
+    if (Math.abs(early.waitAt - early.meteorAt - 3.2) > 0.05) {
+      fail('intro', `等待点击 = 推进起点 + 3.2s，实为 ${early.waitAt}（起点 ${early.meteorAt}）`)
+    }
     if (early.gazeLocked !== true) fail('intro', '推进阶段视线未锁定为 (0,0)（瞳孔会偏离画面中心）')
     // 第十轮真因：画布 absolute+inset:0 被钉在视口左上角，父级 flex 对绝对定位元素无效。
     // 现在用 margin:auto 居中，实测画布中心应≈视口中心（容差 3px）。
@@ -487,7 +489,17 @@ try {
 
     // 6.4 服务器部署版流星雨：Canvas 2D 星轨 + 渐变尾迹流星，铺满整个视口、
     //     冷蓝无暖色、有星点拖尾（不是空白）。4.6s 起淡入，7.8s 完全接管。
-    await page.waitForTimeout(5100)   // ≈ 7.7s（含 headless 渲染开销），流星雨层已淡入
+    //     注意：加了粒子层后单文件更大、headless 每帧更贵，不能再用"睡 5.1s 再看"。
+    //     这里等到真有 20 帧再说（超时 60s），保证"动画在跑"这个断言不依赖机器速度。
+    await waitIntroElapsed(page, 8.8)
+    await page.waitForFunction(
+      () => {
+        const st = window.__persistIntroState && window.__persistIntroState()
+        return Boolean(st && st.meteorFrames >= 20)
+      },
+      null,
+      { timeout: 60000, polling: 150 },
+    )
     const deep = await page.evaluate(() => {
       const cv = document.getElementById('introMeteor')
       const st = window.__persistIntroState()
@@ -497,13 +509,18 @@ try {
       const ov = document.getElementById('intro')
       // 星空照片底图：内嵌 data URI 的 CSS 变量，必须存在且是 webp
       const starfield = getComputedStyle(document.documentElement).getPropertyValue('--intro-starfield').trim()
+      // 第十三轮起星空照片底图拆到独立层 #introSky（花瓣段要把它淡掉），
+      // 背景尺寸断言改读这一层；流星 canvas 只负责星轨/流星。
+      const skyEl = document.getElementById('introSky')
+      const skyBg = skyEl ? getComputedStyle(skyEl) : null
       const meteorBg = getComputedStyle(cv)
       return {
         starfield: starfield.startsWith('url("data:image/webp;base64,'),
         starfieldLen: starfield.length,
         // 第十二轮：完整显示不裁剪 → 图片层用 100% 100%（cover 裁掉银河/流星轨迹，
         // contain 留黑边），零裁剪零黑边
-        bgSize: meteorBg.backgroundSize,
+        bgSize: skyBg ? skyBg.backgroundSize : meteorBg.backgroundSize,
+        hasSky: Boolean(skyEl),
         fullscreen: st.meteorIsFullscreen,
         cssW: cv.clientWidth, cssH: cv.clientHeight,
         vw: window.innerWidth, vh: window.innerHeight,
@@ -635,6 +652,17 @@ try {
     }
   }
 
+  /** 等到「从起播算起」的第 sec 秒（不要用 load 后的固定 sleep：单文件 2.96 MB 的 load 本身就要 2–3s） */
+  async function waitIntroElapsed(pg, sec) {
+    await pg.waitForFunction(
+      (t) => {
+        const st = window.__persistIntroState && window.__persistIntroState()
+        return Boolean(st && st.elapsed >= t)
+      },
+      sec,
+      { timeout: 60000, polling: 100 },
+    )
+  }
   /* ---------- 6d. 移动端降级：减粒子 + 关 Bloom ---------- */
   {
     const ctx = await browser.newContext({
@@ -647,7 +675,7 @@ try {
     const errs = []
     page.on('pageerror', (e) => errs.push(String(e)))
     await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
-    await page.waitForTimeout(5600)
+    await waitIntroElapsed(page, 7.4)
     const m = await page.evaluate(() => {
       const st = window.__persistIntroState()
       return {
@@ -675,7 +703,7 @@ try {
     const errs = []
     page.on('pageerror', (e) => errs.push(String(e)))
     await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
-    await page.waitForTimeout(5200)   // 粒子层已接管
+    await waitIntroElapsed(page, 7.0)   // 已在推进段、仍在等待点击之前（skip 可点）
     const before = await page.evaluate(() => ({
       st: window.__persistIntroState(),
       overlayHidden: document.getElementById('intro').hidden,
@@ -710,7 +738,7 @@ try {
     })
     const page = await ctx.newPage()
     await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
-    await page.waitForTimeout(5000)
+    await waitIntroElapsed(page, 7.0)
     const f0 = await page.evaluate(() => window.__persistIntroState().meteorFrames)
     // 模拟页面隐藏（headless 下 CDP 无 setPageVisibilityState，用属性 + 事件等价模拟）
     await page.evaluate(() => {
