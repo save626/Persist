@@ -1,4 +1,4 @@
-# Dependencies and build output
+﻿# Dependencies and build output
 node_modules/
 landing-app/node_modules/
 landing-app/dist/
@@ -85,3 +85,6 @@ bloom/preview/
 # Python 产物
 __pycache__/
 *.pyc
+
+# 排障截图（诊断用，不入库；保留 preview/ 根下的精选证据图）
+preview/_diag/
