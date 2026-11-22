@@ -88,3 +88,6 @@ __pycache__/
 
 # 排障截图（诊断用，不入库；保留 preview/ 根下的精选证据图）
 preview/_diag/
+
+# 独立开场动画仓库（自带 .git，单独推送）
+intro-stage/
