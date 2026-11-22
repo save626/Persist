@@ -1,4 +1,4 @@
-# 手势粒子融合 · Gesture Particle Fusion（裁剪版）
+﻿# 手势粒子融合 · Gesture Particle Fusion（裁剪版）
 
 只剩两个场景：**花瓣**（最初的张开 / 满屏散开）与 **圣诞树**（ZekangLi-Zico/Christmas-Tree 的移植）。
 一套 Three.js 渲染、一套手势管线、一个入口页面。
@@ -78,6 +78,8 @@ index.html / styles.css      入口与界面（场景按钮 / 颜色 / 全屏 / 
 serve.mjs                    静态服务（wasm MIME / CSP / 摄像头权限）
 src/
 ├─ main.js                   装配：引擎 + 手势 + 场景注册表 + 循环
+├─ stage.js                  **可复用渲染层**：createParticleStage（无 UI/手势/流星，
+│                            独立工程与落地页开场共用同一份粒子代码）
 ├─ core/
 │  ├─ engine.js              单渲染器 / 单相机 / 单 RAF / 场景挂载与释放
 │  ├─ gestures.js            统一手势状态（palm/fist/pinch/spread/fingers/pos/rot）
@@ -204,3 +206,16 @@ node scripts/shoot.mjs
    65k 位置写回 + 24k 花瓣进度推进）。真实 GPU 上应远高于此，但未在真机测过。
 4. **移动端未分场景降配**：目前只有全局 DPR 限制，树场景在低端机上可能需要减少排序频率或点数。
 5. **pygame 程序的退出**：上游没有 ESC 退出，只能点窗口关闭按钮（`PATCHES.md` 已记录）。
+
+## 被落地页开场复用
+
+渲染层 src/stage.js 不含 UI：`createParticleStage({ canvas, sceneId })` 返回
+`update(dt, gestures) / render() / loadScene() / setDisperse() / setScale() / setAuto() / setTint() / measure() / dispose()`。
+落地页开场（`landing-app/src/components/IntroOverlay.vue`）就是这么用的：
+
+- `setAuto(false)` 关自动循环；
+- `setDisperse(0)` 保持完整六瓣（只要开到 0.2，粒子就会朝屏幕随机目标点漂移，瓣形立刻糊掉）；
+- `setScale(0.4 → 1)` 做"从瞳孔里长出来"的缩放；
+- 遮罩/透明度由开场自己的 CSS 过渡负责，粒子层本身 `pointer-events:none`。
+
+花瓣场景为此加了 `setAuto/setDisperse/setScale` 三个手动接口（手势模式下行为不变）。

@@ -4,11 +4,10 @@
  * 这里刻意不做"每个场景自己 new 一个 renderer / 自己起一个 rAF"——
  * 原五个仓库都是那样的结构，共存会互相抢 canvas 与帧率。
  */
-import { createEngine } from './core/engine.js'
+import { createParticleStage } from './stage.js'
 import { GestureState } from './core/gestures.js'
 import { HandTracker } from './core/hand-tracker.js'
 import { createOverlay } from './core/overlay.js'
-import { createGlowTexture } from './core/sprites.js'
 import { createMeteors } from './core/meteors.js'
 import { SCENES } from './scenes/index.js'
 import { createUI } from './ui/ui.js'
@@ -17,10 +16,9 @@ const canvas = document.querySelector('#stage')
 const overlayCanvas = document.querySelector('#hand-overlay')
 const meteorCanvas = document.querySelector('#meteors')
 
-const engine = createEngine({ canvas })
-engine.resize()
-
-const sprite = createGlowTexture(engine.THREE)
+// 渲染层收进 stage（同一份代码也被落地页开场复用），这里只做壳
+const stage = createParticleStage({ canvas, sceneId: 'flower' })
+const engine = stage.engine
 const gestures = new GestureState()
 const overlay = createOverlay(overlayCanvas)
 const tracker = new HandTracker({ numHands: 2 })
@@ -56,11 +54,10 @@ const ui = createUI({
 let tintColor = '#ffffff'
 
 function loadScene(id) {
-  const entry = SCENES.find((s) => s.id === id) || SCENES[0]
-  const inst = entry.create({ THREE: engine.THREE, sprite, camera: engine.camera })
-  engine.setScene(inst)
+  const inst = stage.loadScene(id)
   current = inst
-  currentId = entry.id
+  currentId = stage.sceneId
+  const entry = SCENES.find((s) => s.id === currentId) || SCENES[0]
   ui.setActive(entry)
   // 新场景套用当前颜色
   current.setTint?.(tintColor)
