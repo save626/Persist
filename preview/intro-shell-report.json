@@ -1,0 +1,43 @@
+{
+  "shell": {
+    "elapsed": 11.66,
+    "sceneId": "flower",
+    "uiVisible": true,
+    "actions": [
+      "花瓣",
+      "圣诞树",
+      "开启手势",
+      "全屏"
+    ],
+    "hasSceneFlower": true,
+    "hasSceneLights": true,
+    "hasHands": true,
+    "hasFullscreen": true,
+    "hasColorPicker": false,
+    "uiClass": true,
+    "actionsVisible": 0.988066
+  },
+  "tree": {
+    "sceneId": "lights",
+    "activeLabel": "intro-act intro-scene is-active"
+  },
+  "back": "flower",
+  "fsBefore": false,
+  "fsAfter": true,
+  "openLit": {
+    "litRatio": 0.9761,
+    "width": 1440,
+    "height": 900
+  },
+  "closedLit": {
+    "litRatio": 0.3006,
+    "width": 1440,
+    "height": 900
+  },
+  "stillIntro": true,
+  "after": {
+    "hidden": true,
+    "text": "PERSIST\n动效 开\n产品介绍\n\n把每天的碎片写下来，晚"
+  },
+  "errors": []
+}
