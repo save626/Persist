@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { EyePlayer } from '../three/EyePlayer.js'
 import { MeteorField } from '../three/MeteorField.js'
@@ -512,8 +512,8 @@ defineExpose({ state })
     @click="onOverlayClick"
   >
     <canvas ref="eyeCanvas" class="intro-canvas" id="introCanvas" aria-hidden="true"></canvas>
-    <!-- 星空照片底图单独一层：花瓣段要把它淡掉，只留深色底 + 流星 -->
-    <div class="intro-sky" id="introSky" aria-hidden="true"></div>
+    <!-- 2026-11-23：星空照片底图整层删除（用户要求「只保留流星层与星轨」）。
+         瞳孔推进后直接落在近黑底 #010203 上，星轨与流星由下面这张 2D canvas 画。 -->
     <canvas ref="meteorCanvas" class="intro-meteor" id="introMeteor" aria-hidden="true"></canvas>
     <canvas ref="particleCanvas" class="intro-particles" id="introParticles" aria-hidden="true"></canvas>
     <video ref="camEl" class="intro-cam" id="introCam" playsinline muted autoplay aria-hidden="true"></video>

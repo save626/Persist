@@ -507,20 +507,16 @@ try {
       const px = st.meteorPixels || { warm: 0, magenta: 0, lit: 0, blueish: 0, total: 0 }
       const ctx2d = cv.getContext('2d')
       const ov = document.getElementById('intro')
-      // 星空照片底图：内嵌 data URI 的 CSS 变量，必须存在且是 webp
+      // 2026-11-23：星空照片底图整层删除（用户要求只留流星层与星轨）。
+      // 这里改为**反向断言**：--intro-starfield 必须是空的、#introSky 必须不存在。
       const starfield = getComputedStyle(document.documentElement).getPropertyValue('--intro-starfield').trim()
-      // 第十三轮起星空照片底图拆到独立层 #introSky（花瓣段要把它淡掉），
-      // 背景尺寸断言改读这一层；流星 canvas 只负责星轨/流星。
       const skyEl = document.getElementById('introSky')
-      const skyBg = skyEl ? getComputedStyle(skyEl) : null
       const meteorBg = getComputedStyle(cv)
       return {
-        starfield: starfield.startsWith('url("data:image/webp;base64,'),
+        starfield: starfield === '',
         starfieldLen: starfield.length,
-        // 第十二轮：完整显示不裁剪 → 图片层用 100% 100%（cover 裁掉银河/流星轨迹，
-        // contain 留黑边），零裁剪零黑边
-        bgSize: skyBg ? skyBg.backgroundSize : meteorBg.backgroundSize,
         hasSky: Boolean(skyEl),
+        meteorBgImage: meteorBg.backgroundImage,
         fullscreen: st.meteorIsFullscreen,
         cssW: cv.clientWidth, cssH: cv.clientHeight,
         vw: window.innerWidth, vh: window.innerHeight,
@@ -546,16 +542,10 @@ try {
     if (deep.warm > 3000) fail('intro', `流星雨层出现 ${deep.warm} 个暖色像素（应统一冷蓝）`)
     const litPct = deep.lit / deep.total * 100
     if (litPct < 0.1) fail('intro', `流星雨层几乎全空（亮像素 ${litPct.toFixed(2)}%）`)
-    if (!deep.starfield) fail('intro', '流星雨层缺少星空照片底图（--intro-starfield data URI）')
-    // 第十二轮：3000×1688 原始档逐字节 base64 ≈ 200 万字符，完整画质零重编码。
-    // 不许再 canvas 重编码压缩（第十轮压缩版 ~12 万、第十一轮 1920 档 ~84 万）
-    if (deep.starfieldLen < 1900000) {
-      fail('intro', `星空底图只有 ${deep.starfieldLen} 字符，疑似降级到 1920 档或被压缩（3000 档原画质应 ≥ 1900000）`)
-    }
-    // 完整显示、零裁剪零黑边：图片层 background-size 必须是 100% 100%
-    // （cover 裁掉约 10% 银河/流星轨迹，contain 在 16:10 视口留黑边）
-    if (!/100%\s+100%/.test(deep.bgSize)) {
-      fail('intro', `星空底图 background-size 为 ${deep.bgSize}，应为 100% 100%（零裁剪零黑边完整显示）`)
+    if (!deep.starfield) fail('intro', '--intro-starfield 不为空：星空照片底图应已整层删除')
+    if (deep.hasSky) fail('intro', '#introSky 仍然存在：星空照片底图应已整层删除')
+    if (deep.meteorBgImage !== 'none') {
+      fail('intro', `流星 canvas 不该自带背景图（应为 none，实为 ${deep.meteorBgImage.slice(0, 40)}）`)
     }
 
     // 6.5 等待点击：8.5s 后停在粒子层，不自动进落地页
@@ -600,7 +590,7 @@ try {
     if (!done.ctaVisible) fail('intro', '点击后 CTA 不见了')
     if (done.hasSkyCanvas) fail('intro', '落地页仍有流星雨 canvas')
     if (consoleErrors.length) fail('intro', `控制台报错：${consoleErrors.join(' | ')}`)
-    notes.push(`开场：${early.cols}×${early.rows} 格 ${early.cellW}×${early.cellH} · 近黑底留白 ${density.nearBase}% · 灰蓝三色 虹膜${density.irisBlue}/巩膜${density.paleBlue}/瞳孔${density.deepBlue}px 琥珀${density.warm} · 画布居中偏差 ${early.canvasOffsetX}×${early.canvasOffsetY}px · 星轨+流星雨 ${deep.cssW}×${deep.cssH} 铺满 ${deep.meteorCount} 颗/${deep.meteorFrames} 帧（上限40/寿命翻倍） · 星空底图3000档零裁剪零黑边 ${deep.starfieldLen}字符 · 等点击后交棒 标题 ${done.wmDrawn}/${done.wmTotal}`)
+    notes.push(`开场：${early.cols}×${early.rows} 格 ${early.cellW}×${early.cellH} · 近黑底留白 ${density.nearBase}% · 灰蓝三色 虹膜${density.irisBlue}/巩膜${density.paleBlue}/瞳孔${density.deepBlue}px 琥珀${density.warm} · 画布居中偏差 ${early.canvasOffsetX}×${early.canvasOffsetY}px · 星轨+流星雨 ${deep.cssW}×${deep.cssH} 铺满 ${deep.meteorCount} 颗/${deep.meteorFrames} 帧（上限40/寿命翻倍） · 无照片底图（0 字符） · 等点击后交棒 标题 ${done.wmDrawn}/${done.wmTotal}`)
     await ctx.close()
   }
 
@@ -663,7 +653,7 @@ try {
       { timeout: 60000, polling: 100 },
     )
   }
-  /* ---------- 6d. 移动端降级：减粒子 + 关 Bloom ---------- */
+  /* ---------- 6d. 移动端：无粒子层 + 规整流星雨 ---------- */
   {
     const ctx = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -676,20 +666,39 @@ try {
     page.on('pageerror', (e) => errs.push(String(e)))
     await page.goto(`${fileUrl}?intro=1`, { waitUntil: 'load' })
     await waitIntroElapsed(page, 7.4)
+    // 规整流星是等距点阵，某一瞬间的采样窗可能正好落在两排之间 ——
+    // 所以不取单点，等到「至少一帧有明显亮像素」再读（最多等 8s，足够走完一个周期）
+    await page.waitForFunction(
+      () => {
+        const st = window.__persistIntroState()
+        return Boolean(st.meteorPixels && st.meteorPixels.lit >= 10)
+      },
+      null,
+      { timeout: 8000, polling: 120 },
+    )
     const m = await page.evaluate(() => {
       const st = window.__persistIntroState()
+      const cv = document.getElementById('introMeteor')
       return {
         mobile: st.meteorMobile, bloom: st.meteorBloom,
         count: st.meteorCount, frames: st.meteorFrames,
         px: st.meteorPixels,
+        particleEligible: st.particleEligible,
+        skyGone: !document.getElementById('introSky'),
+        bgImage: getComputedStyle(cv).backgroundImage,
       }
     })
     if (m.mobile !== true) fail('mobile', `移动端应判定为 mobile，实为 ${m.mobile}`)
     if (m.bloom !== false) fail('mobile', `移动端应关闭 Bloom，实为 ${m.bloom}`)
-    if (m.frames < 5) fail('mobile', `移动端粒子层帧数 ${m.frames} 过低`)
-    if (!m.px || m.px.lit < 10) fail('mobile', `移动端粒子层没有可见粒子（lit=${m.px ? m.px.lit : 'null'}）`)
+    if (m.particleEligible !== false) fail('mobile', '移动端不应挂 3D 粒子层')
+    if (m.frames < 5) fail('mobile', `移动端流星层帧数 ${m.frames} 过低`)
+    // 2026-11-23：移动端改成规整流星雨（5 轨 × 6 颗 = 30 颗固定点阵），数量不随机增减
+    if (m.count !== 30) fail('mobile', `移动端规整流星应为固定 30 颗，实为 ${m.count}`)
+    if (!m.px || m.px.lit < 10) fail('mobile', `移动端流星层没有可见流星（lit=${m.px ? m.px.lit : 'null'}）`)
+    if (!m.skyGone) fail('mobile', '移动端仍存在 #introSky（照片底图应已整层删除）')
+    if (m.bgImage !== 'none') fail('mobile', `移动端流星 canvas 自带背景图（${m.bgImage.slice(0, 40)}）`)
     if (errs.length) fail('mobile', `移动端控制台报错：${errs.join(' | ')}`)
-    notes.push(`移动端降级：判定 ${m.mobile} · Bloom ${m.bloom} · 粒子 ${m.count} 颗/${m.frames} 帧 · 亮像素 ${m.px ? m.px.lit : 0}`)
+    notes.push(`移动端：无粒子层 · 规整流星 ${m.count} 条/${m.frames} 帧 · 亮像素 ${m.px ? m.px.lit : 0} · 无照片底图`)
     await ctx.close()
   }
 

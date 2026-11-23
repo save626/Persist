@@ -92,17 +92,15 @@ const appCss = readFileSync(resolve(ROOT, 'dist', 'app.css'), 'utf8')
 const engine = readFileSync(ENGINE, 'utf8').replace(/\r\n/g, '\n')
 const head = readFileSync(HEAD_TPL, 'utf8').replace(/\r\n/g, '\n')
 
-// 服务器部署版的星空照片底图：从历史 4be7a0f 取 starfield-wide-3000.webp
-// （3000×1688 原始档 1.5 MB）逐字节 base64，作为 CSS 变量注入 —— 完整画质、
-// 零重编码，同时保住「单文件 / 零外部请求 / file:// 可开」。
-// 生成方式：git show 4be7a0f:landing/assets/starfield-wide-3000.webp | base64 -w0。
-const starfield = readFileSync(resolve(ROOT, 'src', 'three', 'starfield.datauri.txt'), 'utf8').trim()
-const starfieldCss = `:root{--intro-starfield:url("${starfield}")}\n`
+// 2026-11-23：星空照片底图整层删除（用户要求只留流星层与星轨），
+// 不再注入 --intro-starfield —— 单这一项就省掉 2 008 386 字符的 data URI。
+// src/three/starfield.datauri.txt 仍留在仓库（255 KB 的文本，2 MB 图片的逐字节 base64），
+// 只作为「要恢复底图」时的素材；恢复步骤：把 div.intro-sky 加回模板 + 这里重新注入 + 恢复 CSS。
 
 // ---------- 3. 组装 ----------
 const html = `${head}
 <style>
-${starfieldCss}${appCss}
+${appCss}
 </style>
 </head>
 <body>

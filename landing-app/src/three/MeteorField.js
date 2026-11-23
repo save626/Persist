@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 满屏流星雨（Canvas 2D 版）——完整移植「服务器部署版」landing/index.html（4be7a0f）
  * 的 Canvas 星空实现，去掉 "Hello World" SVG 遮罩扫描文案动画。
  *
@@ -13,10 +13,14 @@
  */
 
 const CFG = {
-  trailMin: 90, trailMax: 210,      // 星轨数量，按面积自适应
-  arcLen: [0.030, 0.150],           // 星轨弧的角跨度（弧度）
-  omega: [0.0035, 0.0140],          // 公转角速度 rad/s
-  growT: [5.0, 16.0],               // 弧长长到满所需秒数
+  // 2026-11-23：星空照片底图删掉后，星轨不再有银河照片作衬底。
+  // 原来的「6 万像素里撒 200 条随机长短弧」在照片上是"星点拖影"，在纯黑上就是划痕。
+  // 重调为「少而长、慢而淡」：条数减半、弧长翻倍、线宽变细、亮度压到 0.38 上限，
+  // 读起来是长曝光星轨的同心弧，而不是随机噪点。
+  trailMin: 52, trailMax: 96,       // 星轨数量，按面积自适应（原 90–210）
+  arcLen: [0.080, 0.220],           // 星轨弧的角跨度（弧度）—— 原 0.030–0.150
+  omega: [0.0020, 0.0080],          // 公转角速度 rad/s，更慢更稳（原 0.0035–0.0140）
+  growT: [6.0, 18.0],               // 弧长长到满所需秒数
   // 第十二轮：数量翻倍（20→40）、生成率翻倍、寿命翻倍（0.8–1.6s → 1.6–3.2s）、
   // 速度降到 0.7 倍 —— 让每颗流星在屏幕上停留更久，画面更密更从容。
   meteorCount: 40,
@@ -27,13 +31,45 @@ const CFG = {
   meteorHue: [192, 216],            // 冷蓝
   spawnInterval: 0.065,             // 每秒约 15.4 颗（原 7.7）
 }
-const BUCKETS = [0.20, 0.38, 0.60, 0.86]
+const BUCKETS = [0.10, 0.17, 0.26, 0.38]
 const SEGS = [
-  { f0: 0.00, f1: 0.55, a: 0.15, w: 0.75 },
-  { f0: 0.55, f1: 0.85, a: 0.40, w: 1.15 },
-  { f0: 0.85, f1: 1.00, a: 0.92, w: 1.70 },
+  { f0: 0.00, f1: 0.55, a: 0.10, w: 0.55 },
+  { f0: 0.55, f1: 0.85, a: 0.26, w: 0.85 },
+  { f0: 0.85, f1: 1.00, a: 0.62, w: 1.20 },
 ]
 const POLE = { x: 0.5, y: -0.30 }   // 相对坐标，画面正上方外部
+
+/**
+ * 移动端「规整流星雨」（2026-11-23）。
+ *
+ * 原来的移动端只是把桌面参数按 0.55 缩、上限 22 颗，其余全是随机：
+ * 角度 118–148°、速度 300–620、长度 110–260（在 390 宽的屏上等于 1/3 屏长）、
+ * 寿命 1.6–3.2s，再按 0.065s 抽签补一颗 —— 在手机上读起来是"随机闪一下"，
+ * 不是"流星雨"。
+ *
+ * 现在改成**确定性传送带**：所有流星同方向、同速度、等距分道、等间隔进入，
+ * 沿同一个周期循环。屏幕上看永远是 N 条平行、等距、匀速的斜线，
+ * 不会因为随机寿命/随机速度而互相追尾或扎堆成团。
+ *
+ * 几何：把 N 条平行轨道按**垂直方向等距**排布（间距 = 视口在该方向上的投影 / N），
+ * 起点放在画面中心沿反方向退 L 处、终点对称前进 L，所以每条轨道都必然穿过画面，
+ * 且在 u=0 / u=1 时都在屏外 —— 不会出现"从画面中间凭空冒出来"。
+ */
+const RAIN = {
+  tracks: 5,          // 轨道条数（垂直方向等距铺满视口）
+  perTrack: 6,        // 每条轨道上沿运动方向均匀放 6 颗 → 30 颗的规整点阵
+  // 竖屏很窄很高：128° 的斜线在手机上走不到屏底就从左边出界，读起来"只在右上角下"。
+  // 移动端用 112°（更偏竖直）—— 每颗都能从顶走到底，整屏都在下，且方向统一。
+  angle: 112,
+  speed: 320,         // px/s，所有流星一致 —— 这是"有规律"的关键
+  lengthRatio: 0.30,  // 尾迹长度 = 屏宽 × 0.30
+  lengthMin: 84,
+  lengthMax: 132,
+  width: 1.5,
+  fadeIn: 0.06,
+  fadeOut: 0.10,
+}
+
 
 function rand(a, b) { return a + Math.random() * (b - a) }
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v) }
@@ -58,6 +94,10 @@ export class MeteorField {
 
     // 移动端降级：星轨 / 流星数量减半（线上版无此适配，这里按本项目规范补齐）
     this.mobile = opts.mobile === true
+    // 移动端走「规整流星雨」（确定性传送带），桌面端保持原来的随机流星
+    this.regular = this.mobile
+    this.rain = null
+    this.rainT = 0
     // 兼容字段：PC 全效果 / 移动端降级（Canvas 2D 无 Bloom，字段语义为「完整效果」）
     this.useBloom = !this.mobile && opts.bloom !== false
 
@@ -92,7 +132,8 @@ export class MeteorField {
     this.canvas.style.height = this.H + 'px'
     this.ctx.setTransform(this.DPR, 0, 0, this.DPR, 0, 0)
     this._buildTrails()
-    for (const m of this.meteors) this._resetMeteor(m, true)
+    if (this.regular) this._buildRain()
+    else for (const m of this.meteors) this._resetMeteor(m, true)
 
     if (this._onResize) window.removeEventListener('resize', this._onResize)
     let timer = 0
@@ -130,7 +171,7 @@ export class MeteorField {
         grow: rand(0.15, 1.0),
         growT: rand(CFG.growT[0], CFG.growT[1]),
         b: bucket,
-        headR: rand(0.5, 1.7),
+        headR: rand(0.35, 0.95),
         phase: rand(0, Math.PI * 2),
         tw: rand(0.5, 1.4),
       })
@@ -155,6 +196,7 @@ export class MeteorField {
 
   _seed() {
     this.meteors.length = 0
+    if (this.regular) { this._buildRain(); return }
     const n = this.mobile ? 22 : CFG.meteorCount
     for (let i = 0; i < n; i++) {
       const m = {}
@@ -162,6 +204,51 @@ export class MeteorField {
       this.meteors.push(m)
     }
   }
+
+  /**
+   * 规整模式的几何：N_t 条等距平行轨道 × 每条轨道上 N_m 颗等距流星。
+   *
+   * 只按「每条轨道一个相位」排会退化成一列斜线：轨道索引同时决定了位置和相位，
+   * 整片雨会像一条斜带扫过屏幕，两侧始终是空的。这里把相位按
+   * `m/N_m + t/(N_m·N_t)` 铺开，得到一个走斜向的规整点阵 ——
+   * 任何时刻屏幕上都是同一套等距分布，不会一会儿扎堆一会儿空。
+   */
+  _buildRain() {
+    const { W, H } = this
+    if (!W || !H) return
+    const N_t = RAIN.tracks, N_m = RAIN.perTrack
+    const ang = RAIN.angle * Math.PI / 180
+    const dx = Math.cos(ang), dy = Math.sin(ang)
+    const nx = -dy, ny = dx                      // 轨道排布方向（与运动方向垂直）
+    const len = clamp(W * RAIN.lengthRatio, RAIN.lengthMin, RAIN.lengthMax)
+    const perpExtent = Math.abs(nx) * W + Math.abs(ny) * H
+    const spacing = perpExtent / N_t
+    const L = (W + H) / 2 + len                  // 起点/终点都在画面外
+    const D = 2 * L
+    const cx = W / 2, cy = H / 2
+    const lanes = []
+    for (let t = 0; t < N_t; t++) {
+      const s = (t - (N_t - 1) / 2) * spacing
+      const x0 = cx - dx * L + nx * s
+      const y0 = cy - dy * L + ny * s
+      for (let m = 0; m < N_m; m++) {
+        // 只抖视觉（色相/粗细/亮度），不抖节奏 —— 确定性伪随机，每次刷新同一张网
+        const r1 = ((t * N_m + m) * 0.6180339887) % 1
+        const r2 = ((t * N_m + m) * 0.3819660113) % 1
+        lanes.push({
+          angle: ang,
+          x0,
+          y0,
+          hue: CFG.meteorHue[0] + (CFG.meteorHue[1] - CFG.meteorHue[0]) * r1,
+          alpha: 0.55 + 0.25 * r2,
+          width: RAIN.width * (0.85 + 0.30 * r1),
+          phase: (m / N_m + t / (N_m * N_t)) % 1,
+        })
+      }
+    }
+    this.rain = { dx, dy, len, D, P: D / RAIN.speed, lanes }
+  }
+
 
   _updateTrails(dt) {
     for (const t of this.trails) {
@@ -226,13 +313,37 @@ export class MeteorField {
 
   _drawMeteor(m) {
     if (m.delay > 0 || m.life <= 0) return
-    const { ctx } = this
     const lifeRatio = Math.max(0, m.life / m.maxLife)
-    const alpha = m.alpha * Math.min(1, lifeRatio * 2.2)
-    const tailX = m.x - Math.cos(m.angle) * m.length
-    const tailY = m.y - Math.sin(m.angle) * m.length
+    this._stroke(m, m.x, m.y, m.length, m.alpha * Math.min(1, lifeRatio * 2.2))
+  }
 
-    const grad = ctx.createLinearGradient(m.x, m.y, tailX, tailY)
+  /** 规整模式：按共享周期算出每条轨道的位置，再交给同一套笔触 */
+  _drawRain() {
+    const r = this.rain
+    if (!r || !r.P) return
+    for (const lane of r.lanes) {
+      let u = (this.rainT / r.P + lane.phase) % 1
+      if (u < 0) u += 1
+      const fade = u < RAIN.fadeIn ? u / RAIN.fadeIn
+        : (u > 1 - RAIN.fadeOut ? (1 - u) / RAIN.fadeOut : 1)
+      if (fade <= 0.01) continue
+      this._stroke(
+        lane,
+        lane.x0 + r.dx * r.D * u,
+        lane.y0 + r.dy * r.D * u,
+        r.len,
+        lane.alpha * fade,
+      )
+    }
+  }
+
+  /** 画一条流星（头部光晕 + 渐变尾迹）；x/y 是头部当前坐标 */
+  _stroke(m, x, y, len, alpha) {
+    const { ctx } = this
+    const tailX = x - Math.cos(m.angle) * len
+    const tailY = y - Math.sin(m.angle) * len
+
+    const grad = ctx.createLinearGradient(x, y, tailX, tailY)
     grad.addColorStop(0, `hsla(${m.hue}, 100%, 96%, ${alpha})`)
     grad.addColorStop(0.18, `hsla(${m.hue}, 100%, 82%, ${alpha * 0.9})`)
     grad.addColorStop(0.55, `hsla(${m.hue}, 100%, 72%, ${alpha * 0.35})`)
@@ -244,17 +355,17 @@ export class MeteorField {
     ctx.lineWidth = m.width
     ctx.lineCap = 'round'
     ctx.beginPath()
-    ctx.moveTo(m.x, m.y)
+    ctx.moveTo(x, y)
     ctx.lineTo(tailX, tailY)
     ctx.stroke()
 
-    const glow = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.width * 7)
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, m.width * 7)
     glow.addColorStop(0, `hsla(${m.hue}, 100%, 98%, ${alpha})`)
     glow.addColorStop(0.35, `hsla(${m.hue}, 100%, 85%, ${alpha * 0.45})`)
     glow.addColorStop(1, `hsla(${m.hue}, 100%, 80%, 0)`)
     ctx.fillStyle = glow
     ctx.beginPath()
-    ctx.arc(m.x, m.y, m.width * 7, 0, Math.PI * 2)
+    ctx.arc(x, y, m.width * 7, 0, Math.PI * 2)
     ctx.fill()
     ctx.restore()
   }
@@ -272,33 +383,42 @@ export class MeteorField {
     this._updateTrails(dt)
     this._drawTrails(tSec)
 
-    this.spawnAcc += dt
-    if (this.spawnAcc >= CFG.spawnInterval) {
-      this.spawnAcc = 0
-      if (this.meteors.length < (this.mobile ? 22 : CFG.meteorCount)) {
-        const m = {}
-        this._resetMeteor(m, false)
-        this.meteors.push(m)
+    if (this.regular) {
+      // 规整模式：没有"生成/消亡"，只有一条恒速传送带 —— 节奏永远均匀
+      this.rainT += dt
+      this._drawRain()
+    } else {
+      this.spawnAcc += dt
+      if (this.spawnAcc >= CFG.spawnInterval) {
+        this.spawnAcc = 0
+        if (this.meteors.length < (this.mobile ? 22 : CFG.meteorCount)) {
+          const m = {}
+          this._resetMeteor(m, false)
+          this.meteors.push(m)
+        }
       }
-    }
-    for (let i = this.meteors.length - 1; i >= 0; i--) {
-      const m = this.meteors[i]
-      if (m.delay > 0) { m.delay -= dt; continue }
-      m.x += Math.cos(m.angle) * m.speed * dt
-      m.y += Math.sin(m.angle) * m.speed * dt
-      m.life -= dt
-      if (m.life <= 0 || m.x < -m.length * 2 || m.y > H + m.length * 2) {
-        this.meteors.splice(i, 1)
-      } else {
-        this._drawMeteor(m)
+      for (let i = this.meteors.length - 1; i >= 0; i--) {
+        const m = this.meteors[i]
+        if (m.delay > 0) { m.delay -= dt; continue }
+        m.x += Math.cos(m.angle) * m.speed * dt
+        m.y += Math.sin(m.angle) * m.speed * dt
+        m.life -= dt
+        if (m.life <= 0 || m.x < -m.length * 2 || m.y > H + m.length * 2) {
+          this.meteors.splice(i, 1)
+        } else {
+          this._drawMeteor(m)
+        }
       }
     }
     this.frames++
     this.raf = requestAnimationFrame(this._tick)
   }
 
-  /** 兼容旧状态接口（验收脚本读 particles.length 作为粒子数）。 */
-  get particles() { return this.meteors }
+  /** 兼容旧状态接口（验收脚本读 particles.length 作为粒子数）。规整模式下报轨道数。 */
+  get particles() {
+    if (this.regular && this.rain) return this.rain.lanes
+    return this.meteors
+  }
 
   start() {
     if (this.disposed || this.running) return
@@ -340,6 +460,7 @@ export class MeteorField {
     this.trails.length = 0
     this.buckets = [[], [], [], []]
     this.meteors.length = 0
+    this.rain = null
     this.ctx = null
   }
 }
