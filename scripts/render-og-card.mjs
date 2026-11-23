@@ -11,10 +11,15 @@
 // 用法：
 //   node scripts/render-og-card.mjs                     # 渲染全部变体
 //   node scripts/render-og-card.mjs --variant a         # 只渲染变体 A
+//   node scripts/render-og-card.mjs --crop              # 追加微信 1:1 取景稿（630×630）
 //   node scripts/render-og-card.mjs --out <路径>        # 自定义输出目录
 //
 // 输出：landing/og/preview/<variant>-<theme>.png
+//       landing/og/preview/<variant>-<theme>-crop.png（--crop）
 // 预览图是草稿（文案会变），不入库；真正对外的是 og:meta 里指向的最终 PNG。
+//
+// 1:1 取景稿用设计源自带的 ?crop=1（只截中心 630×630），不是事后裁图——
+// 事后裁会在缩放/取整上对不上，而微信裁的就是这张图的原尺寸中心区。
 
 import { chromium } from '../app/node_modules/playwright-core/index.mjs'
 import { existsSync, mkdirSync } from 'node:fs'
@@ -35,6 +40,7 @@ const argOf = (name) => {
 }
 const onlyVariant = argOf('--variant')
 const outDir = resolve(ROOT, argOf('--out') ?? DEFAULT_OUT)
+const withCrop = args.includes('--crop')
 
 if (!existsSync(SOURCE)) {
   throw new Error(`设计源不存在：${SOURCE}`)
@@ -43,7 +49,7 @@ if (!existsSync(SOURCE)) {
 const VARIANTS = ['a', 'b']
 const THEMES = ['light', 'dark']
 const targets = VARIANTS.filter((v) => !onlyVariant || v === onlyVariant).flatMap((v) =>
-  THEMES.map((theme) => ({ variant: v, theme })),
+  THEMES.flatMap((theme) => [{ variant: v, theme, crop: false }].concat(withCrop ? [{ variant: v, theme, crop: true }] : [])),
 )
 
 if (!targets.length) {
@@ -56,26 +62,29 @@ const browser = await chromium.launch({ headless: true })
 const failures = []
 
 try {
-  for (const { variant, theme } of targets) {
+  for (const { variant, theme, crop } of targets) {
+    const w = crop ? HEIGHT : WIDTH
     const page = await browser.newPage({
-      viewport: { width: WIDTH, height: HEIGHT },
+      viewport: { width: w, height: HEIGHT },
       deviceScaleFactor: 1,
     })
-    // file:// 下的 query 参数决定版式与主题，设计源自己读 location.search。
-    const url = `file:///${SOURCE.replace(/\\/g, '/').replace(/^\//, '')}?v=${variant}&theme=${theme}`
+    // file:// 下的 query 参数决定版式、主题与取景，设计源自己读 location.search。
+    const base = `file:///${SOURCE.replace(/\\/g, '/').replace(/^\//, '')}?v=${variant}&theme=${theme}`
+    const url = crop ? `${base}&crop=1` : base
     await page.goto(url, { waitUntil: 'load' })
     await page.waitForTimeout(400)
 
-    const out = join(outDir, `${variant}-${theme}.png`)
-    await page.screenshot({ path: out, clip: { x: 0, y: 0, width: WIDTH, height: HEIGHT } })
+    const name = crop ? `${variant}-${theme}-crop.png` : `${variant}-${theme}.png`
+    const out = join(outDir, name)
+    await page.screenshot({ path: out, clip: { x: 0, y: 0, width: w, height: HEIGHT } })
     await page.close()
 
     // 静默失败是最危险的：文件没落盘时后面接入 meta 会指向 404。
     if (!existsSync(out)) {
-      failures.push(`${variant}-${theme}: 截图未落盘`)
+      failures.push(`${name}: 截图未落盘`)
       continue
     }
-    console.log(`✓ ${variant}-${theme} → ${out}`)
+    console.log(`✓ ${name} → ${out}`)
   }
 } finally {
   await browser.close()
