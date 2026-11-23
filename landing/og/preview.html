@@ -214,8 +214,10 @@
     <h1>社交分享卡（OG）本地预览</h1>
     <p class="lede">
       这一页就是「Persist 被分享到微信 / X / Facebook 时对方看到的那张卡片」。
-      卡面用的是 <code>landing/assets/og-card.png</code>——与生产服务器上
-      <code>/var/www/persist/assets/og-card.png</code> 逐字节一致的那一张，不是示意图。
+      卡面用的是 <code>landing/assets/og-card.png</code>——将来部署到
+      <code>/var/www/persist/assets/og-card.png</code> 的那一张，不是示意图。
+      2026-11-23 按<b>解法 1</b>重做：品牌 / 标题 / 副标题 / 徽标 / 页脚全部收进中心 630×630，
+      微信的 1:1 裁切不再切掉任何一个字。
     </p>
   </header>
 
@@ -224,8 +226,9 @@
     <div class="status">
       <div class="status-card ok">
         <b>✅ 现在就能看到</b>
-        卡面本身已定稿、已渲染、已部署生产（1200×630 / 44 459 B / PNG）。
-        本页与 <code>landing/assets/og-card.png</code> 显示的就是线上那一张。
+        卡面已按解法 1 重做并渲染完成（1200×630 / 129 519 B / PNG），
+        本页显示的就是 <code>landing/assets/og-card.png</code> 本身。
+        生产上仍是 2026-11-11 的旧版，<b>尚未部署</b>（等部署授权）。
       </div>
       <div class="status-card wait">
         <b>⏳ 现在看不到（真实平台抓取）</b>
@@ -239,41 +242,47 @@
     <h2>1 · 最终对外卡面</h2>
     <div class="cardshot">
       <div class="shot">
-        <img src="../assets/og-card.png" width="1200" height="630" alt="Persist 社交分享卡：同一天，看清自己。">
+        <img src="../assets/og-card.png" width="1200" height="630" alt="Persist 社交分享卡：把每天的碎片写下来，晚上看懂自己。">
         <div class="safezone"></div>
       </div>
       <div class="shot-meta">
         <span><b>尺寸</b> 1200 × 630</span>
-        <span><b>大小</b> 44 459 B</span>
+        <span><b>大小</b> 129 519 B</span>
         <span><b>格式</b> image/png</span>
-        <span><b>变体</b> A（左文右线）× 浅色</span>
+        <span><b>变体</b> A（左对齐）× 浅色</span>
         <span><b>线上路径</b> /assets/og-card.png</span>
+      </div>
+      <div class="note" style="margin-top:12px; font-size:13px;">
+        红色虚线框 = 微信 1:1 取景框（中心 630×630）。框内是本卡的全部信息：
+        品牌、徽标、眉标、标题、副标题、页脚。框外的地平线与光晕是纯装饰，被裁掉不丢内容。
       </div>
     </div>
   </section>
 
   <section>
-    <h2>1b · 微信的 1:1 裁切实拍（当前卡面的真实弱点）</h2>
+    <h2>1b · 微信 1:1 裁切：解法 1 已落地</h2>
     <div class="panel">
       <div class="wechat-real">
         <div>
-          <div class="square"><img src="../assets/og-card.png" alt=""></div>
-          <div class="square-cap">微信聊天列表里的方图</div>
+          <img src="preview/a-light-crop.png" width="315" height="315"
+               alt="微信聊天列表里的 1:1 方图（中心 630×630 取景）"
+               style="display:block;width:315px;height:315px;border-radius:8px;border:1px solid var(--line);">
+          <div class="square-cap" style="width:315px;">微信 1:1 取景（中心 630×630，真实裁切结果）</div>
         </div>
         <div class="note" style="flex:1; min-width:280px;">
           <p style="margin-top:0;">
-            微信把 <code>og:image</code> 裁成 <b>1:1 且取中心区域</b>（横图会裁掉左右两边），
-            右边这张就是本卡面被裁后的真实样子。
+            微信把 <code>og:image</code> 裁成 <b>1:1 且取中心区域</b>（横图裁掉左右两边）。
+            左边这张不是模拟，是设计源用 <code>?crop=1</code> 直接按 630×630 渲染的取景稿。
           </p>
           <p>
-            当前是<b>左文右线</b>构图，主标题「同一天，看清自己。」落在 x=80 起，
-            而 630 宽的取景框从 x=285 开始 —— <b>标题被切掉大半</b>，方图里只剩大片留白与右半段折线。
-            X / Facebook / LinkedIn 全宽显示时没有这个问题，<b>只有微信会这样</b>。
+            <b>2026-11-23 之前的版本</b>是「左文右线」，主标题从 x=80 起，取景框却从 x=285 开始 ——
+            方图里标题被切掉大半，只剩大片留白。<b>现在</b>所有信息节点都落在 x ∈ [285, 915] 内，
+            方图里品牌、徽标、标题、副标题、页脚一个不少。
           </p>
           <p style="margin-bottom:0;">
-            常见解法：把标题 / Logo 收进<b>中心 630×630 安全区</b>（上图红色虚线框），
-            或另出一张 1:1 方图专门给微信（微信只取 <code>og:image</code> 的第一张）。
-            这属于<b>待你拍板的视觉决策</b>，本轮没有擅自改卡面。
+            这条约束由 <code>scripts/check-og-card.mjs</code> 用几何量值断言（不是靠肉眼）：
+            整卡下量 <code>x ≥ 285 && right ≤ 915</code>，取景稿下量 <code>0..630</code>。
+            改版式后先跑它，再复制到 <code>landing/assets/og-card.png</code>。
           </p>
         </div>
       </div>
@@ -294,12 +303,12 @@
             <img src="../assets/og-card.png" alt="" style="width:118.3px; height:62px; left:-28.1px;">
           </div>
           <div>
-            <div class="wx-title">Persist · 同一天，看清自己</div>
+            <div class="wx-title">Persist · 记录 · 复盘 · 变化</div>
             <div class="wx-domain">wpersist.top</div>
           </div>
         </div>
         <div class="note" style="margin-top:12px; font-size:12.5px;">
-          缩略图按微信规则做了 <b>1:1 中心裁切</b>，所以方图里看不到主标题（见 §1b）。
+          缩略图按微信规则做了 <b>1:1 中心裁切</b>：解法 1 之后方图里品牌与标题都完整（见 §1b）。
           卡片标题与描述由 <code>og:title</code> / <code>og:description</code> 提供，不依赖图里的字。
         </div>
       </div>
@@ -312,8 +321,8 @@
         <div class="lg">
           <img src="../assets/og-card.png" alt="">
           <div class="lg-body">
-            <div class="lg-title">Persist · 同一天，看清自己</div>
-            <div class="lg-desc">把每一天记下来，让 AI 告诉你规律。在线演示的数据只留在你自己的浏览器里，不上传服务器。</div>
+            <div class="lg-title">Persist · 记录 · 复盘 · 变化</div>
+            <div class="lg-desc">Persist 是一个记录工具：把每天的碎片写下来，晚上给你一段看得懂的话。</div>
             <div class="lg-domain">wpersist.top</div>
           </div>
         </div>
@@ -327,8 +336,8 @@
         <div class="lg">
           <img src="../assets/og-card.png" alt="">
           <div class="lg-body">
-            <div class="lg-title">Persist · 同一天，看清自己</div>
-            <div class="lg-desc">把每一天记下来，让 AI 告诉你规律。在线演示的数据只留在你自己的浏览器里，不上传服务器。</div>
+            <div class="lg-title">Persist · 记录 · 复盘 · 变化</div>
+            <div class="lg-desc">Persist 是一个记录工具：把每天的碎片写下来，晚上给你一段看得懂的话。</div>
             <div class="lg-domain">W PERSIST.TOP</div>
           </div>
         </div>
@@ -349,13 +358,13 @@
           <tr><th>og:type</th><td>website</td></tr>
           <tr><th>og:site_name</th><td>Persist</td></tr>
           <tr><th>og:locale</th><td>zh_CN</td></tr>
-          <tr><th>og:title</th><td>Persist · 同一天，看清自己</td></tr>
-          <tr><th>og:description</th><td>把每一天记下来，让 AI 告诉你规律。在线演示的数据只留在你自己的浏览器里，不上传服务器。</td></tr>
+          <tr><th>og:title</th><td>Persist · 记录 · 复盘 · 变化</td></tr>
+          <tr><th>og:description</th><td>Persist 是一个记录工具：把每天的碎片写下来，晚上给你一段看得懂的话。</td></tr>
           <tr><th>og:url</th><td>https://wpersist.top/ （介绍页为 /home.html）</td></tr>
           <tr><th>og:image</th><td>https://wpersist.top/assets/og-card.png</td></tr>
           <tr><th>og:image:type</th><td>image/png</td></tr>
           <tr><th>og:image:width / height</th><td>1200 / 630</td></tr>
-          <tr><th>og:image:alt</th><td>Persist · 同一天，看清自己。健身、饮食、学习记在一处，晚上让 AI 把数字写成一段人话。</td></tr>
+          <tr><th>og:image:alt</th><td>Persist · 记录 · 复盘 · 变化</td></tr>
           <tr><th>twitter:card</th><td>summary_large_image</td></tr>
           <tr><th>twitter:title / description / image</th><td>与 og:* 同源</td></tr>
           <tr><th>canonical</th><td>https://wpersist.top/ （介绍页为 /home.html）</td></tr>
@@ -370,7 +379,7 @@
     <div class="variants">
       <div class="variant">
         <img src="preview/a-light.png" alt="变体 A 浅色">
-        <div class="vname"><b>A × 浅色</b><span class="pill">已选用</span><br>左文右线，线上版</div>
+        <div class="vname"><b>A × 浅色</b><span class="pill">已选用</span><br>左对齐，线上版</div>
       </div>
       <div class="variant">
         <img src="preview/a-dark.png" alt="变体 A 深色">
@@ -378,7 +387,7 @@
       </div>
       <div class="variant">
         <img src="preview/b-light.png" alt="变体 B 浅色">
-        <div class="vname"><b>B × 浅色</b><span class="pill off">备用</span><br>居中构图，主标题过大</div>
+        <div class="vname"><b>B × 浅色</b><span class="pill off">备用</span><br>居中构图</div>
       </div>
       <div class="variant">
         <img src="preview/b-dark.png" alt="变体 B 深色">
@@ -386,9 +395,37 @@
       </div>
     </div>
     <div class="note" style="margin-top:12px;">
-      选用 <b>A × 浅色</b>：A 的左文右线构图比 B 的居中构图平衡（B 的主标题字号过大、副标题在 22ch 宽度内换行难看）；
-      浅色在微信 / Twitter / Facebook 的默认卡片底色上更自然。改文案后重跑
-      <code>node scripts/render-og-card.mjs</code>，再把新图复制到 <code>landing/assets/og-card.png</code>。
+      选用 <b>A × 浅色</b>：左对齐的阅读节奏比居中更稳，且与落地页 hero 的左起一致；
+      浅色是产品纸底 <code>#f4f7f9</code>，与落地页同色，在微信 / X / Facebook 的白色卡片上也干净。
+      改文案后重跑 <code>node scripts/render-og-card.mjs --crop</code>，
+      跑 <code>node scripts/check-og-card.mjs</code>，再把 <code>a-light.png</code> 复制到
+      <code>landing/assets/og-card.png</code>。
+    </div>
+  </section>
+
+  <section>
+    <h2>4b · 四张 1:1 取景稿（微信实际看到的样子）</h2>
+    <div class="variants" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
+      <div class="variant">
+        <img src="preview/a-light-crop.png" alt="变体 A 浅色 1:1 取景">
+        <div class="vname"><b>A × 浅色</b><span class="pill">已选用</span><br>630×630</div>
+      </div>
+      <div class="variant">
+        <img src="preview/a-dark-crop.png" alt="变体 A 深色 1:1 取景">
+        <div class="vname"><b>A × 深色</b><span class="pill off">备用</span><br>630×630</div>
+      </div>
+      <div class="variant">
+        <img src="preview/b-light-crop.png" alt="变体 B 浅色 1:1 取景">
+        <div class="vname"><b>B × 浅色</b><span class="pill off">备用</span><br>630×630</div>
+      </div>
+      <div class="variant">
+        <img src="preview/b-dark-crop.png" alt="变体 B 深色 1:1 取景">
+        <div class="vname"><b>B × 深色</b><span class="pill off">备用</span><br>630×630</div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:12px;">
+      这四张由设计源的 <code>?crop=1</code> 直接按 630×630 渲染，不是事后裁图
+      （事后裁会在缩放取整上对不上，而微信裁的就是原图中心区）。
     </div>
   </section>
 
@@ -406,14 +443,16 @@
       <pre class="cmd">node scripts/check-og-meta.mjs                      # 校验两页的 og/twitter 标签与卡面尺寸
 node scripts/check-og-meta.mjs --url https://wpersist.top/  # 校验线上页面并 HEAD 图片（域名上线后用）</pre>
 
-      <b>改卡面后重渲染</b>：
-      <pre class="cmd">node scripts/render-og-card.mjs          # 渲染 4 个变体到 landing/og/preview/
-copy landing/og/preview/a-light.png landing/assets/og-card.png   # 同步最终产物</pre>
+      <b>改卡面后</b>（渲染 → 校验 → 同步三步，缺一步就会「静默变白卡」）：
+      <pre class="cmd">node scripts/render-og-card.mjs --crop              # 八个渲染稿 → landing/og/preview/
+node scripts/check-og-card.mjs                      # 安全区 / 几何断言
+copy landing/og/preview/a-light.png landing/assets/og-card.png   # 同步最终产物
+node scripts/check-og-meta.mjs                      # 两页 head 与卡面尺寸</pre>
     </div>
   </section>
 
   <footer class="page-foot">
-    Persist · 本地预览页 · 零外部请求 · 卡面与生产一致（1200×630 / 44 459 B / PNG）
+    Persist · 本地预览页 · 零外部请求 · 卡面 1200×630 / 129 519 B / PNG · 全部信息落在微信 1:1 安全区内
   </footer>
 
 </div>

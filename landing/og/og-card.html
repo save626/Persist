@@ -5,44 +5,64 @@
 <title>Persist · OG 分享卡设计源（1200×630）</title>
 <!--
   用途：生成 1200×630 社交分享卡（og:image / twitter:image）。
-  这是【设计源】，不是站点页面；复制 token 与落地页 landing/index.html 一致，
-  但独立成文件，避免落页面体积继续增长。
+  这是【设计源】，不是站点页面；复制 landing-app/src/styles/landing.css 的令牌，
+  但独立成文件，避免落地页体积继续增长。
 
-  渲染（无外部请求，纯 file://）：
-    msedge.exe --headless=new --disable-gpu --hide-scrollbars
-      --force-device-scale-factor=1 --window-size=1200,630
-      --virtual-time-budget=1200
-      --user-data-dir=".edge-profile-og"
-      --screenshot="landing/og/preview/a-light.png"
-      "file:///D:/Persist/landing/og/og-card.html?v=a&theme=light"
+  渲染（不要手拼 Edge headless 命令，用仓库脚本）：
+    node scripts/render-og-card.mjs            # 四个变体 → landing/og/preview/
+    node scripts/render-og-card.mjs --crop     # 追加 630×630 微信 1:1 取景稿
+  校验：
+    node scripts/check-og-card.mjs             # 安全区包含性 + 版式几何（不靠肉眼）
 
-  参数：?v=a|b   ?theme=light|dark
-  文案：标题 / 副标题 / 底部右侧全部为占位，等用户给文案后替换 .ph 内容并删除 badge。
+  参数：
+    ?v=a|b           a = 左对齐（默认，线上版）；b = 居中构图
+    ?theme=light|dark
+    ?crop=1          裁成 630×630（微信 1:1 取景框），只截中心
+    ?selfcheck=1     把几何量值写进 DOM 供脚本读回
+
+  —— 版式的唯一硬约束（2026-11-23 解法 1）——
+  微信把 og:image 裁成「中心 630×630」（x ∈ [285, 915]，纵向整高）。
+  所以品牌 / 标题 / 副标题 / 徽标 / 页脚**全部**必须落在这一列内；
+  全幅装饰（地平线与光晕）允许伸出，被裁掉也不丢信息。
+  改版式前先看 landing/og/preview.html 的红框演示。
+
+  文案只与落地页 / home.html 同源，不要在这里另起一套说法。
 -->
 <style>
   :root {
-    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-            "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI",
-            system-ui, sans-serif;
-    --bg: #ffffff;
-    --fg: #0b0d10;
-    --muted: #6e7378;
-    --faint: #9aa0a6;
-    --line: #e7e9ec;
-    --accent: #0071e3;
-    --accent-soft: #eef6fe;
-    --shadow: 0 2px 24px rgba(0, 0, 0, .06);
+    --font: 'Aptos', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei',
+            'Segoe UI', system-ui, sans-serif;
+    /* —— 直接取 landing.css 的令牌，不另造色 —— */
+    --bg: #f4f7f9;
+    --ink: #202830;
+    --soft: #4d5965;
+    --muted: #55616d;
+    --faint: #616d79;
+    --line: #dfe5eb;
+    --green: #6d9fbd;
+    --deep: #467692;
+    --gs: #e9f2f7;
+    /* 小字用同色相加深：#467692 在 #f4f7f9 上只有 4.46:1，正文/徽标要 4.5 才达标
+       （与 landing.css 里 --muted / --faint 的「为可读性加深」同一做法） */
+    --accent-ink: #3c6a86;
+    --motif: rgba(70, 118, 146, .34);
+    --glow-a: rgba(255, 255, 255, .9);
+    --glow-b: rgba(126, 173, 200, .14);
   }
 
   html[data-theme="dark"] {
-    --bg: #000000;
-    --fg: #f5f5f7;
-    --muted: #8e8e93;
-    --faint: #6e6e73;
-    --line: #1f1f22;
-    --accent: #2997ff;
-    --accent-soft: #0d2133;
-    --shadow: 0 2px 24px rgba(0, 0, 0, .5);
+    --bg: #0b1419;
+    --ink: #e8eff3;
+    --soft: #a9bcc7;
+    --muted: #93a7b3;
+    --faint: #7d92a0;
+    --line: rgba(199, 218, 230, .16);
+    --deep: #8fbcd6;
+    --gs: rgba(109, 159, 189, .14);
+    --accent-ink: #a8cbdf;
+    --motif: rgba(199, 218, 230, .30);
+    --glow-a: rgba(120, 170, 200, .12);
+    --glow-b: rgba(6, 12, 16, .55);
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -53,234 +73,244 @@
     width: 1200px;
     height: 630px;
     overflow: hidden;
-    background: var(--bg);
-    color: var(--fg);
+    color: var(--ink);
     font-family: var(--font);
     -webkit-font-smoothing: antialiased;
   }
 
-  /* 安全边距：四周 72–80px，避开各平台分享卡的裁切区 */
+  /* ---------- 舞台 = 整张卡（1200×630，零滚动） ---------- */
   .stage {
     position: relative;
     width: 1200px;
     height: 630px;
-    padding: 72px 80px 64px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 8% -8%, var(--glow-a), transparent 34%),
+      radial-gradient(circle at 105% 110%, var(--glow-b), transparent 36%),
+      var(--bg);
+  }
+
+  /* 全幅装饰：地平线 + 末端节点。允许伸出安全区。 */
+  .bleed {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .bleed svg.rule {
+    position: absolute;
+    left: 0; top: 0;
+    width: 1200px; height: 630px;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 13%, #000 87%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 13%, #000 87%, transparent);
+  }
+
+  .rule .hair { stroke: var(--line); stroke-width: 1.4; fill: none; }
+  .rule .ink  { stroke: var(--motif); stroke-width: 2.2; fill: none; stroke-linecap: round; }
+  .rule .node { fill: var(--bg); stroke: var(--motif); stroke-width: 2; }
+  .rule .end  { fill: var(--green); }
+
+  /* ---------- 安全区内容列：x ∈ [285, 915] ---------- */
+  .frame {
+    position: absolute;
+    left: 285px;
+    top: 0;
+    width: 630px;
+    height: 630px;
+    padding: 58px 24px 50px;
     display: flex;
     flex-direction: column;
   }
 
-  /* ---------- 顶栏：品牌 + 占位标记 ---------- */
+  /* ---------- 顶栏 ---------- */
   .top {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 44px;
+    gap: 16px;
+    height: 40px;
   }
 
   .brand {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 24px;
+    gap: 11px;
+    font-size: 23px;
     font-weight: 650;
     letter-spacing: -.01em;
+    color: var(--ink);
   }
 
-  .brand-mark { width: 34px; height: 34px; }
+  .brand-mark { width: 30px; height: 30px; flex: none; }
 
   .badge {
-    font-size: 15px;
-    letter-spacing: .04em;
-    color: var(--accent);
-    background: var(--accent-soft);
+    font-size: 14px;
+    letter-spacing: .02em;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--gs);
     border-radius: 980px;
-    padding: 7px 16px;
+    padding: 6px 14px;
     white-space: nowrap;
   }
 
-  /* ---------- 占位文本样式：一眼看出是待填 ---------- */
-  .ph {
-    position: relative;
-    color: var(--faint);
-    border-bottom: 1px dashed var(--faint);
-    border-bottom-color: color-mix(in srgb, var(--faint) 55%, transparent);
-    padding-bottom: 2px;
-  }
-
-  .ph-note {
-    display: block;
-    font-size: 14px;
-    letter-spacing: .06em;
-    color: var(--faint);
-    margin-top: 14px;
-  }
-
-  /* ---------- 变体 A：左文右线 ---------- */
-  .va .main {
-    display: flex;
-    align-items: center;
-    gap: 56px;
+  /* ---------- 主区 ---------- */
+  .main {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     min-height: 0;
   }
 
-  .va .col-text { width: 620px; flex: none; }
-
-  .va .col-art { flex: 1; min-width: 0; display: flex; justify-content: flex-end; }
-
   .eyebrow {
-    font-size: 20px;
-    letter-spacing: .08em;
-    color: var(--accent);
-    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: .09em;
+    font-weight: 700;
+    color: var(--deep);
     margin: 0;
   }
 
   .va h1 {
-    font-size: 68px;
-    line-height: 1.16;
-    letter-spacing: -.032em;
+    font-size: 58px;
+    line-height: 1.18;
+    letter-spacing: -.02em;
     font-weight: 700;
-    margin: 20px 0 0;
+    margin: 18px 0 0;
+    color: var(--ink);
   }
 
   .va .sub {
-    font-size: 26px;
-    line-height: 1.55;
-    color: var(--muted);
-    margin: 24px 0 0;
-    max-width: 24ch;
-  }
-
-  /* ---------- 变体 B：居中构图 ---------- */
-  .vb .mid {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    min-height: 0;
-    padding-bottom: 34px; /* 让「一条线」母题与页脚分隔线保持呼吸 */
-  }
-
-  .vb h1 {
-    font-size: 82px;
-    line-height: 1.14;
-    letter-spacing: -.034em;
-    font-weight: 700;
+    font-size: 21px;
+    line-height: 1.6;
+    color: var(--soft);
     margin: 22px 0 0;
   }
 
-  .vb .sub {
-    font-size: 28px;
-    line-height: 1.5;
-    color: var(--muted);
-    margin: 26px 0 0;
-    max-width: 22ch;
+  h1 em { font-style: normal; color: var(--deep); }
+
+  /* ---------- 变体 B：居中构图 ---------- */
+  .vb .main {
+    align-items: center;
+    text-align: center;
+    padding-bottom: 46px;
   }
 
-  .vb .art { margin-top: 26px; }
+  .vb h1 {
+    font-size: 52px;
+    line-height: 1.2;
+    letter-spacing: -.018em;
+    font-weight: 700;
+    margin: 18px 0 0;
+    color: var(--ink);
+  }
+
+  .vb .eyebrow { font-size: 18px; }
+  /* 不要用窄 ch 上限：27ch 会在「晚上」中间折行（旧版 B 的老毛病） */
+  .vb .sub { font-size: 20px; line-height: 1.6; color: var(--soft); margin: 20px 0 0; max-width: none; }
 
   /* ---------- 底栏 ---------- */
+  /* 分隔线由全幅的「地平线」承担（见 .rule），这里不再画第二条线——
+     两条线相距 40px 会显得像误伤的重影。 */
   .foot {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 24px;
-    border-top: 1px solid var(--line);
-    padding-top: 20px;
-    font-size: 19px;
+    gap: 18px;
+    font-size: 16px;
     color: var(--muted);
   }
 
-  .foot .lock { color: var(--fg); font-weight: 600; }
-
-  .dot { fill: var(--accent); }
+  .foot .lock { color: var(--ink); font-weight: 600; }
 
   /* 变体切换：同一份文件渲染两张 */
   .vb { display: none; }
   html[data-variant="b"] .va { display: none; }
   html[data-variant="b"] .vb { display: flex; }
+
+  /* ---------- 微信 1:1 取景模式（?crop=1） ---------- */
+  html[data-crop="1"] body { width: 630px; height: 630px; }
+  html[data-crop="1"] .stage { left: -285px; width: 1200px; }
+  html[data-crop="1"] .frame { left: 285px; }
 </style>
 </head>
 <body>
 
-<div class="stage va" data-block="a">
-  <header class="top">
-    <span class="brand">
-      <svg class="brand-mark" viewBox="0 0 34 34" aria-hidden="true" fill="none">
-        <rect x=".8" y=".8" width="32.4" height="32.4" rx="9.5" stroke="var(--line)" stroke-width="1.6"/>
-        <path d="M8 21.6 L13.6 15.2 L18.6 18 L24.4 11.2" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="24.4" cy="11.2" r="2.1" class="dot"/>
-      </svg>
-      Persist
-    </span>
-    <span class="badge">本地优先 · 不上传服务器</span>
-  </header>
+<!-- ================= 变体 A：左对齐（线上版） ================= -->
+<div class="stage va">
+  <div class="bleed" aria-hidden="true">
+    <svg class="rule" viewBox="0 0 1200 630" fill="none">
+      <path class="hair" d="M0 538 H1200"/>
+      <path class="ink"  d="M96 538 H1096"/>
+      <circle class="node" cx="96"   cy="538" r="4.5"/>
+      <circle class="node" cx="330"  cy="538" r="3.2"/>
+      <circle class="node" cx="600"  cy="538" r="3.2"/>
+      <circle class="node" cx="870"  cy="538" r="3.2"/>
+      <circle class="end"  cx="1096" cy="538" r="6.5"/>
+    </svg>
+  </div>
 
-  <div class="main">
-    <div class="col-text">
+  <div class="frame">
+    <header class="top">
+      <span class="brand">
+        <svg class="brand-mark" viewBox="0 0 30 30" aria-hidden="true" fill="none">
+          <rect x=".9" y=".9" width="28.2" height="28.2" rx="8.4" stroke="var(--line)" stroke-width="1.5"/>
+          <path d="M7.2 19.6 L12.2 13.9 L16.6 16.5 L21.8 9.9" stroke="var(--ink)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="21.8" cy="9.9" r="1.9" fill="var(--green)"/>
+        </svg>
+        Persist
+      </span>
+      <span class="badge">记录先存在你的设备上</span>
+    </header>
+
+    <div class="main">
       <p class="eyebrow">个人记录与 AI 复盘</p>
-      <h1>同一天，<br>看清自己。</h1>
+      <h1>把每天的碎片写下来，<br><em>晚上看懂自己</em>。</h1>
       <p class="sub">健身、饮食、学习记在一处，晚上让 AI 把数字写成一段人话。</p>
     </div>
 
-    <div class="col-art">
-      <svg viewBox="0 0 430 300" width="430" height="300" fill="none" aria-hidden="true">
-        <!-- 一条线母题：与落地页 hero 同构 -->
-        <path d="M18 262 H412" stroke="var(--line)" stroke-width="1"/>
-        <path d="M42 216 L104 176 L166 196 L228 132 L290 152 L352 74 L400 92"
-              stroke="var(--fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="42"  cy="216" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
-        <circle cx="104" cy="176" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
-        <circle cx="166" cy="196" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
-        <circle cx="228" cy="132" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
-        <circle cx="290" cy="152" r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
-        <circle cx="352" cy="74"  r="4" fill="var(--bg)" stroke="var(--fg)" stroke-width="2"/>
-        <circle cx="400" cy="92"  r="6.5" class="dot"/>
-      </svg>
-    </div>
+    <footer class="foot">
+      <span class="lock">Persist · 计划 · 记录 · 复盘</span>
+      <span>wpersist.top</span>
+    </footer>
   </div>
-
-  <footer class="foot">
-    <span class="lock">Persist ・ 记录，同一天</span>
-    <span>wpersist.top</span>
-  </footer>
 </div>
 
-<div class="stage vb" data-block="b">
-  <header class="top">
-    <span class="brand">
-      <svg class="brand-mark" viewBox="0 0 34 34" aria-hidden="true" fill="none">
-        <rect x=".8" y=".8" width="32.4" height="32.4" rx="9.5" stroke="var(--line)" stroke-width="1.6"/>
-        <path d="M8 21.6 L13.6 15.2 L18.6 18 L24.4 11.2" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="24.4" cy="11.2" r="2.1" class="dot"/>
-      </svg>
-      Persist
-    </span>
-    <span class="badge">本地优先 · 不上传服务器</span>
-  </header>
-
-  <div class="mid">
-    <p class="eyebrow">个人记录与 AI 复盘</p>
-    <h1>同一天，<br>看清自己。</h1>
-    <p class="sub">健身、饮食、学习记在一处，晚上让 AI 把数字写成一段人话。</p>
-
-    <div class="art">
-      <svg viewBox="0 0 760 46" width="760" height="46" fill="none" aria-hidden="true">
-        <path d="M14 26 H746" stroke="var(--line)" stroke-width="1"/>
-        <path d="M14 26 H700" stroke="var(--fg)" stroke-width="2.2" stroke-linecap="round"/>
-        <circle cx="700" cy="26" r="6.5" class="dot"/>
-        <circle cx="14" cy="26" r="4.5" fill="none" stroke="var(--fg)" stroke-width="2"/>
-      </svg>
-    </div>
+<!-- ================= 变体 B：居中构图 ================= -->
+<div class="stage vb">
+  <div class="bleed" aria-hidden="true">
+    <svg class="rule" viewBox="0 0 1200 630" fill="none">
+      <path class="hair" d="M0 538 H1200"/>
+      <path class="ink"  d="M150 538 H1050"/>
+      <circle class="node" cx="150"  cy="538" r="3.2"/>
+      <circle class="end"  cx="1050" cy="538" r="6.5"/>
+    </svg>
   </div>
 
-  <footer class="foot">
-    <span class="lock">Persist ・ 记录，同一天</span>
-    <span>wpersist.top</span>
-  </footer>
+  <div class="frame">
+    <header class="top">
+      <span class="brand">
+        <svg class="brand-mark" viewBox="0 0 30 30" aria-hidden="true" fill="none">
+          <rect x=".9" y=".9" width="28.2" height="28.2" rx="8.4" stroke="var(--line)" stroke-width="1.5"/>
+          <path d="M7.2 19.6 L12.2 13.9 L16.6 16.5 L21.8 9.9" stroke="var(--ink)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="21.8" cy="9.9" r="1.9" fill="var(--green)"/>
+        </svg>
+        Persist
+      </span>
+      <span class="badge">记录先存在你的设备上</span>
+    </header>
+
+    <div class="main">
+      <p class="eyebrow">个人记录与 AI 复盘</p>
+      <h1>把每天的碎片写下来，<br><em>晚上看懂自己</em>。</h1>
+      <p class="sub">健身、饮食、学习记在一处，晚上让 AI 把数字写成一段人话。</p>
+    </div>
+
+    <footer class="foot">
+      <span class="lock">Persist · 计划 · 记录 · 复盘</span>
+      <span>wpersist.top</span>
+    </footer>
+  </div>
 </div>
 
 <script>
@@ -290,8 +320,9 @@
     var t = p.get('theme') === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-variant', v);
     document.documentElement.setAttribute('data-theme', t);
+    if (p.get('crop') === '1') document.documentElement.setAttribute('data-crop', '1');
 
-    // ?selfcheck=1：把几何自检结果写进 DOM，供 --dump-dom 读取（无图像能力时的客观校验）
+    // ?selfcheck=1：把几何自检结果写进 DOM，供脚本读回（不依赖肉眼）
     if (p.get('selfcheck') === '1') {
       var rect = function (el) {
         var b = el.getBoundingClientRect();
@@ -303,7 +334,8 @@
         function (el) { return getComputedStyle(el).display !== 'none'; }
       )[0];
       var items = {};
-      var nodes = visible.querySelectorAll('.brand, .badge, .eyebrow, h1, .sub, .foot, .foot > span, svg');
+      // 只量「承载信息」的节点；.rule 是装饰，允许越界
+      var nodes = visible.querySelectorAll('.frame .brand, .frame .badge, .frame .eyebrow, .frame h1, .frame .sub, .frame .foot, .frame .foot > span, .frame .brand-mark');
       Array.prototype.forEach.call(nodes, function (el, i) {
         var key = (el.getAttribute('class') || el.tagName.toLowerCase()) + '#' + i;
         var o = rect(el);
@@ -311,16 +343,33 @@
         o.overflowX = el.scrollWidth - el.clientWidth;
         items[key] = o;
       });
+
+      // 微信 1:1 安全区：整卡视口下 x ∈ [285, 915]；取景模式（已左移 285）下 x ∈ [0, 630]
+      var cropped = p.get('crop') === '1';
+      var SAFE_L = cropped ? 0 : 285;
+      var SAFE_R = cropped ? 630 : 915;
+      var violations = [];
+      Object.keys(items).forEach(function (key) {
+        var o = items[key];
+        if (o.x < SAFE_L || o.r > SAFE_R) {
+          violations.push({ node: key, x: o.x, right: o.r });
+        }
+      });
+
       var h1 = visible.querySelector('h1');
       var cs = getComputedStyle(h1);
+      var stageBox = rect(visible);
       var report = {
         variant: v,
         theme: t,
+        crop: p.get('crop') === '1',
         fonts: document.fonts ? document.fonts.status : 'n/a',
-        stage: rect(visible),
+        stage: stageBox,
         docScroll: { w: document.documentElement.scrollWidth, h: document.documentElement.scrollHeight },
         bodyScroll: { w: document.body.scrollWidth, h: document.body.scrollHeight },
         h1Lines: Math.round(h1.getBoundingClientRect().height / parseFloat(cs.lineHeight)),
+        h1OverflowX: h1.scrollWidth - h1.clientWidth,
+        safeZone: { left: SAFE_L, right: SAFE_R, violations: violations, ok: violations.length === 0 },
         items: items
       };
       document.body.textContent = '';
