@@ -302,8 +302,10 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
   position:absolute;inset:0;width:100%;height:100%;display:block;
   opacity:0;pointer-events:none;transition:opacity 1.5s ease;
 }
-/* 6.2s 瞳孔推进开始：字符画淡出、星轨 + 流星淡入（逐渐进入，不是硬切） */
-.intro.is-meteor .intro-canvas{opacity:0}
+/* 6.2s 瞳孔推进开始：字符画淡出、星轨 + 流星淡入（逐渐进入，不是硬切）
+   字符层淡出从 1.1s 收紧到 0.55s：引擎在推进段会把字符网格铺成"星空隧道"，
+   以前有照片底图压着不显眼，删掉底图后那半秒会看到满屏乱码字符。 */
+.intro.is-meteor .intro-canvas{opacity:0;transition:opacity .55s ease}
 .intro.is-meteor .intro-meteor{opacity:1}
 /* 照片底图删掉后，用一层极淡的径向渐变给深底一点纵深（纯 CSS、零外部请求）。
    只在流星段加：眼睛段的近黑底要原样保住（验收按 #010203 ± 容差采样）。 */

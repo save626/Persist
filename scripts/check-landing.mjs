@@ -1,4 +1,4 @@
-// 落地页验收（landing/index.html · 科技展示型 · 浅色产品色系 + 开场动画）。
+﻿// 落地页验收（landing/index.html · 科技展示型 · 浅色产品色系 + 开场动画）。
 //
 // 为什么需要它：这是纯视觉页面，改坏了**不会报错**——只会变得不炫、
 // 掉帧、或在手机上卡死。这个脚本把「炫技但不失控」变成可复现的断言：
@@ -692,13 +692,13 @@ try {
     if (m.bloom !== false) fail('mobile', `移动端应关闭 Bloom，实为 ${m.bloom}`)
     if (m.particleEligible !== false) fail('mobile', '移动端不应挂 3D 粒子层')
     if (m.frames < 5) fail('mobile', `移动端流星层帧数 ${m.frames} 过低`)
-    // 2026-11-23：移动端改成规整流星雨（5 轨 × 6 颗 = 30 颗固定点阵），数量不随机增减
-    if (m.count !== 30) fail('mobile', `移动端规整流星应为固定 30 颗，实为 ${m.count}`)
+    // 2026-11-23 第二轮：移动端回到随机分布（方向/长度/间距都随机），但上限 34 颗、补充更快
+    if (m.count < 24) fail('mobile', `移动端流星只有 ${m.count} 颗（上限 34，实测应 ≥24）`)
     if (!m.px || m.px.lit < 10) fail('mobile', `移动端流星层没有可见流星（lit=${m.px ? m.px.lit : 'null'}）`)
     if (!m.skyGone) fail('mobile', '移动端仍存在 #introSky（照片底图应已整层删除）')
     if (m.bgImage !== 'none') fail('mobile', `移动端流星 canvas 自带背景图（${m.bgImage.slice(0, 40)}）`)
     if (errs.length) fail('mobile', `移动端控制台报错：${errs.join(' | ')}`)
-    notes.push(`移动端：无粒子层 · 规整流星 ${m.count} 条/${m.frames} 帧 · 亮像素 ${m.px ? m.px.lit : 0} · 无照片底图`)
+    notes.push(`移动端：无粒子层 · 流星 ${m.count} 颗/${m.frames} 帧 · 亮像素 ${m.px ? m.px.lit : 0} · 无照片底图`)
     await ctx.close()
   }
 
