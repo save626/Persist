@@ -1,4 +1,4 @@
-﻿/* 手势粒子融合 —— 简约现代深色界面 */
+/* 手势粒子融合 —— 简约现代深色界面 */
 
 :root {
   --bg: #05080d;
@@ -97,17 +97,10 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.brand-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #d9f0ff, var(--accent) 45%, rgba(111, 182, 232, 0.12) 70%);
-  box-shadow: 0 0 22px rgba(111, 182, 232, 0.55);
-  flex: none;
-}
+/* 2026-11-24：`.brand-mark`（26px 小蓝球 + 22px 外发光）已删除。
+   那圈发光在左上角会摊成一大团淡蓝雾，压着场景标题；现在顶栏只留「场景名 + 提示语」。 */
 
 .topbar h1 {
   margin: 0;
