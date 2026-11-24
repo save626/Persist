@@ -66,11 +66,16 @@ describe('parseAiGateMode', () => {
     expect(parseAiGateMode(' enforce ')).toBe('enforce')
   })
 
-  it('无法识别的值回到 off，保持现状可用', () => {
-    // 刻意选择：笔误不应该把作者自己锁在门外；可见性靠 describeConfig 打启动日志。
-    expect(parseAiGateMode('enforcee')).toBe('off')
-    expect(parseAiGateMode('')).toBe('off')
+  it('未配置时沿用 off（回滚锚点，不影响本地开发与 CI）', () => {
     expect(parseAiGateMode(undefined)).toBe('off')
+  })
+
+  it('提供了但无法识别的值 fail-closed 到 enforce', () => {
+    // 生产 env 明确配了 enforce；这行写错若静默退回 off 等于把接口敞开。
+    // 失败方向必须朝向拒绝，让启动后立刻暴露配置错误。
+    expect(parseAiGateMode('enforcee')).toBe('enforce')
+    expect(parseAiGateMode('')).toBe('enforce')
+    expect(parseAiGateMode('   ')).toBe('enforce')
   })
 })
 

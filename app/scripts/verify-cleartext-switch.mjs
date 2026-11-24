@@ -69,16 +69,16 @@ check(
 const httpsCase = deriveFromEnv('VITE_PERSIST_API_BASE_URL=https://wpersist.top\n')
 check('https 基址 → 禁止明文', httpsCase.allowCleartext, false)
 
-const httpCase = deriveFromEnv('VITE_PERSIST_API_BASE_URL=http://121.196.39.123\n')
+const httpCase = deriveFromEnv('VITE_PERSIST_API_BASE_URL=http://127.0.0.1:3000\n')
 check('http 基址 → 允许明文', httpCase.allowCleartext, true)
 
 const emptyCase = deriveFromEnv('# 只有注释\n')
 check('缺配置 → 允许明文（保守：宁可多放行也不静默断链）', emptyCase.allowCleartext, true)
 
 const commentedCase = deriveFromEnv(
-  '# VITE_PERSIST_API_BASE_URL=https://wpersist.top\nVITE_PERSIST_API_BASE_URL=http://121.196.39.123\n',
+  '# VITE_PERSIST_API_BASE_URL=https://wpersist.top\nVITE_PERSIST_API_BASE_URL=http://127.0.0.1:3000\n',
 )
-check('注释行不干扰取值', commentedCase.apiBaseUrl, 'http://121.196.39.123')
+check('注释行不干扰取值', commentedCase.apiBaseUrl, 'http://127.0.0.1:3000')
 
 // --- 3. 三处配置必须都读同一个来源 ---
 console.log('')

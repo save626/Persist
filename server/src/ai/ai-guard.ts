@@ -84,15 +84,19 @@ export function parseAiKeys(raw: string | undefined): AiKey[] {
 }
 
 /**
- * 解析开关值。无法识别的值一律回到 `off`。
+ * 解析开关值。
  *
- * 这是个刻意的取舍：写错成 `enforcee` 时选择「保持现状可用」而不是「拒绝一切请求」，
- * 因为后者会让作者自己也被锁在外面，而锁定问题比漏放行更难在远程发现。
- * 代价是笔误不会被立刻发现——所以 `describeConfig` 会把生效模式打进启动日志。
+ * - 未配置（`undefined`）沿用 `off`，保留回滚锚点与本地开发体验：没写过这个变量的
+ *   环境（单测、CI、临时起服务）不该突然被锁在门外。
+ * - **提供了却无法识别**（空串、`enforcee` 之类笔误）一律回落到 `enforce`（fail-closed）。
+ *   生产 env 明确写了 `PERSIST_AI_GATE=enforce`，这行一旦写错就静默变成「不校验」，
+ *   等于把 AI 接口向公网敞开——失败方向必须朝向拒绝，让问题在启动后立刻暴露。
+ *   生效模式由 `describeConfig` 打进启动日志，便于核对。
  */
 export function parseAiGateMode(raw: string | undefined): AiGateMode {
-  const value = raw?.trim().toLowerCase()
-  return AI_GATE_MODES.includes(value as AiGateMode) ? (value as AiGateMode) : 'off'
+  if (raw === undefined) return 'off'
+  const value = raw.trim().toLowerCase()
+  return AI_GATE_MODES.includes(value as AiGateMode) ? (value as AiGateMode) : 'enforce'
 }
 
 function sha256(value: string): Buffer {

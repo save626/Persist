@@ -7,12 +7,12 @@
 //
 // 用法：
 //   adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>
-//   node scripts/device-ai-probe.mjs                       # 默认打生产地址
-//   PERSIST_API_BASE=http://127.0.0.1:3000 ...             # 需要时改目标
+//   node scripts/device-ai-probe.mjs                       # 默认打本机 127.0.0.1:3000
+//   PERSIST_API_BASE=<目标地址> ...                        # 打其它目标时显式指定（地址不入库）
 import { chromium } from "../app/node_modules/playwright-core/index.mjs";
 
 const ENDPOINT = process.env.CDP_ENDPOINT ?? "http://127.0.0.1:9222";
-const API = process.env.PERSIST_API_BASE ?? "http://121.196.39.123";
+const API = process.env.PERSIST_API_BASE ?? "http://127.0.0.1:3000";
 
 const profile = {
   age: 30,
