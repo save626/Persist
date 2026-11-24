@@ -1,4 +1,4 @@
-# 只跑「不需要浏览器、不需要 node_modules」的那两组。
+# 跑两组：static（零依赖）+ product（产品本体 typecheck / test / lint）。
 #
 # 为什么不全跑：剩下 5 组要 Playwright 的 Chromium（`node scripts/accept.mjs`
 # 里的 web / intro / fusion / bloom / intro-stage），而本仓库里没有安装
@@ -26,3 +26,27 @@ jobs:
       # bloom-unit：手势数学（FINGER_RANGES / pinch / smoothing）的 17 条单测
       - name: 静态校验 + 手势单测
         run: node scripts/accept.mjs --only static,bloom-unit
+
+  product:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            server/package-lock.json
+
+      # shared/ 无独立依赖：两包的 pretest / pretypecheck 钩子会自行 tsc -p ../shared。
+      # 必须 npm ci 而非 install：CI 要锁定 lock 文件里的版本。
+      - name: 安装依赖
+        run: |
+          npm --prefix server ci --no-audit --no-fund
+          npm --prefix app ci --no-audit --no-fund
+
+      # product：server typecheck/test → app typecheck/test/lint，失败任一项即红。
+      - name: 产品本体门禁
+        run: node scripts/accept.mjs --only product
