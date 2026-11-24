@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 统一手势状态 —— 六个场景共用这一份。
  *
  * 从 21 点关键点算出**跨场景通用**的量，场景只做"怎么用"的映射：
@@ -18,6 +18,24 @@
 import { computeTension, handGap, handCenter, palmScale, clamp01 } from './tension.js'
 
 const HOLD_MS = 450
+
+/**
+ * 「收拢度」0..1：握拳与捏合取较大者 —— 场景聚合/收树的统一信号。
+ *
+ * 为什么需要它（2026-11-24 真机验收反馈）：`palm` 是四指 ratio 的加权平均，
+ * **两指捏合**（拇指+食指，其余三指伸开）只能把它压到 ~0.7，于是花不收，
+ * 必须把整只手捏到接近握拳才聚合。拇指↔食指的距离本来就是「捏合」的专用度量，
+ * 这里让它与握拳等权驱动场景。
+ *
+ * 对注入快照友好：快照可能只给 palm/fist、也可能只给 pinch，缺失的按语义补齐。
+ */
+export function closingOf(g) {
+  if (!g) return 0
+  const fist = Number.isFinite(g.fist) ? g.fist : 1 - (g.palm || 0)
+  const pinch = Number.isFinite(g.pinch) ? g.pinch : 0
+  return clamp01(Math.max(fist, pinch))
+}
+
 
 function fingerExtended(lm, tip, pip) {
   // 指尖比 PIP 离腕更远 → 视为伸直（尺度无关，不需要额外归一化）

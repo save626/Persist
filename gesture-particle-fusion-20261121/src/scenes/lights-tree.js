@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 场景 · 圣诞树（合并自 ZekangLi-Zico/Christmas-Tree 的 tree.py）
  *
  * 本轮按要求做了四件事：
@@ -17,6 +17,7 @@
  * 空中星点、树顶隐式方程爱心与细颈。
  */
 import { clamp01, approach } from '../core/sprites.js'
+import { closingOf } from '../core/gestures.js'
 
 const TAU = Math.PI * 2
 
@@ -343,8 +344,8 @@ export function createLightsTreeScene({ THREE, camera }) {
       // —— 扩散目标 ——
       let target
       if (g.active) {
-        // 张手 → 炸散；握拳 → 收树
-        target = clamp01(g.palm * 1.12 - 0.06)
+        // 张开度 = 1 - 收拢度（握拳 或 两指捏合 都算收拢）；捏合能直接收树
+        target = clamp01((1 - closingOf(g)) * 1.12 - 0.06)
       } else {
         // 无手势：满屏散开 ↔ 收树，周期往复（与花瓣场景一致）
         autoPhase += dt

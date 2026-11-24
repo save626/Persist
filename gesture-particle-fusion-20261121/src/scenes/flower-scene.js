@@ -11,6 +11,7 @@
  */
 import { createFlower } from './flower/particles.js'
 import { clamp01 } from '../core/sprites.js'
+import { closingOf } from '../core/gestures.js'
 
 /** 与 bloom 一致：花瓣（含散射）需要入画的最大半径。
  *  取 1.45 而不是 1.58 —— 1.58 会多留一圈空白，花在画面里显得比原版小约 9%。 */
@@ -118,8 +119,12 @@ export function createFlowerScene({ THREE, camera, count = 32000, autoCycle = tr
       if (override !== null) {
         disperse = override
       } else if (g && g.active) {
-        // 张手 → 散开；捏合/握拳 → 聚成花。双手拉开进一步加满
-        disperse = Math.max(clamp01(g.palm * 1.15 - 0.05), g.spread)
+        // 张开度 = 1 - 收拢度；收拢度取「握拳」与「捏合」的较大者。
+        // 2026-11-24 真机反馈：以前只吃 palm，两指捏合（其余三指伸开）的 palm 仍在 0.7，
+        // 花根本不收 —— 必须把整只手握到 0.3 以下才聚合。捏合本来就是拇指↔食指的
+        // 专用度量，这里让它与握拳等权触发。
+        const opening = 1 - closingOf(g)
+        disperse = Math.max(clamp01(opening * 1.15 - 0.05), g.spread)
       } else if (autoOn) {
         autoT += dt
         disperse = autoDisperse(autoT)

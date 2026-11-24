@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 手势阈值标定页（2026-11-24）。
  *
  * 为什么要有它：`FINGER_RANGES` / `SPREAD_THRESHOLD` / 捏合公式里的那些数字都是
@@ -10,7 +10,7 @@
  * 页面只负责显示与统计。所以这里量的数就是场景里用的数。
  */
 import { HandTracker } from './core/hand-tracker.js'
-import { GestureState } from './core/gestures.js'
+import { GestureState, closingOf } from './core/gestures.js'
 import {
   computeTension,
   fingerOpenness,
@@ -116,6 +116,7 @@ const LIVE_ROWS = [
   ['hands', '手数'],
   ['tension', '张力 tension（0..1）'],
   ['verdict', '按当前阈值判定'],
+  ['closing', '收拢度 max(握拳, 捏合) ← 场景用它'],
   ['palm', 'palm（EMA 平滑后）'],
   ['spread', 'spread（双手张开）'],
   ['fingersCount', '伸直手指数'],
@@ -166,6 +167,7 @@ function renderLive(hands, s) {
   }
   setV('tension', n3(s.tension))
   setV('verdict', verdictOf(s.tension))
+  setV('closing', `${n3(closingOf(gestures))}  ← 捏合 ${n3(gestures.pinch)} / 握拳 ${n3(1 - gestures.palm)}`)
   setV('palm', n3(gestures.palm))
   setV('spread', n3(gestures.spread))
   setV('fingersCount', String(gestures.fingers))

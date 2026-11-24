@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 渲染验收（裁剪后：只有「花瓣」与「圣诞树」两个场景）
  *
  * 检查项：
@@ -89,8 +89,16 @@ await page.evaluate(() => window.__fusion.inject({ active: true, hands: 2, palm:
 await page.waitForTimeout(1600)
 const closedHand = await page.evaluate(() => window.__fusion.measure())
 await page.screenshot({ path: join(OUT, 'flower-hand-closed.png') })
+
+// 两指捏合（拇指+食指，其余三指伸开）：palm 仍高、pinch 很高。
+// 2026-11-24 真机反馈的正是这一种 —— 以前场景只吃 palm，这种姿势花不收。
+await page.evaluate(() => window.__fusion.inject({ active: true, hands: 1, palm: 0.72, fist: 0.28, pinch: 0.92, spread: 0, fingers: 3 }))
+await page.waitForTimeout(1600)
+const pinchHand = await page.evaluate(() => window.__fusion.measure())
+await page.screenshot({ path: join(OUT, 'flower-hand-pinch.png') })
+
 console.log(
-  `双手张合（花瓣）：张开 亮像素 ${(openHand.litRatio * 100).toFixed(2)}% / 捏合 ${(closedHand.litRatio * 100).toFixed(2)}%`,
+  `双手张合（花瓣）：张开 亮像素 ${(openHand.litRatio * 100).toFixed(2)}% / 捏合 ${(closedHand.litRatio * 100).toFixed(2)}% / 两指捏合 ${(pinchHand.litRatio * 100).toFixed(2)}%`,
 )
 
 // 流星雨 / 星轨（只在花瓣场景）
@@ -145,6 +153,13 @@ for (const f of REMOVED) {
 if (!(openHand.litRatio > closedHand.litRatio * 1.15)) {
   problems.push(`双手张合幅度异常：张开 ${(openHand.litRatio * 100).toFixed(2)}% vs 捏合 ${(closedHand.litRatio * 100).toFixed(2)}%`)
 }
+// 两指捏合也必须是「收拢」：以前只吃 palm，这种姿势等于没收（花的亮像素和张开一样）
+if (!(pinchHand.litRatio < openHand.litRatio * 0.75)) {
+  problems.push(
+    `两指捏合没有收拢：捏合 ${(pinchHand.litRatio * 100).toFixed(2)}% vs 张开 ${(openHand.litRatio * 100).toFixed(2)}%` +
+    `（场景应该用 closingOf(g) = max(fist, pinch)，不能只看 palm）`,
+  )
+}
 if (!meteorInfo.exists || !meteorInfo.body) problems.push('花瓣场景没有启用流星雨层（#meteors 或 has-meteors 缺失）')
 else if (!(meteorInfo.ratio > 0.002)) problems.push(`流星雨层几乎没有像素（${(meteorInfo.ratio * 100).toFixed(3)}%）`)
 if (!(treeMaxExtent > 0.8)) problems.push(`圣诞树无手势时没有满屏散开（最大横向 ${(treeMaxExtent * 100).toFixed(1)}%）`)
@@ -154,7 +169,7 @@ if (bad.length) problems.push(`运行报错：${bad.slice(0, 3).join(' | ')}`)
 
 writeFileSync(
   join(OUT, 'fusion-report.json'),
-  JSON.stringify({ at: new Date().toISOString(), scenes, rows, controls, color: { beforeGain, afterGain }, openHand, closedHand, errors }, null, 2),
+  JSON.stringify({ at: new Date().toISOString(), scenes, rows, controls, color: { beforeGain, afterGain }, openHand, closedHand, pinchHand, errors }, null, 2),
 )
 
 if (problems.length) {
