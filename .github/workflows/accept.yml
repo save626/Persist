@@ -1,0 +1,28 @@
+# 只跑「不需要浏览器、不需要 node_modules」的那两组。
+#
+# 为什么不全跑：剩下 5 组要 Playwright 的 Chromium（`node scripts/accept.mjs`
+# 里的 web / intro / fusion / bloom / intro-stage），而本仓库里没有安装
+# playwright-core 的 npm 依赖树（脚本直接引用 `app/node_modules/playwright-core`），
+# 在 CI 上要额外装一份浏览器，收益不抵成本。视觉/交互验收保持本地跑。
+name: accept
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # static：OG 标签与卡面尺寸、页脚备案占位一致性、内联引擎一致性
+      # bloom-unit：手势数学（FINGER_RANGES / pinch / smoothing）的 17 条单测
+      - name: 静态校验 + 手势单测
+        run: node scripts/accept.mjs --only static,bloom-unit

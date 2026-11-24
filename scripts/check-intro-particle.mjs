@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 开场动画「粒子舞台」验收（桌面端全规格）
  *
  * 时间基准：从**起播**算起（state().elapsed），不是从页面 load 算起 ——
@@ -20,10 +20,15 @@
  * 产物：preview/intro-particle-1-enter.png / -2-hold.png / -3-click.png
  */
 import fs from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { chromium } from '../app/node_modules/playwright-core/index.mjs'
 
-const FILE = 'file:///D:/Persist/landing/index.html'
-const OUT = 'preview'
+// 不要写死 D:\Persist —— 换机器/换路径就跑不了，改用脚本自身位置推导
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const PAGE = join(ROOT, 'landing', 'index.html')
+const FILE = `file:///${PAGE.replace(/\\/g, '/').replace(/^\//, '')}`
+const OUT = join(ROOT, 'preview')
 
 const browser = await chromium.launch({
   headless: true,
