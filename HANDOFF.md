@@ -233,9 +233,11 @@ npm run visual:diff -- ../design <备份目录>   # 像素门禁：真比对基�
 3. 后端部署必须同时包含 `server/dist`、`server/package.json`、`shared/dist`、
    `shared/package.json`。
 4. 不重启 `persist-server`，除非改动要求或健康检查异常。
-5. 不删除任何回滚源。当前锚点（SSH 核实仍存在）：
-   `/opt/persist-next/server/dist.old`、`/opt/persist/server`、
-   `/root/backend-backup-2026111{1,3,7}-*`（多个）、`/root/frontend-backup-*`（多个）。
+5. **后端回滚源一条都不许删**：`/opt/persist-next/server/dist.old`、`/opt/persist/server`、
+   `/root/backend-backup-2026111{1,3,7}-*`。
+   **前端备份按「保留最近 3 份」轮转**（2026-11-24 起，见 `docs/部署与服务器现状.md` §11.7）：
+   新建 `frontend-backup-*` 时同步删最旧一份，否则会像 11 月那样堆到 11 份 14 MB。
+   `app.old-*` 同理只留 2 个（它们不是回滚源，只是历次 `mv` 的残留，而且能被公网直接访问）。
 6. 不输出真实公网 IP（仓库只写 `121.196.*.*`）。
 7. **不要用 `kill %1`**：非交互 ssh 没有作业控制，会杀不掉进程并占端口，导致「配了正确
    凭据却 401」。用 `P=$!`，收尾 `ss -ltnp` 确认端口释放。
