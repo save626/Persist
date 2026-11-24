@@ -34,6 +34,9 @@ body {
 }
 
 /* —— 画面层 —— */
+/* #cam 只是 MediaPipe 的视频源（hand-tracker 拿它做 detectForVideo），
+   全程 opacity:0 不可见。2026-11-24 删掉了没人用的 `.cam.is-live{opacity:.22}`：
+   代码里从来没有给这个元素加过 is-live，那套"22% 相机预览"从未生效。 */
 .cam {
   position: absolute;
   inset: 0;
@@ -46,10 +49,6 @@ body {
   filter: saturate(0.4) brightness(0.5);
   transition: opacity 600ms ease;
   z-index: 0;
-}
-
-.cam.is-live {
-  opacity: 0.22;
 }
 
 .hand-overlay {
