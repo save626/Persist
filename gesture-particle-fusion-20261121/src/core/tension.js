@@ -55,15 +55,29 @@ export const LM = Object.freeze({
  *
  * `closed` / `open` 是 ratio = |tip-wrist| / |mcp-wrist| 在该指握拳/张开时的典型值。
  * 这些数字是**可调常量**，不是物理定律：不同人的指长比例差得很远。
- * 调参入口：打开 `?hud=1`，看每指实测 `raw`，把稳定态的最小/最大值填进来。
+ *
+ * 2026-11-24 真手标定（`calibrate.html`，1680×982 · DPR 1.5）后按实测重填：
+ *   握拳 p50 / 张开 p50 →
+ *     thumb  1.78 / 1.72   ← 反向！见下
+ *     index  0.81 / 1.93
+ *     middle 0.72 / 2.02
+ *     ring   0.64 / 2.02
+ *     pinky  0.64 / 1.82
+ * 旧值（closed≈1.1 / open≈2.35）比这只手的手型大得多，导致「张开」只映射到 0.66，
+ * 全靠 spread 项把张力拉到 0.77。
+ *
+ * 拇指为什么 weight 归零：握拳时拇指绕过指节，|拇指尖-腕| 反而略**大**于张开
+ * （1.78 > 1.72，样本 272/268 帧、抖动 ±0.04），这个比值对拇指没有区分度。
+ * 拇指参与「捏合」另有专用度量（拇指尖↔食指尖 / 掌宽），不需要挤进 ratio。
  */
 export const FINGER_RANGES = Object.freeze([
   // 拇指：MCP 用 2 号点（真正贴着腕根的是 CMC 1 号，分母太小会把噪声放大）
-  { name: 'thumb', mcp: LM.THUMB_MCP, tip: LM.THUMB_TIP, closed: 1.45, open: 2.35, weight: 0.5 },
-  { name: 'index', mcp: LM.INDEX_MCP, tip: LM.INDEX_TIP, closed: 1.10, open: 2.35, weight: 1.0 },
-  { name: 'middle', mcp: LM.MIDDLE_MCP, tip: LM.MIDDLE_TIP, closed: 1.15, open: 2.40, weight: 1.0 },
-  { name: 'ring', mcp: LM.RING_MCP, tip: LM.RING_TIP, closed: 1.10, open: 2.25, weight: 0.9 },
-  { name: 'pinky', mcp: LM.PINKY_MCP, tip: LM.PINKY_TIP, closed: 1.05, open: 2.00, weight: 0.7 },
+  // 保留在表里只为 HUD 显示；weight 0 = 不参与 tension 的 ratio 平均
+  { name: 'thumb', mcp: LM.THUMB_MCP, tip: LM.THUMB_TIP, closed: 1.45, open: 2.35, weight: 0 },
+  { name: 'index', mcp: LM.INDEX_MCP, tip: LM.INDEX_TIP, closed: 0.88, open: 1.90, weight: 1.0 },
+  { name: 'middle', mcp: LM.MIDDLE_MCP, tip: LM.MIDDLE_TIP, closed: 0.82, open: 1.98, weight: 1.0 },
+  { name: 'ring', mcp: LM.RING_MCP, tip: LM.RING_TIP, closed: 0.75, open: 1.98, weight: 0.9 },
+  { name: 'pinky', mcp: LM.PINKY_MCP, tip: LM.PINKY_TIP, closed: 0.72, open: 1.78, weight: 0.7 },
 ])
 
 /** 指令给的阈值：< 0.32 花苞，> 0.66 绽放，中间平滑。 */
@@ -110,13 +124,17 @@ export function fingerOpenness(landmarks, ranges = FINGER_RANGES) {
   })
 }
 
-/** 指尖张开度：掌宽归一化，握拳 ~0.6 / 张开 ~1.6。 */
+/**
+ * 指尖张开度：掌宽归一化，握拳 / 张开。
+ * 2026-11-24 真手标定：握拳 p50 0.86（p5 0.83）、张开 p50 2.33（p5 2.30），
+ * 所以区间取 0.88→2.30 —— 旧值 0.75→1.55 在张手时早就饱和到 1，等于只剩开关量。
+ */
 export function palmSpread(landmarks) {
   const palmWidth = dist(landmarks[LM.INDEX_MCP], landmarks[LM.PINKY_MCP])
   if (palmWidth < 1e-6) return null
   const tipSpan = dist(landmarks[LM.INDEX_TIP], landmarks[LM.PINKY_TIP])
   const raw = tipSpan / palmWidth
-  return { raw, value: clamp01((raw - 0.75) / (1.55 - 0.75)) }
+  return { raw, value: clamp01((raw - 0.88) / (2.30 - 0.88)) }
 }
 
 /**
