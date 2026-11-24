@@ -1,4 +1,4 @@
-﻿# 手势粒子融合 · Gesture Particle Fusion（裁剪版）
+# 手势粒子融合 · Gesture Particle Fusion（裁剪版）
 
 只剩两个场景：**花瓣**（最初的张开 / 满屏散开）与 **圣诞树**（ZekangLi-Zico/Christmas-Tree 的移植）。
 一套 Three.js 渲染、一套手势管线、一个入口页面。
@@ -196,9 +196,32 @@ node scripts/shoot.mjs
 > 诊断脚本：`node scripts/shot-flower-still.mjs` —— 抓一张"花瓣完全聚拢"的静帧
 > （`preview/flower-gathered.png`），用来和 bloom 原版截图对比尺寸。
 
+## 手势阈值标定页（2026-11-24）
+
+`FINGER_RANGES` / `SPREAD_THRESHOLD` / 捏合公式里的数字全部是**在注入快照上手调出来的**，
+从来没在一只真手上核对过。`calibrate.html` 就是为了补这一步：
+
+```powershell
+cd gesture-particle-fusion-20261121
+node serve.mjs 4190
+# 浏览器开 http://localhost:4190/calibrate.html（localhost 是安全上下文，摄像头可用）
+```
+
+1. 点「开始」授权摄像头（页面左上显示「N 只手 / 未检测到手」和实时 fps）；
+2. 依次点三个按钮，各**保持动作 2.5 秒**：张开手 → 握拳 → 捏合；
+3. 报告区会给出每指 `raw` 的 p5/p50/p95、张力、捏合距离，并算出建议值：
+   `closed = 握拳 p95`、`open = 张开 p5`（两者必须有间隙，否则会标 ⚠/✗）；
+4. 末尾有一段可直接粘贴的 `FINGER_RANGES` 片段与 `SPREAD_THRESHOLD` 建议，点「复制报告」拿走。
+
+它**复用** `src/core/hand-tracker.js` + `gestures.js` + `tension.js`（与场景同一套代码），
+页面只做显示与统计，所以这里量到的数就是场景里用的数。
+控制台还有 `window.__calibrate.selftest()`：用合成样本把「统计 → 建议 → 报告」跑一遍，
+用来验证页面逻辑本身（不需要真手）。
+
 ## 仍需处理
 
 1. **真手未验证**：手势量在注入数据上验收；`FINGER_RANGES`、捏合阈值需真机看 HUD 核对。
+   **2026-11-24 已备好标定页**（见上一节），剩下的只是戴上手跑一遍并回填常量。
 2. **树的"全局"深度顺序是近似的**：螺旋与填充是两个 draw call，无法真正交错绘制；
    现在各自桶排序 + 按两层平均深度决定先后。若要像素级还原 painter's order，
    需要合并成一个材质（但那样就违背"亮度分别控制"的要求）或用多趟按深度区间切分绘制。

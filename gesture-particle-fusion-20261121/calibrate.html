@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>手势阈值标定 · Persist</title>
+<!--
+  用途：用手掌真机核对 FINGER_RANGES / SPREAD_THRESHOLD / 捏合阈值。
+
+  为什么单独一页：这些常量只在「注入快照」上验收过，从来没在真手上看过。
+  本页复用 src/core/hand-tracker.js + gestures.js + tension.js（与场景同一套代码），
+  只负责显示与统计，不引入第二套算法。
+
+  用法：在 gesture-particle-fusion-20261121 里 `node serve.mjs 4190`，
+  浏览器开 http://localhost:4190/calibrate.html（localhost 是安全上下文，摄像头可用）。
+
+  注意：本页受 serve.mjs 的 CSP 约束（script-src 'self'），所以**不能写内联脚本**。
+-->
+<link rel="stylesheet" href="./calibrate.css">
+</head>
+<body>
+<main class="wrap">
+
+  <header class="head">
+    <h1>手势阈值标定</h1>
+    <p class="lede">
+      按顺序做三个动作，各保持 2.5 秒：<b>张开手</b> → <b>握拳</b> → <b>捏合</b>。
+      页面会把每指 ratio 的实测区间和「按这只手该填什么值」算出来，末尾有一段可直接粘贴的报告。
+      左下图是摄像头（镜像），右图是实时度量。
+    </p>
+  </header>
+
+  <section class="grid">
+    <div class="cam">
+      <video id="cam" playsinline muted autoplay></video>
+      <div class="cam-hint" id="camHint">点右边「开始」并允许摄像头</div>
+      <div class="cam-meta">
+        <span id="hands">—</span>
+        <span id="fps">—</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <button type="button" class="btn primary" id="startBtn">开始（授权摄像头）</button>
+      <div class="live" id="live"></div>
+    </div>
+  </section>
+
+  <section class="recs">
+    <button type="button" class="btn" data-act="open">张开手 · 记 2.5s</button>
+    <button type="button" class="btn" data-act="fist">握拳 · 记 2.5s</button>
+    <button type="button" class="btn" data-act="pinch">捏合 · 记 2.5s</button>
+    <span class="rec-state" id="recState">还没开始</span>
+  </section>
+
+  <section class="report">
+    <div class="report-head">
+      <h2>结果与建议</h2>
+      <button type="button" class="btn small" id="copyBtn">复制报告</button>
+    </div>
+    <pre id="report"></pre>
+  </section>
+
+  <footer class="foot">
+    只在本机运行 · 摄像头画面不回传 · 所有度量来自 src/core/tension.js（与场景同源）
+  </footer>
+</main>
+
+<script type="module" src="./src/calibrate.js"></script>
+</body>
+</html>

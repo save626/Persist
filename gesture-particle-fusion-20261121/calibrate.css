@@ -1,0 +1,97 @@
+/* 手势标定页样式（2026-11-24）。只服务 calibrate.html，不参与开场。 */
+
+:root {
+  --bg: #0b1419;
+  --panel: #111d24;
+  --panel-2: #0e181e;
+  --line: rgba(199, 218, 230, .16);
+  --fg: #e8eff3;
+  --muted: #93a7b3;
+  --faint: #7d92a0;
+  --accent: #6d9fbd;
+  --accent-ink: #a8cbdf;
+  --warn: #e0b26a;
+  --bad: #e08a8a;
+  --ok: #8fd0a8;
+  --mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.6;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+
+.head h1 { font-size: 24px; margin: 0 0 8px; letter-spacing: -.01em; }
+.lede { margin: 0 0 20px; color: var(--muted); font-size: 14px; max-width: 78ch; }
+.lede b { color: var(--accent-ink); font-weight: 600; }
+
+.grid { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+/* ---------- 摄像头 ---------- */
+.cam {
+  position: relative; border: 1px solid var(--line); border-radius: 14px;
+  overflow: hidden; background: #05090c; aspect-ratio: 4 / 3;
+}
+.cam video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+.cam-hint {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 13px; color: var(--muted); background: rgba(5, 9, 12, .72);
+  padding: 20px; text-align: center;
+}
+/* 作者样式里的 display:grid 会盖掉 UA 的 [hidden]{display:none}，必须显式声明 */
+.cam-hint[hidden] { display: none; }
+.cam-meta {
+  position: absolute; left: 10px; bottom: 10px; display: flex; gap: 10px;
+  font-family: var(--mono); font-size: 12px; color: var(--accent-ink);
+  background: rgba(6, 12, 16, .6); padding: 3px 9px; border-radius: 999px;
+}
+
+/* ---------- 控制与实时面板 ---------- */
+.panel { display: grid; gap: 14px; }
+.btn {
+  appearance: none; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--fg); font: inherit; font-size: 14px;
+  padding: 10px 16px; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: linear-gradient(180deg, #467692, #3c6a84); border-color: #467692; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ok { background: #1d3a2b; border-color: #2f6b4b; color: var(--ok); }
+.btn[disabled] { opacity: .6; cursor: default; }
+.btn.small { font-size: 12.5px; padding: 5px 12px; }
+
+.live { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--panel-2); }
+.rows { display: grid; gap: 2px; }
+.rows + .rows { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 10px; font-size: 13px; }
+.fingers .row { grid-template-columns: 1fr 52px 90px 74px; align-items: center; }
+.k { color: var(--muted); }
+.k em { font-style: normal; color: var(--faint); font-size: 11.5px; }
+.v { font-family: var(--mono); color: var(--fg); text-align: right; }
+.lim { font-family: var(--mono); font-size: 11.5px; color: var(--faint); text-align: right; }
+.bar { height: 5px; background: rgba(199, 218, 230, .14); border-radius: 999px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #467692, #6d9fbd); transition: width .12s linear; }
+
+/* ---------- 记录按钮 ---------- */
+.recs { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+.rec-state { font-family: var(--mono); font-size: 12.5px; color: var(--faint); }
+
+/* ---------- 报告 ---------- */
+.report { margin-top: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.report-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.report-head h2 { font-size: 15px; margin: 0; color: var(--muted); font-weight: 600; }
+#report {
+  margin: 0; padding: 14px 16px; font-family: var(--mono); font-size: 12.5px;
+  line-height: 1.75; white-space: pre-wrap; word-break: break-word; color: var(--fg);
+  max-height: 62vh; overflow: auto;
+}
+
+.foot { margin-top: 20px; font-size: 12px; color: var(--faint); }
