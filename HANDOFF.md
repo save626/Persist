@@ -1,4 +1,4 @@
-# Persist 项目现状与交接
+﻿# Persist 项目现状与交接
 
 > **本文是「现在是什么 + 下一步做什么」的唯一事实源。**
 >
@@ -59,7 +59,7 @@ debug 签名。
 | Node        | `/opt/node22/bin/node` v22.19.0（系统 Node 20 未动）            |
 | 数据库      | `/var/lib/persist/persist.sqlite` 348 160 B，**schema 5**       |
 | 数据量      | `users=1` / `devices=1` / `ai_calls=20` / `ai_usage=4` / `audit_log=7` / `job_runs=7` |
-| env         | `/etc/persist/server.env` **36 键**，`600 root:root`             |
+| env         | `/etc/persist/server.env` **42 行**，`600 root:root`（`PERSIST_AI_KEYS` 为空，见 §5.1） |
 | 备份        | `/var/lib/persist/backups` 2 份；`persist-backup.timer` active，每日 03:00 |
 | dist        | 47 个 js                                                        |
 | health      | `status=ok / ai=deepseek / db=ok / storage 13.8%`               |
