@@ -84,16 +84,24 @@ function stats(values) {
   }
 }
 
+/** 记录窗口开头这段是"从上一个姿势切过来"的过渡帧，统计时必须丢掉，
+ *  否则握拳段的 p95 会落在张开值上（2026-11-24 第一次实测就踩到了）。 */
+const TRIM_HEAD_MS = 600
+
 /** 把一次记录的样本按指标压成统计表 */
 function summarize(samples) {
-  const per = (pick) => samples.map(pick).filter((x) => x !== null && x !== undefined)
+  const first = samples.length ? samples[0].at : 0
+  const steady = samples.filter((s) => s.at - first >= TRIM_HEAD_MS)
+  const use = steady.length >= 10 ? steady : samples
+  const per = (pick) => use.map(pick).filter((x) => x !== null && x !== undefined)
   const fingers = {}
   for (const f of FINGER_RANGES) {
     fingers[f.name] = stats(per((s) => s.fingers[f.name]))
   }
   return {
-    count: samples.length,
-    durationMs: samples.length ? samples[samples.length - 1].at - samples[0].at : 0,
+    count: use.length,
+    dropped: samples.length - use.length,
+    durationMs: use.length ? use[use.length - 1].at - use[0].at : 0,
     tension: stats(per((s) => s.tension)),
     spreadRaw: stats(per((s) => s.spreadRaw)),
     pinchD: stats(per((s) => s.pinchD)),
@@ -263,6 +271,11 @@ function suggestions() {
       const a = fist.fingers[f.name]
       const b = open.fingers[f.name]
       if (!a || !b) continue
+      // weight 0 的指（实测无区分度，比如拇指）不参与 tension，也不给建议
+      if (!f.weight) {
+        lines.push(`${f.name.padEnd(7)} weight 0（实测握拳/张开无区分度，不参与 tension）`)
+        continue
+      }
       const closed = a.p95
       const opened = b.p05
       const gap = opened - closed
@@ -323,7 +336,7 @@ function renderReport() {
     const r = results[act]
     if (!r) continue
     const s = r.summary
-    out.push(`## ${ACTIONS[act]}（${s.count} 帧 / ${(s.durationMs / 1000).toFixed(1)}s）`)
+    out.push(`## ${ACTIONS[act]}（${s.count} 帧 / ${(s.durationMs / 1000).toFixed(1)}s，已丢弃前 ${TRIM_HEAD_MS}ms 的过渡帧 ${s.dropped} 张）`)
     out.push(`tension  ${fmtStat(s.tension, 3)}`)
     out.push(`pinch d  ${fmtStat(s.pinchD, 3)} · pinch ${fmtStat(s.pinch, 3)}`)
     out.push(`指尖跨度 ${fmtStat(s.spreadRaw, 2)}`)
@@ -346,7 +359,6 @@ function renderReport() {
   } else {
     out.push('  （先采满「张开手」和「握拳」）')
   }
-
   $('report').textContent = out.join('\n')
 }
 
