@@ -55,15 +55,22 @@ export const LM = Object.freeze({
  *
  * `closed` / `open` 是 ratio = |tip-wrist| / |mcp-wrist| 在该指握拳/张开时的典型值。
  * 这些数字是**可调常量**，不是物理定律：不同人的指长比例差得很远。
- * 调参入口：打开 `?hud=1`，看每指实测 `raw`，把稳定态的最小/最大值填进来。
+ *
+ * 2026-11-24 按真手标定重填（与 `gesture-particle-fusion-20261121` 保持同一组值）：
+ *   握拳 p50 / 张开 p50 → index 0.81/1.93、middle 0.72/2.02、ring 0.64/2.02、pinky 0.64/1.82。
+ * 旧值（closed≈1.1 / open≈2.35）比标定那只手大得多，「张开」只能映射到 0.66。
+ *
+ * 拇指 weight 0：握拳时拇指绕过指节，|拇指尖-腕| 反而略大于张开（1.78 > 1.72），
+ * 这个比值没有区分度。拇指的「捏合」由 `pinchAmount()` 单独度量。
  */
 export const FINGER_RANGES = Object.freeze([
   // 拇指：MCP 用 2 号点（真正贴着腕根的是 CMC 1 号，分母太小会把噪声放大）
-  { name: 'thumb', mcp: LM.THUMB_MCP, tip: LM.THUMB_TIP, closed: 1.45, open: 2.35, weight: 0.5 },
-  { name: 'index', mcp: LM.INDEX_MCP, tip: LM.INDEX_TIP, closed: 1.10, open: 2.35, weight: 1.0 },
-  { name: 'middle', mcp: LM.MIDDLE_MCP, tip: LM.MIDDLE_TIP, closed: 1.15, open: 2.40, weight: 1.0 },
-  { name: 'ring', mcp: LM.RING_MCP, tip: LM.RING_TIP, closed: 1.10, open: 2.25, weight: 0.9 },
-  { name: 'pinky', mcp: LM.PINKY_MCP, tip: LM.PINKY_TIP, closed: 1.05, open: 2.00, weight: 0.7 },
+  // 留在表里只为显示；weight 0 = 不参与 tension 的 ratio 平均
+  { name: 'thumb', mcp: LM.THUMB_MCP, tip: LM.THUMB_TIP, closed: 1.45, open: 2.35, weight: 0 },
+  { name: 'index', mcp: LM.INDEX_MCP, tip: LM.INDEX_TIP, closed: 0.88, open: 1.90, weight: 1.0 },
+  { name: 'middle', mcp: LM.MIDDLE_MCP, tip: LM.MIDDLE_TIP, closed: 0.82, open: 1.98, weight: 1.0 },
+  { name: 'ring', mcp: LM.RING_MCP, tip: LM.RING_TIP, closed: 0.75, open: 1.98, weight: 0.9 },
+  { name: 'pinky', mcp: LM.PINKY_MCP, tip: LM.PINKY_TIP, closed: 0.72, open: 1.78, weight: 0.7 },
 ])
 
 /** 指令给的阈值：< 0.32 花苞，> 0.66 绽放，中间平滑。 */
@@ -116,7 +123,7 @@ export function palmSpread(landmarks) {
   if (palmWidth < 1e-6) return null
   const tipSpan = dist(landmarks[LM.INDEX_TIP], landmarks[LM.PINKY_TIP])
   const raw = tipSpan / palmWidth
-  return { raw, value: clamp01((raw - 0.75) / (1.55 - 0.75)) }
+  return { raw, value: clamp01((raw - 0.88) / (2.30 - 0.88)) }
 }
 
 /**
@@ -248,13 +255,31 @@ export function twoHandApartness(hands, range = HAND_GAP_RANGE) {
  * @param {Array<Array<{x:number,y:number,z:number}>>} hands
  * @returns {number|null} 没有可用的手时返回 null（调用方回落到自动循环）
  */
+/**
+ * 拇指尖↔食指尖的捏合程度（0=分开，1=捏住），掌宽归一化。
+ *
+ * 与 `gesture-particle-fusion-20261121/src/core/gestures.js` 里的公式一致：
+ * 指间距 ≈ 0.3 掌宽算捏住、≈ 1.1 掌宽算完全张开。2026-11-24 真机实测 d ≈ 0.33（捏）
+ * 与 ≈ 1.23（张），这条公式对得上，不需要改。
+ */
+export function pinchAmount(lm) {
+  if (!lm || lm.length < 21) return 0
+  const s = palmScale(lm) || 1
+  const d = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / s
+  return clamp01((1.1 - d) / 0.8)
+}
+
 export function handsOpenness(hands) {
   if (!Array.isArray(hands) || hands.length === 0) return null
   let sum = 0
   let n = 0
   for (const lm of hands) {
     if (!lm || lm.length < 21) continue
-    sum += computeTension(lm).tension
+    // 张开度 = 1 - 收拢度，收拢度取「握拳」与「捏合」的较大者。
+    // 2026-11-24 真机反馈：只吃 tension 时，两指捏合（其余三指伸开）只能把它压到 ~0.7，
+    // 花根本不收 —— 必须把整只手捏到接近握拳才聚合。
+    const fist = 1 - computeTension(lm).tension
+    sum += 1 - Math.max(fist, pinchAmount(lm))
     n++
   }
   return n > 0 ? sum / n : null

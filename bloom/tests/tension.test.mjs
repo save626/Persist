@@ -68,12 +68,38 @@ const OPEN = skeleton({
   [LM.PINKY_TIP]: [0.7, 0.42],
 })
 
-/** 半开：握拳与张开之间线性插值 50%。 */
-const HALF = FIST.map((p, i) => ({
-  x: (p.x + OPEN[i].x) / 2,
-  y: (p.y + OPEN[i].y) / 2,
-  z: 0,
-}))
+/** 握拳 → 张开之间按比例混合位置（只用几何插值，不代表 ratio 也线性）。 */
+function blended(b) {
+  return FIST.map((p, i) => ({
+    x: p.x + (OPEN[i].x - p.x) * b,
+    y: p.y + (OPEN[i].y - p.y) * b,
+    z: 0,
+  }))
+}
+
+function spreadAt(b) {
+  return tensionToSpread(computeTension(blended(b)).tension)
+}
+
+/**
+ * 找「过渡区中点」的姿态。
+ *
+ * 2026-11-24 起 `FINGER_RANGES` 是按真手标定的窄区间，位置插值 50% 已经不落在中间带了
+ * （ratio 在位置空间是非线性的，旧的 1.1→2.35 才恰好在 0.5 处过渡）。
+ * 所以这里不写死 blend，而是扫一遍取「spread 最接近 0.5」的那个。
+ */
+const MID_BLEND = (() => {
+  let bestB = 0.5
+  let bestScore = -1
+  for (let b = 0.02; b <= 0.98; b += 0.005) {
+    const score = 1 - Math.abs(spreadAt(b) - 0.5)
+    if (score > bestScore) { bestScore = score; bestB = b }
+  }
+  return bestB
+})()
+
+/** 半开：过渡区中点姿态。 */
+const HALF = blended(MID_BLEND)
 
 test('握拳：tension < 0.32，花朵应聚合为花苞', () => {
   const { tension, fingers } = computeTension(FIST)
@@ -195,17 +221,14 @@ test('TensionTracker：噪声被压住（平滑后的抖动幅度明显小于原
   let now = 0
   const smoothed = []
   const raw = []
-  // 在「半开」附近以 30Hz 抖动 ±0.03：模拟 MediaPipe 关键点的常态抖动
+  // 在「过渡区中点」附近以 30Hz 抖动 ±0.03：模拟 MediaPipe 关键点的常态抖动。
+  // 中心值由 MID_BLEND 给出（阈值是标定过的，不能写死 0.49）。
   for (let i = 0; i < 180; i++) {
-    const blend = 0.49 + Math.sin(i * 0.55) * 0.03
-    const blended = FIST.map((p, k) => ({
-      x: p.x + (OPEN[k].x - p.x) * blend,
-      y: p.y + (OPEN[k].y - p.y) * blend,
-      z: 0,
-    }))
+    const blend = MID_BLEND + Math.sin(i * 0.55) * 0.03
+    const pose = blended(Math.max(0, Math.min(1, blend)))
     now += 16.67
-    raw.push(tensionToSpread(computeTension(blended).tension))
-    smoothed.push(tracker.update(blended, 1 / 60, now).target)
+    raw.push(tensionToSpread(computeTension(pose).tension))
+    smoothed.push(tracker.update(pose, 1 / 60, now).target)
   }
   // 丢掉前 40 帧的收敛瞬态，只量稳定段的抖动
   const steady = (arr) => arr.slice(40)
@@ -261,4 +284,19 @@ test('handsOpenness：张手 → 接近 1，握拳 → 接近 0；双手取平�
   assert.ok(Math.abs(mixed - (open + fist) / 2) < 1e-6, `双手应取平均：${mixed.toFixed(3)}`)
   assert.equal(handsOpenness([]), null)
   assert.equal(handsOpenness(null), null)
+})
+
+test('两指捏合（其余三指伸开）：张开度必须压下去，不能只认握拳', async () => {
+  const { handsOpenness, computeTension: ct } = await import('../src/gesture/tension.js')
+  // 2026-11-24 真机反馈的姿势：拇指尖贴到食指尖，中/无名/小指照常伸开。
+  // 这种姿势下 tension 仍有 ~0.7（四指平均），只看 tension 花就不收。
+  const pinch = OPEN.map((p) => ({ ...p }))
+  pinch[LM.THUMB_TIP] = { x: OPEN[LM.INDEX_TIP].x, y: OPEN[LM.INDEX_TIP].y, z: 0 }
+  const o = handsOpenness([pinch])
+  const tens = ct(pinch).tension
+  assert.ok(o !== null && o < 0.25, `两指捏合的张开度应 < 0.25，实际 ${o.toFixed(3)}`)
+  assert.ok(
+    tens > o + 0.2,
+    `tension=${tens.toFixed(3)} 应明显高于收拢后的张开度 ${o.toFixed(3)}（说明 pinch 参与了判定）`,
+  )
 })

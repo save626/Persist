@@ -1,4 +1,4 @@
-# 指尖绽放（bloom）—— 瞳孔散开之后的段落
+﻿# 指尖绽放（bloom）—— 瞳孔散开之后的段落
 
 落地页开场动画里「瞳孔散开」之后原本是星空 + 流星雨。这个项目把它换成：
 **一双手控制的粒子花** —— 手掌张开，粒子铺满整屏；手掌捏合，聚成一朵三层花瓣的花。
@@ -75,15 +75,22 @@ cup(u,v) = C · v² · (0.3 + 0.7u) - 0.1u²   截面杯状 + 瓣尖回卷
 ## 手势：手掌张合（方向已修正）
 
 ```
-openness = mean( 每只手的 tension )       // 0 = 握拳/捏合，1 = 完全张开
+openness = mean( 每只手的 1 - max(握拳度, 捏合度) )   // 0 = 握拳/捏合，1 = 完全张开
 disperse = openness
 ```
 
 - **手掌张开 → 粒子满屏散开；手掌捏合 → 聚成花瓣形态。**
 - 双手时取两只手张开度的平均值；单手时就是该手；没有手 → 交回自动循环。
 - 单只手的 `tension` 公式不变：`ratio = |tip−wrist| / |mcp−wrist|` → 逐指归一化 →
-  加权平均（拇指 0.5、其余 1/1/0.9/0.7）。
-- 标定入口：`?debug=1` 的 HUD 显示实时 `openness`，按自己手型调 `FINGER_RANGES`。
+  加权平均（**拇指 weight 0**、其余 1/1/0.9/0.7）。
+- **2026-11-24 两处同步到真手标定结果**（与 `gesture-particle-fusion-20261121` 同一组值）：
+  1. `FINGER_RANGES` 由实测中位数重填（旧值 1.10→2.35 比标定那只手大得多，
+     「张开」只能映射到 0.66）；`palmSpread` 区间 0.75→1.55 改为 **0.88→2.30**。
+  2. 收拢度取 **`max(握拳, 捏合)`**（新增 `pinchAmount()`）：只看 `tension` 时，
+     两指捏合（其余三指伸开）只能把它压到 ~0.7，花不收 —— 必须把整只手捏到接近握拳才聚合。
+     单元测试新增一条守这个姿势。
+- 标定入口：`?debug=1` 的 HUD 显示实时 `openness`；要重标定用融合工程那页
+  `gesture-particle-fusion-20261121/calibrate.html`（张开/握拳/捏合各 2.5 秒）。
 
 > 上一版这里的方向是反的（`disperse = 1 - tension`），已修正；单元测试里有一条
 > 断言专门守这个方向（`张手必须比握拳更散`），防止再翻回去。
@@ -128,7 +135,7 @@ node bloom/scripts/vendor-mediapipe.mjs     # 幂等；缺什么装什么
 ## 验收
 
 ```powershell
-node bloom/tests/tension.test.mjs        # 16 项：单手/双手张开度、方向和阈值
+node bloom/tests/tension.test.mjs        # 17 项：单手/双手张开度、方向和阈值
 node bloom/scripts/shoot.mjs             # 两态 / 花瓣层级 / 无堆叠过曝 / 满屏 / 循环
 node bloom/scripts/check-mediapipe.mjs   # 本地 wasm+模型在 CSP 下初始化并跑 detect
 ```
