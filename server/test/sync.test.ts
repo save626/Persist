@@ -16,7 +16,12 @@ interface Env {
 }
 
 function setup(env: Record<string, string> = {}): Env {
-  const config = loadConfig({ DEEPSEEK_API_KEY: '', ...env } as unknown as NodeJS.ProcessEnv)
+  // 本文件多处注册第二个账号验证隔离；显式放开上限（默认已收紧为 1）。
+  const config = loadConfig({
+    DEEPSEEK_API_KEY: '',
+    PERSIST_REGISTRATION_MAX_ACCOUNTS: '0',
+    ...env,
+  } as unknown as NodeJS.ProcessEnv)
   const db = openPersistDatabase({ path: ':memory:' })
   const app = buildApp({ config, db })
   return { app, db }

@@ -20,6 +20,23 @@ export default defineConfig(({ mode }) => {
     )
   }
 
+  // 移动端 API 基址必须是 HTTPS：设备令牌与同步的健康数据都走这条链路，
+  // 明文 HTTP 会被同网段/中间人嗅探并篡改（2026-11-25 安全审查发现）。
+  // 仅当显式设置 PERSIST_ALLOW_INSECURE_MOBILE_API=1 时才放行，供本地真机调试；
+  // 该豁免不得进入任何出包流程。CI 未设置该变量，故出包天然 fail-fast。
+  const mobileApiBase = env.VITE_PERSIST_API_BASE_URL?.trim() ?? ''
+  if (
+    mode === 'mobile' &&
+    mobileApiBase &&
+    !/^https:\/\//i.test(mobileApiBase) &&
+    env.PERSIST_ALLOW_INSECURE_MOBILE_API !== '1'
+  ) {
+    throw new Error(
+      `mobile 构建的 VITE_PERSIST_API_BASE_URL 必须使用 https://（当前：${mobileApiBase.slice(0, 24)}…）。` +
+        '明文 http 会泄露设备令牌与健康数据；本地调试可临时设 PERSIST_ALLOW_INSECURE_MOBILE_API=1 显式豁免。',
+    )
+  }
+
   // 网站合规信息（ICP / 公安备案号）。唯一来源是 deploy/site-info.json，
   // 与静态落地页用的是同一份数据、同一套校验——备案号下发后只改那一个 JSON。
   // 校验不通过直接中止构建，避免把编造的备案号发到线上。

@@ -16,6 +16,7 @@ import {
   revokeDevice as revokeDeviceRow,
   updateRecoveryHash,
 } from '../db/repositories/devices.js'
+import { countActiveUsers } from '../db/repositories/devices.js'
 import type { DeviceCredentials, DeviceRegisterResponse } from '@persist/shared/contract/sync'
 
 /**
@@ -25,17 +26,38 @@ import type { DeviceCredentials, DeviceRegisterResponse } from '@persist/shared/
  * 恢复码轮换一旦响应丢失，用户手里的纸条就作废了，自用工具的收益不抵风险。
  */
 
+/** 账号名额已满。`maxAccounts > 0` 且事务内确认活跃账号数已达上限时抛出。 */
+export class RegistrationClosedError extends Error {
+  readonly code = 'registration_closed'
+  constructor(readonly maxAccounts: number) {
+    super(`本服务最多允许 ${maxAccounts} 个账号，当前已满。`)
+    this.name = 'RegistrationClosedError'
+  }
+}
+
+/**
+ * 注册新账号 + 第一台设备。
+ *
+ * `maxAccounts` 的配额检查**在事务内**完成：BEGIN IMMEDIATE 会先拿到写锁，
+ * 使「数活跃账号」与「插入新账号」原子化，消除并发注册同时通过检查的 TOCTOU
+ * （2026-11-25 安全审查）。`<= 0` 表示不限制。
+ */
 export function registerAccount(
   db: Db,
-  options: { label: string | null; now: () => number },
+  options: { label: string | null; now: () => number; maxAccounts?: number },
 ): DeviceRegisterResponse {
-  const userId = createUserId()
-  const deviceId = createDeviceId()
-  const token = generateToken()
-  const recoveryCode = generateRecoveryCode()
-  const timestamp = options.now()
+  const maxAccounts = options.maxAccounts ?? 0
+  // 事务返回凭据；仅当检查 + 插入全部成功时才拿到返回值。
+  const result = db.transaction(() => {
+    if (maxAccounts > 0 && countActiveUsers(db) >= maxAccounts) {
+      throw new RegistrationClosedError(maxAccounts)
+    }
+    const userId = createUserId()
+    const deviceId = createDeviceId()
+    const token = generateToken()
+    const recoveryCode = generateRecoveryCode()
+    const timestamp = options.now()
 
-  db.transaction(() => {
     createUser(db, { id: userId, recoveryHash: hashRecoveryCode(recoveryCode), now: timestamp })
     createDevice(db, {
       id: deviceId,
@@ -44,9 +66,10 @@ export function registerAccount(
       label: options.label,
       now: timestamp,
     })
+    return { userId, deviceId, token, recoveryCode }
   })
 
-  return { userId, deviceId, token, recoveryCode }
+  return result
 }
 
 export type RestoreResult =

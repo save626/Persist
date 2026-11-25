@@ -10,11 +10,11 @@ import {
 import { recordAuditEvent } from '../audit/audit-log.js'
 import {
   registerAccount,
+  RegistrationClosedError,
   resetRecoveryCode,
   restoreAccount,
   revokeDevice,
 } from '../sync/accounts.js'
-import { countActiveUsers } from '../db/repositories/devices.js'
 import type { ServerConfig } from '../config.js'
 import { enforceRateLimit, requireDevice } from './guards.js'
 import type { FastifyInstance } from 'fastify'
@@ -42,16 +42,24 @@ export function registerDeviceRoutes(app: FastifyInstance, options: AccountRoute
   app.post('/api/v1/devices', async (request, reply) => {
     if (!enforceRateLimit(options.limiter, request, reply)) return reply
 
-    // 账号总额上限（默认 0 = 不限）。放在参数校验之前：满额时不必先解析请求体。
-    // 只在「新注册」这一条路上拦，`/devices/restore`（凭恢复码换机）与已有设备不受影响。
-    const maxAccounts = options.config.registrationMaxAccounts
-    if (maxAccounts > 0) {
-      const active = countActiveUsers(options.db)
-      if (active >= maxAccounts) {
-        request.log.warn(
-          { active, maxAccounts },
-          'device registration refused: account cap reached',
-        )
+    const parsed = parseDeviceRegisterBody(request.body)
+    if (!parsed.ok) {
+      return reply.code(400).send(errorBody('invalid_request', parsed.message))
+    }
+
+    // 上限检查已下沉到 registerAccount 的事务内（BEGIN IMMEDIATE 拿写锁后再数人数），
+    // 与插入原子化，消除并发注册双双通过检查的 TOCTOU。这里只负责把 409 错误翻译响应。
+    let result
+    try {
+      result = registerAccount(options.db, {
+        label: parsed.value.label ?? null,
+        now: options.now,
+        maxAccounts: options.config.registrationMaxAccounts,
+      })
+    } catch (error) {
+      if (error instanceof RegistrationClosedError) {
+        const maxAccounts = error.maxAccounts
+        request.log.warn({ maxAccounts }, 'device registration refused: account cap reached')
         return reply
           .header('cache-control', NO_STORE)
           .code(409)
@@ -62,17 +70,8 @@ export function registerDeviceRoutes(app: FastifyInstance, options: AccountRoute
             ),
           )
       }
+      throw error
     }
-
-    const parsed = parseDeviceRegisterBody(request.body)
-    if (!parsed.ok) {
-      return reply.code(400).send(errorBody('invalid_request', parsed.message))
-    }
-
-    const result = registerAccount(options.db, {
-      label: parsed.value.label ?? null,
-      now: options.now,
-    })
     recordAuditEvent(options.db, {
       userId: result.userId,
       action: 'device.create',

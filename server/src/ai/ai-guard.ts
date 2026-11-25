@@ -17,12 +17,13 @@ import { AI_UNAUTHORIZED_CODE } from '../contract.js'
  * - 服务端只保存 sha256 哈希，配置或库文件泄露时拿不到可直接使用的凭据。
  *
  * 三段开关（设计文档 P0 §4.4）：
- * - `off`：不校验，行为与改动前一致。这是默认值，也是回滚锚点。
+ * - `enforce`：校验失败即 401。**默认值**：未配置时也必须拒绝，避免新部署/临时起服务
+ *   在忘记配开关的情况下把付费 AI 接口向公网敞开（2026-11-25 安全审查结论）。
  * - `warn`：校验但不拒绝，只把结果写进日志。用于验证新 APK 是否真的带对了凭据。
- * - `enforce`：校验失败即 401。
+ * - `off`：不校验，仅用于本地开发与回滚；必须显式配置，且不应出现在公网部署。
  *
  * `warn` 存在的唯一理由是避免上线自锁：旧 APK 不带凭据，直接 `enforce` 会让作者自己的
- * 真机立刻失去真实 AI，且没有远程补救手段，只能重新装包。
+ * 真机立刻失去真实 AI，且没有远程补救手段，只能重新装包。这个权衡仅在显式选择时成立。
  */
 
 /** 凭据明文前缀；与设备令牌的 `pst_` 区分。 */
@@ -86,15 +87,16 @@ export function parseAiKeys(raw: string | undefined): AiKey[] {
 /**
  * 解析开关值。
  *
- * - 未配置（`undefined`）沿用 `off`，保留回滚锚点与本地开发体验：没写过这个变量的
- *   环境（单测、CI、临时起服务）不该突然被锁在门外。
+ * - 未配置（`undefined`）沿用 `enforce`（fail-closed）：公网部署忘记配开关时，
+ *   绝不能静默变成「不校验」——那等于把由作者付费的 AI 接口向任何人敞开。
+ *   本地开发 / CI 若需要旧行为，显式写 `PERSIST_AI_GATE=off`。
  * - **提供了却无法识别**（空串、`enforcee` 之类笔误）一律回落到 `enforce`（fail-closed）。
  *   生产 env 明确写了 `PERSIST_AI_GATE=enforce`，这行一旦写错就静默变成「不校验」，
  *   等于把 AI 接口向公网敞开——失败方向必须朝向拒绝，让问题在启动后立刻暴露。
  *   生效模式由 `describeConfig` 打进启动日志，便于核对。
  */
 export function parseAiGateMode(raw: string | undefined): AiGateMode {
-  if (raw === undefined) return 'off'
+  if (raw === undefined) return 'enforce'
   const value = raw.trim().toLowerCase()
   return AI_GATE_MODES.includes(value as AiGateMode) ? (value as AiGateMode) : 'enforce'
 }

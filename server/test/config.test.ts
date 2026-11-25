@@ -22,6 +22,10 @@ describe('loadConfig', () => {
     expect(config.aiMaxRetries).toBe(1)
     expect(config.rateLimitMax).toBe(20)
     expect(config.allowedOrigins).toEqual([...DEFAULT_ALLOWED_ORIGINS])
+    // 2026-11-25：默认只允许 1 个账号，消除开放注册导致的 AI 配额倍增。
+    expect(config.registrationMaxAccounts).toBe(1)
+    // AI 门默认 fail-closed。
+    expect(config.aiGate).toBe('enforce')
   })
 
   it('解析环境变量并去掉密钥首尾空白', () => {

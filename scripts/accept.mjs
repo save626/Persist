@@ -73,6 +73,7 @@ const GROUPS = {
       { name: 'OG 标签与卡面尺寸', cmd: node('scripts/check-og-meta.mjs') },
       { name: '备案占位一致性', cmd: node('deploy/scripts/render-site-info.mjs', '--check') },
       { name: '内联引擎一致性', cmd: node('scripts/inline-intro-engine.mjs', '--check') },
+      { name: '明文密钥扫描', cmd: node('scripts/check-secrets.mjs') },
     ],
   },
 

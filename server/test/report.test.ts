@@ -75,6 +75,9 @@ async function withServer<T>(
   const config = loadConfig({
     DEEPSEEK_API_KEY: 'sk-test',
     RATE_LIMIT_MAX: '100',
+    // 多数用例测业务流程而非鉴权门；显式 off 还原旧行为，
+    // 鉴权门专项用例通过 ...env 覆盖为 enforce/warn。
+    PERSIST_AI_GATE: 'off',
     ...env,
   } as unknown as NodeJS.ProcessEnv)
   const app = buildApp({ config, ai })
@@ -235,7 +238,7 @@ describe('POST /api/report', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('cache-control')).toBe('no-store')
       const body = (await response.json()) as Record<string, unknown>
-      expect(body.model).toBe('deepseek-chat')
+      expect(body.model).toBe('deepseek-flash')
       expect(body.report).toMatchObject({ title: goodReport.title, status: '先补饮水' })
       expect(JSON.stringify(body)).not.toContain('sk-test')
     })
@@ -364,8 +367,8 @@ describe('AI 凭据门（/api/report）', () => {
     )
   })
 
-  it('off 是默认值，行为与改动前一致', async () => {
-    await withServer(fakeAi(), {}, async (baseUrl) => {
+  it('显式 off 时不校验，行为与改动前一致（本地开发/回滚路径）', async () => {
+    await withServer(fakeAi(), { PERSIST_AI_GATE: 'off' }, async (baseUrl) => {
       const response = await postWithKey(baseUrl, request)
       expect(response.status).toBe(200)
     })

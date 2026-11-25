@@ -120,7 +120,12 @@ export interface ServerConfig {
 }
 
 export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
-export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-chat'
+/**
+ * 默认模型名。DeepSeek 官方文档当前只提供 deepseek-flash 与 deepseek-v4-pro；
+ * 旧名 deepseek-chat / deepseek-reasoner 已停用（2026-11-25 换 key 时实测旧名不在在售列表）。
+ * 这里必须跟官方在售名保持一致，否则新部署未显式配置 DEEPSEEK_MODEL 时会直接调用失败。
+ */
+export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-flash'
 export const DEFAULT_ALLOWED_ORIGINS = ['https://localhost'] as const
 
 /** 解析逗号分隔的 origin；非法项丢弃，留空时回到 Capacitor 安全的默认值。 */
@@ -202,7 +207,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     aiKeys: parseAiKeys(env.PERSIST_AI_KEYS),
     aiDailyLimit: readInt(env, 'PERSIST_AI_DAILY_LIMIT', 100, 0, 100_000),
     aiDailyTokens: readInt(env, 'PERSIST_AI_DAILY_TOKENS', 200_000, 0, 100_000_000),
-    registrationMaxAccounts: readInt(env, 'PERSIST_REGISTRATION_MAX_ACCOUNTS', 0, 0, 1_000),
+    // 默认只允许 1 个账号：个人自用工具，且设备令牌可凭恢复码换机（不占新名额）。
+    // 开放注册 + 设备令牌直连 AI 时，每多一个账号就多一份独立日配额，等于把作者
+    // 付费的账单按账号数倍增（2026-11-25 安全审查）。需要多账号部署时显式调大。
+    registrationMaxAccounts: readInt(env, 'PERSIST_REGISTRATION_MAX_ACCOUNTS', 1, 0, 1_000),
     aiAuditKeepDays: readInt(
       env,
       'PERSIST_AI_AUDIT_KEEP_DAYS',

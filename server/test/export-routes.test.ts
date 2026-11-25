@@ -36,6 +36,8 @@ async function setup(): Promise<Env> {
   const config = loadConfig({
     DEEPSEEK_API_KEY: '',
     SYNC_RATE_LIMIT_MAX: '1000',
+    // 本文件测「只导出当前账号」，需注册多个账号，显式放开上限。
+    PERSIST_REGISTRATION_MAX_ACCOUNTS: '0',
   } as unknown as NodeJS.ProcessEnv)
   const database = openPersistDatabase({ path: ':memory:' })
   const clock = { value: NOW }

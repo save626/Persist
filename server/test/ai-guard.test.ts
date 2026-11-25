@@ -66,8 +66,10 @@ describe('parseAiGateMode', () => {
     expect(parseAiGateMode(' enforce ')).toBe('enforce')
   })
 
-  it('未配置时沿用 off（回滚锚点，不影响本地开发与 CI）', () => {
-    expect(parseAiGateMode(undefined)).toBe('off')
+  it('未配置时 fail-closed 到 enforce（公网部署忘配开关也不能敞开接口）', () => {
+    expect(parseAiGateMode(undefined)).toBe('enforce')
+    // 本地开发/回滚仍需显式 off 的能力。
+    expect(parseAiGateMode('off')).toBe('off')
   })
 
   it('提供了但无法识别的值 fail-closed 到 enforce', () => {

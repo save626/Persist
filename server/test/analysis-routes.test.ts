@@ -222,7 +222,7 @@ describe('POST /api/v1/analysis/reports：生成、缓存与 force', () => {
       expect(created).toMatchObject({
         cached: false,
         origin: 'ai',
-        model: 'deepseek-chat',
+        model: 'deepseek-flash',
         range: { start: '2026-10-30', end: '2026-11-05', days: 7 },
       })
       expect(created.content).toEqual(validContent())
@@ -335,7 +335,7 @@ describe('POST /api/v1/analysis/reports：降级与契约违规', () => {
       expect(response.statusCode).toBe(200)
       const report = response.json<AnalysisReportResponse>()
       expect(report.origin).toBe('ai')
-      expect(report.model).toBe('deepseek-chat')
+      expect(report.model).toBe('deepseek-flash')
       expect(report.cached).toBe(false)
       // 第一次被判不合规，第二次带纠正说明重试成功。
       expect(env.ai.calls).toBe(2)

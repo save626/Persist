@@ -12,6 +12,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# 最小权限：CI 只需读取仓库内容，不需要写包、写 issues 或拿 OIDC 令牌。
+permissions:
+  contents: read
+
 jobs:
   static:
     runs-on: ubuntu-latest

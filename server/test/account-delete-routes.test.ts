@@ -41,6 +41,8 @@ async function setup(fileDatabase = false): Promise<Env> {
   const config = loadConfig({
     DEEPSEEK_API_KEY: '',
     SYNC_RATE_LIMIT_MAX: '1000',
+    // 本文件测多账号删除语义，显式放开账号上限（默认已收紧为 1）。
+    PERSIST_REGISTRATION_MAX_ACCOUNTS: '0',
     DB_BACKUP_DIR: backupDir,
   } as unknown as NodeJS.ProcessEnv)
   const database = openPersistDatabase({ path: dbPath })

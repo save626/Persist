@@ -51,6 +51,10 @@ async function withServer<T>(
   const config = loadConfig({
     DEEPSEEK_API_KEY: 'sk-test',
     RATE_LIMIT_MAX: '100',
+    // 本文件的多数用例测的是业务流程（SSE/限流/CORS），不是鉴权门。
+    // 门默认已改为 fail-closed(enforce)，故这里显式 off 还原旧行为；
+    // 鉴权门专项用例通过 ...env 覆盖为 enforce/warn。
+    PERSIST_AI_GATE: 'off',
     ...env,
   } as unknown as NodeJS.ProcessEnv)
   const app = buildApp({ config, ai })
@@ -284,8 +288,8 @@ describe('AI 凭据门（/api/chat）', () => {
     )
   })
 
-  it('off 是默认值，行为与改动前一致', async () => {
-    await withServer(fakeAi(), {}, async (baseUrl) => {
+  it('显式 off 时不校验，行为与改动前一致（本地开发/回滚路径）', async () => {
+    await withServer(fakeAi(), { PERSIST_AI_GATE: 'off' }, async (baseUrl) => {
       const response = await postWithKey(baseUrl, request)
       expect(response.status).toBe(200)
     })

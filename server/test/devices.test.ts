@@ -14,7 +14,13 @@ function setup(env: Record<string, string> = {}): {
   app: FastifyInstance
   db: PersistDatabase
 } {
-  const config = loadConfig({ DEEPSEEK_API_KEY: '', ...env } as unknown as NodeJS.ProcessEnv)
+  // 本文件的多数用例测注册/恢复/吊销机制，默认放开账号数；
+  // 账号上限专项用例通过 ...env 显式传 PERSIST_REGISTRATION_MAX_ACCOUNTS=1 覆盖。
+  const config = loadConfig({
+    DEEPSEEK_API_KEY: '',
+    PERSIST_REGISTRATION_MAX_ACCOUNTS: '0',
+    ...env,
+  } as unknown as NodeJS.ProcessEnv)
   const db = openPersistDatabase({ path: ':memory:' })
   const app = buildApp({ config, db })
   return { app, db }
@@ -113,11 +119,26 @@ describe('POST /api/v1/devices', () => {
     }
   })
 
-  it('默认不限制（PERSIST_REGISTRATION_MAX_ACCOUNTS 未配置时行为不变）', async () => {
-    const { app, db } = setup()
+  it('显式 0 时不限制账号数（多账号部署的显式选择）', async () => {
+    const { app, db } = setup({ PERSIST_REGISTRATION_MAX_ACCOUNTS: '0' })
     try {
       await register(app)
       await register(app)
+    } finally {
+      await close(app, db)
+    }
+  })
+
+  it('并发注册在写锁下不会突破账号上限（TOCTOU）', async () => {
+    const { app, db } = setup({ PERSIST_REGISTRATION_MAX_ACCOUNTS: '1' })
+    try {
+      const [a, b] = await Promise.all([
+        app.inject({ method: 'POST', url: '/api/v1/devices', payload: {} }),
+        app.inject({ method: 'POST', url: '/api/v1/devices', payload: {} }),
+      ])
+      const statuses = [a.statusCode, b.statusCode].sort()
+      // 恰好一个成功、一个因满额被拒；绝不允许两个都 201。
+      expect(statuses).toEqual([201, 409])
     } finally {
       await close(app, db)
     }
