@@ -132,9 +132,14 @@ export async function probeAiReport(options: ProbeReportOptions = {}): Promise<b
   }
 }
 
+/** 报告请求超时（毫秒）：服务端 AI_TIMEOUT_MS 默认 25s，前端稍长以覆盖重试。 */
+export const AI_REPORT_TIMEOUT_MS = 60_000
+
 export interface RequestReportOptions extends ProbeReportOptions {
   endpoint?: string
   signal?: AbortSignal
+  /** 覆盖超时时长，仅测试用；默认 AI_REPORT_TIMEOUT_MS。 */
+  timeoutMs?: number
   /**
    * 覆盖服务端 AI 凭据。不传时读构建期注入值（见 `ai-credential.ts`，web 恒为 null）；
    * 显式传 `null` 表示强制不带凭据（单测用来断言「没有这个头」）。
@@ -155,6 +160,22 @@ export async function requestAiReport(
   const endpoint = options.endpoint ?? AI_REPORT_ENDPOINT
   const doFetch: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init))
   const credential = 'credential' in options ? options.credential : aiCredential()
+  const timeoutMs = options.timeoutMs ?? AI_REPORT_TIMEOUT_MS
+
+  // 超时 + 外部取消组合成单个 signal：任一触发都中止 fetch，避免服务端挂起时 UI 永久"生成中"。
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  let timedOut = false
+  const timer = controller
+    ? setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, Math.max(1, timeoutMs))
+    : null
+  const onExternalAbort = () => controller?.abort()
+  if (controller && options.signal) {
+    if (options.signal.aborted) controller.abort()
+    else options.signal.addEventListener('abort', onExternalAbort, { once: true })
+  }
 
   let response: Response
   try {
@@ -166,11 +187,18 @@ export async function requestAiReport(
         ...(credential ? { authorization: `Bearer ${credential}` } : {}),
       },
       body: JSON.stringify(request),
-      signal: options.signal,
+      ...(controller ? { signal: controller.signal } : {}),
     })
   } catch (error) {
-    if (isAbortError(error)) throw error
+    if (isAbortError(error)) {
+      // 外部取消原样抛出；超时转成用户能理解的文案。
+      if (timedOut) throw new ReportUnavailableError('模型服务响应超时，请稍后重试。')
+      throw error
+    }
     throw new ReportUnavailableError('无法连接模型服务。')
+  } finally {
+    if (timer) clearTimeout(timer)
+    if (options.signal) options.signal.removeEventListener('abort', onExternalAbort)
   }
 
   if (!response.ok) {

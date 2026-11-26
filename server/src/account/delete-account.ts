@@ -82,16 +82,19 @@ function removeBackupFiles(backupDir: string): number {
 
 export function deleteAccount(options: DeleteAccountOptions): AccountDeleteResponse {
   const snapshots = listBackups(options.backupDir)
-  if (snapshots.length > 0 && countActiveUsers(options.db) > 1) {
-    throw new AccountDeleteError(
-      'account_delete_blocked',
-      '当前数据库还有其他 active 账号，且整库快照无法按账号拆分；为避免删除他人可恢复数据，已拒绝删除。',
-      409,
-    )
-  }
 
   const deletedAt = Math.trunc(options.now())
   const counts = options.db.transaction<AccountDeletionCounts>(() => {
+    // 多账号保护必须在同一事务内检查（2026-11-25 安全审查 TOCTOU）：
+    // 放在事务外时，检查通过到 DELETE 之间的窗口里若有新账号注册，会绕过保护删掉
+    // 他人可恢复数据。`snapshots` 是文件系统快照（事务管不到），仍在事务外读取。
+    if (snapshots.length > 0 && countActiveUsers(options.db) > 1) {
+      throw new AccountDeleteError(
+        'account_delete_blocked',
+        '当前数据库还有其他 active 账号，且整库快照无法按账号拆分；为避免删除他人可恢复数据，已拒绝删除。',
+        409,
+      )
+    }
     const next: AccountDeletionCounts = {
       profile: countRows(options.db, 'profiles', options.userId),
       settings: countRows(options.db, 'settings', options.userId),

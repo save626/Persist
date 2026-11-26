@@ -30,10 +30,15 @@ import { openDatabase } from './driver.js'
 
 export type BackupReason = 'scheduled' | 'manual' | 'pre-restore'
 
+const BACKUP_REASONS = new Set<string>(['scheduled', 'manual', 'pre-restore'])
+function isBackupReason(value: unknown): value is BackupReason {
+  return typeof value === 'string' && BACKUP_REASONS.has(value)
+}
+
 /** 路由层需要区分的可预期创建失败；消息仍保留给 CLI / 日志使用。 */
 export class BackupCreateError extends Error {
   constructor(
-    readonly code: 'memory_database' | 'backup_exists',
+    readonly code: 'memory_database' | 'backup_exists' | 'invalid_reason',
     message: string,
   ) {
     super(message)
@@ -375,7 +380,13 @@ export function createBackup(options: CreateBackupOptions): BackupResult {
     throw new Error(`数据库文件不存在：${dbPath}`)
   }
   const nowMs = options.now ?? Date.now()
-  const reason: BackupReason = options.reason ?? 'manual'
+  // reason 会被拼进文件名；TS 类型只在编译期生效，运行时必须白名单校验，
+  // 否则非 TS 调用方（或 as any）可传入含路径分隔符的串污染快照名（2026-11-25 安全审查）。
+  const rawReason: unknown = options.reason ?? 'manual'
+  if (!isBackupReason(rawReason)) {
+    throw new BackupCreateError('invalid_reason', '快照原因不合法。')
+  }
+  const reason: BackupReason = rawReason
   const policy = options.policy ?? DEFAULT_BACKUP_POLICY
   mkdirSync(backupDir, { recursive: true, mode: 0o750 })
 

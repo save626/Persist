@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { parseChatRequest, type ChatRequest, type ProfileData } from '../src/contract.js'
+import {
+  MAX_PROFILE_TEXT_LENGTH,
+  parseChatRequest,
+  parseProfile,
+  type ChatRequest,
+  type ProfileData,
+} from '../src/contract.js'
 
 const limits = { maxTurns: 20, maxTurnChars: 2_000, maxPromptChars: 12_000 }
 
@@ -122,5 +128,22 @@ describe('parseChatRequest', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect('legacyField' in result.value.profile).toBe(false)
+  })
+})
+
+describe('parseProfile 数值与文本上限（2026-11-25 安全审查）', () => {
+  it('拒绝超出 PROFILE_NUMBER_RULES 范围的数值', () => {
+    for (const field of ['age', 'height', 'weight', 'targetWeight', 'sleepHours'] as const) {
+      const result = parseProfile({ ...profile, [field]: 1e308 })
+      expect(result.ok, field).toBe(false)
+      if (!result.ok) expect(result.message).toMatch(/必须|之间/)
+    }
+    expect(parseProfile(profile).ok).toBe(true)
+  })
+
+  it('拒绝超长文本字段', () => {
+    const result = parseProfile({ ...profile, goal: 'x'.repeat(MAX_PROFILE_TEXT_LENGTH + 1) })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.message).toContain('过长')
   })
 })

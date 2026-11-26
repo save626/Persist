@@ -7,7 +7,7 @@ import type { ServerConfig } from '../config.js'
 import { errorBody, parseChatRequest, type ChatStreamEvent } from '../contract.js'
 import type { Db } from '../db/driver.js'
 import type { RateLimiter } from '../rate-limit.js'
-import { enforceAiGate, enforceAiQuota } from './guards.js'
+import { enforceAiConsent, enforceAiGate, enforceAiQuota } from './guards.js'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { ServerResponse } from 'node:http'
 
@@ -117,6 +117,9 @@ export function registerChatRoute(app: FastifyInstance, options: ChatRouteOption
       now: options.now,
     })
     if (!gate) return null
+
+    // AI 授权服务端强制：用户关掉 aiConsent 后，即使带有效设备令牌也不调用模型。
+    if (!enforceAiConsent({ db: options.db, gate, request, reply })) return null
 
     const decision = options.limiter.take(request.ip)
     if (!decision.allowed) {

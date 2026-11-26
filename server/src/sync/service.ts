@@ -110,16 +110,19 @@ export function applyPush(
   body: PushBody,
   now: () => number,
 ): PushResult {
-  const existing = findSyncOp(db, body.opId)
-  if (existing) {
-    if (existing.userId !== auth.userId) {
-      throw new SyncOpConflictError('该 opId 已被其他账号使用。')
-    }
-    const stored = parseStoredResult(existing.resultJson)
-    if (stored) return stored
-  }
-
+  // 幂等检查必须在事务内（2026-11-25 安全审查 TOCTOU）：
+  // 放在事务外时，两个并发请求可能都读到「没用过」，然后都执行 applyEntities，
+  // 造成同一 op 的应用与 recordSyncOp 竞态。移进 BEGIN IMMEDIATE 后检查与写入原子化。
   return db.transaction(() => {
+    const existing = findSyncOp(db, body.opId)
+    if (existing) {
+      if (existing.userId !== auth.userId) {
+        throw new SyncOpConflictError('该 opId 已被其他账号使用。')
+      }
+      const stored = parseStoredResult(existing.resultJson)
+      if (stored) return stored
+    }
+
     const { applied, skipped } = applyEntities(db, auth.userId, body.entities)
     const result: PushResult = { applied, skipped, serverRev: currentRev(db) }
     recordSyncOp(db, {

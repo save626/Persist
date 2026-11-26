@@ -27,6 +27,12 @@ export const AI_CHAT_LABEL = 'DeepSeek 生成 · 经本站服务端代理'
 
 export const AI_CHAT_ENDPOINT = '/api/chat'
 export const AI_HEALTH_ENDPOINT = '/api/health'
+/**
+ * 首块超时（毫秒）：只覆盖「发出请求到收到第一个 SSE 事件」这段。
+ * 服务端挂起 / 网络中间设备断连时，UI 会永久停在"生成中"——用首块超时兜底。
+ * 首块到达后取消计时，慢速流式输出不受影响。默认 60s（服务端 AI_TIMEOUT_MS 默认 25s）。
+ */
+export const AI_CHAT_FIRST_CHUNK_TIMEOUT_MS = 60_000
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -176,15 +182,23 @@ function parseSseLine(line: string): ChatEvent | null {
   return event
 }
 
-async function* readSseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatEvent> {
+async function* readSseEvents(
+  body: ReadableStream<Uint8Array>,
+  onFirstChunk?: () => void,
+): AsyncGenerator<ChatEvent> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let firstChunkSeen = false
 
   try {
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
+      if (!firstChunkSeen) {
+        firstChunkSeen = true
+        onFirstChunk?.()
+      }
       buffer += decoder.decode(value, { stream: true })
 
       for (let index = buffer.indexOf('\n'); index !== -1; index = buffer.indexOf('\n')) {
@@ -221,6 +235,8 @@ async function describeFailure(response: Response): Promise<string> {
 export interface HttpChatOptions {
   endpoint?: string
   fetchImpl?: FetchLike
+  /** 覆盖首块超时时长（默认 AI_CHAT_FIRST_CHUNK_TIMEOUT_MS），仅测试用。 */
+  firstChunkTimeoutMs?: number
   /**
    * 覆盖服务端 AI 凭据。不传时读构建期注入值（见 `ai-credential.ts`，web 恒为 null）；
    * 显式传 `null` 表示强制不带凭据（单测用来断言「没有这个头」）。
@@ -234,12 +250,35 @@ export function createHttpChatClient(options: HttpChatOptions = {}): ChatClient 
   const doFetch: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init))
   // 只有显式传了 credential 才用它（包括 null）；否则回落构建期注入值。
   const credential = 'credential' in options ? options.credential : aiCredential()
+  const firstChunkTimeoutMs = options.firstChunkTimeoutMs ?? AI_CHAT_FIRST_CHUNK_TIMEOUT_MS
 
   return {
     label: AI_CHAT_LABEL,
     async *send(request: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
+      // 首块超时 + 外部取消组合：任一触发即中止，避免挂起时 UI 永久"生成中"。
+      const controller = typeof AbortController === 'function' ? new AbortController() : null
+      let timedOut = false
+      let firstChunkSeen = false
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const stopTimer = () => {
+        if (timer) clearTimeout(timer)
+        timer = null
+      }
+      const onExternalAbort = () => controller?.abort()
+      if (controller && signal) {
+        if (signal.aborted) controller.abort()
+        else signal.addEventListener('abort', onExternalAbort, { once: true })
+      }
+
       let response: Response
       try {
+        if (controller) {
+          timer = setTimeout(() => {
+            if (firstChunkSeen) return
+            timedOut = true
+            controller.abort()
+          }, Math.max(1, firstChunkTimeoutMs))
+        }
         response = await doFetch(endpoint, {
           method: 'POST',
           headers: {
@@ -254,21 +293,38 @@ export function createHttpChatClient(options: HttpChatOptions = {}): ChatClient 
               ? { askedFields: request.askedFields }
               : {}),
           }),
-          signal,
+          ...(controller ? { signal: controller.signal } : signal ? { signal } : {}),
         })
       } catch (error) {
-        if (isAbortError(error)) throw error
+        stopTimer()
+        if (signal) signal.removeEventListener('abort', onExternalAbort)
+        if (isAbortError(error)) {
+          if (timedOut) throw new ChatUnavailableError('模型服务响应超时，请稍后重试。')
+          throw error
+        }
         throw new ChatUnavailableError('无法连接模型服务。')
       }
 
       if (!response.ok) {
+        stopTimer()
+        if (signal) signal.removeEventListener('abort', onExternalAbort)
         throw new ChatUnavailableError(await describeFailure(response), response.status)
       }
       if (!response.body) {
+        stopTimer()
+        if (signal) signal.removeEventListener('abort', onExternalAbort)
         throw new ChatUnavailableError('模型服务没有返回数据流。')
       }
 
-      yield* readSseEvents(response.body)
+      try {
+        yield* readSseEvents(response.body, () => {
+          firstChunkSeen = true
+          stopTimer()
+        })
+      } finally {
+        stopTimer()
+        if (signal) signal.removeEventListener('abort', onExternalAbort)
+      }
     },
   }
 }

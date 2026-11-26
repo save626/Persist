@@ -13,13 +13,24 @@
  *   → http://localhost:4173/landing/index.html
  */
 import { createServer } from 'node:http'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, lstat } from 'node:fs/promises'
 import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const PORT = Number(process.env.PORT || process.argv[2] || 4173)
 const HOST = process.env.HOST || '127.0.0.1'
+
+/**
+ * 敏感路径黑名单（2026-11-25 安全审查）。
+ * 本服务以仓库根为 root，能直接请求到 /server/.env、/.git/config 等；预览时不应暴露这些。
+ * 按 URL 路径片段匹配，大小写不敏感；命中即 403，不做文件读取。
+ */
+const BLOCKED_SEGMENTS = ['.env', '.git', 'node_modules', 'backup', '.bak', '.sqlite', '.key', '.pem']
+function isBlocked(pathname) {
+  const lower = decodeURIComponent(pathname).toLowerCase()
+  return BLOCKED_SEGMENTS.some((seg) => lower.includes(seg))
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -50,6 +61,10 @@ const server = createServer(async (req, res) => {
     return
   }
   if (path === '/') path = '/landing/index.html'
+  if (isBlocked(path)) {
+    res.writeHead(403).end('forbidden')
+    return
+  }
 
   const target = resolve(join(ROOT, path))
   if (target !== ROOT && !target.startsWith(ROOT + sep)) {
@@ -58,7 +73,12 @@ const server = createServer(async (req, res) => {
   }
 
   try {
-    const info = await stat(target)
+    const info = await lstat(target)
+    // 跟随符号链接可能逃出 ROOT（黑名单只挡路径名挡不住 symlink 目标），一律拒绝链接。
+    if (info.isSymbolicLink()) {
+      res.writeHead(403).end('forbidden')
+      return
+    }
     if (info.isDirectory()) {
       res.writeHead(302, { Location: path.replace(/\/?$/, '/') + 'index.html' }).end()
       return

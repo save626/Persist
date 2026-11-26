@@ -187,6 +187,21 @@ describe('createHttpChatClient', () => {
       message: '无法连接模型服务。',
     })
   })
+
+  it('首块到达前超时转成可回退的 ChatUnavailableError', async () => {
+    // fetch 返回一个永不推送数据的流，且尊重 signal 中止。
+    const hanging: FetchLike = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        })
+      })
+    const client = createHttpChatClient({ fetchImpl: hanging, firstChunkTimeoutMs: 20 })
+    await expect(collect(client)).rejects.toMatchObject({
+      name: 'ChatUnavailableError',
+      message: /超时/,
+    })
+  })
 })
 
 describe('probeAiChat', () => {

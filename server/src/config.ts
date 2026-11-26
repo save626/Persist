@@ -125,6 +125,47 @@ export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
  * 旧名 deepseek-chat / deepseek-reasoner 已停用（2026-11-25 换 key 时实测旧名不在在售列表）。
  * 这里必须跟官方在售名保持一致，否则新部署未显式配置 DEEPSEEK_MODEL 时会直接调用失败。
  */
+/**
+ * 校验 AI 上游基址（2026-11-25 安全审查：防 SSRF / 密钥外带）。
+ *
+ * 请求会带 `Authorization: Bearer <DEEPSEEK_API_KEY>`，若基址可被配成任意地址，
+ * 一次误配 / 注入就能把付费密钥发往攻击者服务器。因此只接受：
+ * - https 协议（明文 http 会在网络上暴露密钥）；
+ * - URL 不含 userinfo（`https://user:pass@host` 形式的凭据内嵌）；
+ * - 主机名不是 localhost / 环回 / 私网 / 链路本地 / 元数据地址。
+ *
+ * 不合法时回落到官方默认地址，并在 loadConfig 里记一条 warn——失败方向朝向"不发密钥"。
+ */
+export function isValidAiBaseUrl(raw: string): boolean {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'https:') return false
+  if (url.username || url.password) return false
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (!host) return false
+  // 明确拒绝本地 / 私网 / 元数据服务，阻断把密钥打进内网或云 metadata 的误配。
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host === '::1' ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    /^0\./.test(host) ||
+    /^fc00:/i.test(host) ||
+    /^fe80:/i.test(host)
+  ) {
+    return false
+  }
+  return true
+}
+
 export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-flash'
 export const DEFAULT_ALLOWED_ORIGINS = ['https://localhost'] as const
 
@@ -189,6 +230,18 @@ function readBool(env: NodeJS.ProcessEnv, key: string, fallback: boolean) {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const apiKey = env.DEEPSEEK_API_KEY?.trim() ?? ''
   const dbPath = env.DB_PATH?.trim() || 'data/persist.sqlite'
+  const rawBaseUrl = (env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL).replace(
+    /\/+$/,
+    '',
+  )
+  // 非法基址一律回落到官方地址：宁可打错目标让运维看到告警，也不把密钥发往未知主机。
+  const deepseekBaseUrl = isValidAiBaseUrl(rawBaseUrl) ? rawBaseUrl : DEFAULT_DEEPSEEK_BASE_URL
+  if (deepseekBaseUrl !== rawBaseUrl) {
+    process.emitWarning(
+      `DEEPSEEK_BASE_URL 不安全（仅允许 https、无内嵌凭据、非本地/私网主机），已回落到 ${DEFAULT_DEEPSEEK_BASE_URL}`,
+      { code: 'PERSIST_UNSAFE_AI_BASE_URL' },
+    )
+  }
   return {
     host: env.HOST?.trim() || '127.0.0.1',
     port: readInt(env, 'PORT', 3000, 1, 65_535),
@@ -196,10 +249,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
     deepseekApiKey: apiKey.length > 0 ? apiKey : null,
-    deepseekBaseUrl: (env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL).replace(
-      /\/+$/,
-      '',
-    ),
+    deepseekBaseUrl,
     deepseekModel: env.DEEPSEEK_MODEL?.trim() || DEFAULT_DEEPSEEK_MODEL,
     aiTimeoutMs: readInt(env, 'AI_TIMEOUT_MS', 25_000, 1_000, 120_000),
     aiMaxRetries: readInt(env, 'AI_MAX_RETRIES', 1, 0, 3),

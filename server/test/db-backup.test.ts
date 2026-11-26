@@ -6,6 +6,7 @@ import {
   backupStamp,
   checksumPath,
   createBackup,
+  BackupCreateError,
   DEFAULT_BACKUP_POLICY,
   integrityCheck,
   listBackups,
@@ -258,5 +259,18 @@ describe('保留清理：', () => {
     expect(result.retention.dropped).toHaveLength(1)
     expect(existsSync(oldPath)).toBe(false)
     expect(listBackups(backupDir).map((entry) => entry.name)).toEqual([result.file])
+  })
+})
+
+describe('快照 reason 白名单（2026-11-25 安全审查）', () => {
+  it('运行时拒绝非白名单 reason，不拼进文件名', () => {
+    const dir = tempDir()
+    const dbPath = join(dir, 'persist.sqlite')
+    seedDatabase(dbPath)
+    const backupDir = join(dir, 'backups')
+    const bad = '../../etc/passwd' as Parameters<typeof createBackup>[0]['reason']
+    expect(() => createBackup({ dbPath, backupDir, now: NOW, reason: bad })).toThrow(
+      BackupCreateError,
+    )
   })
 })

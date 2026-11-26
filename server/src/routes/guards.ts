@@ -9,6 +9,40 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { aiQuotaExceededBody, aiTokenQuotaExceededBody, errorBody } from '../contract.js'
 import { authenticateRequest } from '../sync/service.js'
 import { readBearerToken, TOKEN_PREFIX } from '../auth.js'
+import { isAiConsentOff } from '../analysis/facts.js'
+
+/** gate.keyId 的设备令牌形态是 `user:<id>`；从这里取出 userId 做授权状态查询。 */
+function userIdFromKeyId(keyId: string | null): string | null {
+  if (!keyId?.startsWith('user:')) return null
+  const id = keyId.slice('user:'.length)
+  return id || null
+}
+
+/**
+ * AI 授权服务端强制（2026-11-25 安全审查）。
+ *
+ * `/api/chat` 与 `/api/report` 原本只在前端检查 `aiConsent`（关掉就走 Mock、不发请求），
+ * 篡改客户端可直接打接口绕过。这里在鉴权门之后按userId查库，明确关闭（aiConsent === false）
+ * 就返回 403——与 `/api/v1/analysis/*` 的 `isAiConsentOff` 同一口径。
+ *
+ * 无 userId（旧 psa_ 凭据）或未同步 profile 时放行：本地优先产品里"数据缺失"不等于"用户关闭"。
+ * 这与 AI 鉴权门的 fail-closed 不冲突——鉴权本身仍是 enforce，这里只补授权这一维。
+ */
+export function enforceAiConsent(options: {
+  db: Db
+  gate: { keyId: string | null }
+  request: FastifyRequest
+  reply: FastifyReply
+}): boolean {
+  const userId = userIdFromKeyId(options.gate.keyId)
+  if (!userId || !isAiConsentOff(options.db, userId)) return true
+  options.request.log.warn({ route: options.request.url }, 'ai blocked by consent')
+  options.reply
+    .header('cache-control', 'no-store')
+    .code(403)
+    .send(errorBody('ai_consent_off', '你在档案页关闭了 AI 数据处理授权，本接口不可用。'))
+  return false
+}
 
 /**
  * `/api/v1/*` 两个前置动作：按 IP 限流、按设备令牌鉴权。

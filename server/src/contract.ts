@@ -179,6 +179,12 @@ export function parseProfile(raw: unknown): ParseResult<ProfileData> {
     if (!isFiniteNumber(value)) {
       return { ok: false, message: `profile.${field} 必须是有限数字。` }
     }
+    // PROFILE_NUMBER_RULES 定义了范围却没被用上（审查发现）：
+    // 不校验时超大值（如 weight=1e308）会让报告聚合 SUM 溢出成 Infinity 污染 JSON。
+    const rule = PROFILE_NUMBER_RULES[field]
+    if (value < rule.min || value > rule.max) {
+      return { ok: false, message: `profile.${field} 必须在 ${rule.min}–${rule.max} 之间。` }
+    }
     profile[field] = value
   }
   for (const field of PROFILE_TEXT_FIELDS) {
@@ -186,7 +192,11 @@ export function parseProfile(raw: unknown): ParseResult<ProfileData> {
     if (typeof value !== 'string') {
       return { ok: false, message: `profile.${field} 必须是字符串。` }
     }
-    profile[field] = value.trim()
+    const text = value.trim()
+    if (text.length > MAX_PROFILE_TEXT_LENGTH) {
+      return { ok: false, message: `profile.${field} 过长（上限 ${MAX_PROFILE_TEXT_LENGTH} 字）。` }
+    }
+    profile[field] = text
   }
   if (typeof raw.aiConsent !== 'boolean') {
     return { ok: false, message: 'profile.aiConsent 必须是布尔值。' }

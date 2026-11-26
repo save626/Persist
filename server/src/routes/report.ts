@@ -7,7 +7,7 @@ import type { ServerConfig } from '../config.js'
 import { errorBody, parseReportRequest, type ReportResponse } from '../contract.js'
 import type { Db } from '../db/driver.js'
 import type { RateLimiter } from '../rate-limit.js'
-import { enforceAiGate, enforceAiQuota } from './guards.js'
+import { enforceAiConsent, enforceAiGate, enforceAiQuota } from './guards.js'
 import type { FastifyInstance } from 'fastify'
 
 /**
@@ -59,6 +59,9 @@ export function registerReportRoute(app: FastifyInstance, options: ReportRouteOp
       now: options.now,
     })
     if (!gate) return reply
+
+    // AI 授权服务端强制：与 /api/chat 同口径，关掉 aiConsent 后服务端不再生成报告。
+    if (!enforceAiConsent({ db: options.db, gate, request, reply })) return reply
 
     const decision = options.limiter.take(request.ip)
     if (!decision.allowed) {

@@ -1,8 +1,9 @@
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_ALLOWED_ORIGINS,
   DEFAULT_DEEPSEEK_BASE_URL,
+  isValidAiBaseUrl,
   loadConfig,
   parseAllowedOrigins,
 } from '../src/config.js'
@@ -53,6 +54,35 @@ describe('loadConfig', () => {
     expect(config.rateLimitMax).toBe(5)
     expect(config.rateLimitWindowMs).toBe(60_000)
     expect(config.trustProxy).toBe(false)
+  })
+
+  it('DEEPSEEK_BASE_URL 拒绝明文/内嵌凭据/私网，非法时回落官方地址', () => {
+    const warning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined)
+    try {
+      // 合法：https 公网地址
+      expect(isValidAiBaseUrl('https://api.deepseek.com')).toBe(true)
+      expect(isValidAiBaseUrl('https://proxy.example.com/v1')).toBe(true)
+      // 非法：明文 http、内嵌凭据、环回/私网/元数据地址
+      for (const bad of [
+        'http://api.deepseek.com',
+        'https://user:pass@api.deepseek.com',
+        'https://localhost',
+        'https://127.0.0.1',
+        'https://10.0.0.1',
+        'https://192.168.1.1',
+        'https://172.16.0.1',
+        'https://169.254.169.254',
+        'ftp://api.deepseek.com',
+        'not a url',
+      ]) {
+        expect(isValidAiBaseUrl(bad), bad).toBe(false)
+        expect(loadConfig(env({ DEEPSEEK_BASE_URL: bad })).deepseekBaseUrl, bad).toBe(
+          DEFAULT_DEEPSEEK_BASE_URL,
+        )
+      }
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it('CORS 白名单只保留合法 origin，并支持环境变量覆盖', () => {

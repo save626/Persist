@@ -162,16 +162,33 @@ describe('requestAiReport', () => {
     ).rejects.toBeInstanceOf(ReportContractError)
   })
 
-  it('尊重取消信号', async () => {
+  it('尊重取消信号（含超时组合后的 signal）', async () => {
     const controller = new AbortController()
+    let sawAborted = false
     const aborting: FetchLike = async (_url, init) => {
-      expect(init?.signal).toBe(controller.signal)
+      // 超时改造后 fetch 收到的是组合 signal，不再是外部 signal 本身；
+      // 语义是「外部取消能传播到 fetch」——故断言 aborted 状态而非对象身份。
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
       controller.abort()
+      sawAborted = init?.signal?.aborted === true
       throw Object.assign(new Error('aborted'), { name: 'AbortError' })
     }
     await expect(
       requestAiReport(request, { fetchImpl: aborting, signal: controller.signal }),
     ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(sawAborted).toBe(true)
+  })
+
+  it('超时时中止 fetch 并抛出可回退的错误', async () => {
+    const hanging: FetchLike = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        })
+      })
+    await expect(
+      requestAiReport(request, { fetchImpl: hanging, timeoutMs: 20 }),
+    ).rejects.toMatchObject({ message: /超时/ })
   })
 })
 
