@@ -1,6 +1,6 @@
 {
   "shell": {
-    "elapsed": 14.99,
+    "elapsed": 11.57,
     "sceneId": "flower",
     "uiVisible": true,
     "actions": [
@@ -15,7 +15,7 @@
     "hasFullscreen": true,
     "hasColorPicker": false,
     "uiClass": true,
-    "actionsVisible": 1
+    "actionsVisible": 0.93646
   },
   "tree": {
     "sceneId": "lights",
@@ -25,12 +25,12 @@
   "fsBefore": false,
   "fsAfter": true,
   "openLit": {
-    "litRatio": 0.9268,
+    "litRatio": 0.9734,
     "width": 1440,
     "height": 900
   },
   "closedLit": {
-    "litRatio": 0.3009,
+    "litRatio": 0.3001,
     "width": 1440,
     "height": 900
   },

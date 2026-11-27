@@ -210,15 +210,20 @@ svg {
 }
 /* 网站合规信息（ICP / 公安备案号）。仅 web 产物渲染，备案号未下发时不出现。
    放在主内容区底部而不是侧边栏：窄屏（≤900px）侧边栏是 display:none，
-   放那里手机用户就看不到备案号，而备案要求是「页面底部可见」。 */
+   放那里手机用户就看不到备案号，而备案要求是「页面底部可见」。
+
+   独立于内容流：.main 是 flex 纵向，.page 用 flex:1 吃掉剩余高度，
+   本元素用 margin-top:auto 吸到视口底部 —— 不跟着任何卡片上浮或悬浮。
+   flex:0 0 auto 保证它自身高度不被压缩，长内容页里也不会被挤扁。 */
 .site-info {
   display: flex;
+  width: 100%;
+  max-width: 1240px;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 4px 0;
   justify-content: center;
-  width: 100%;
-  max-width: 1240px;
-  margin: 0 auto;
+  margin: auto auto 0;
   padding: 26px 0 4px;
   color: var(--faint);
   font-size: 11px;
@@ -239,8 +244,14 @@ svg {
   border-bottom-color: var(--deep);
 }
 .site-info-sep {
-  margin: 0 6px;
+  margin: 0 8px;
   color: var(--line2);
+}
+.site-info-links {
+  display: inline-block;
+}
+.site-info-pending {
+  color: var(--faint);
 }
 .profile {
   display: flex;
@@ -298,15 +309,23 @@ svg {
   color: var(--ink);
   background: var(--surface);
 }
+/* 主内容区。改成 flex 纵向 + min-height:100vh，
+   让页脚（.site-info）能脱离内容流吸到视口底部：
+   .page 用 flex:1 吃掉剩余空间，页脚用 margin-top:auto 推到最下。
+   之前这里是普通块级容器，页脚只是 .page 的流式兄弟元素 ——
+   内容少时它就贴着最后一张卡片上浮（2026-11-27 实测并修复）。 */
 .main {
+  display: flex;
   width: calc(100% - 236px);
   min-height: 100vh;
+  flex-direction: column;
   margin-left: 236px;
   padding: 38px clamp(28px, 4.3vw, 66px) 70px;
 }
 .page {
   width: 100%;
   max-width: 1240px;
+  flex: 1 0 auto;
   margin: 0 auto;
 }
 /* 路由分包加载占位（P5-3）：只占位，不画骨架，避免先闪假布局再跳成真布局。 */
@@ -1373,6 +1392,14 @@ h1 {
     width: 100%;
     margin: 0;
     padding: 78px 16px calc(112px + env(safe-area-inset-bottom));
+  }
+  /* 移动端页脚：底部有吸底的 .bottom-nav（68px + 安全区）与右侧的 .fab
+     （bottom 83px + 安全区，52×52）。
+     .main 的下内边距 112px 让页脚落在导航条上方，但 FAB 的顶边在视口底
+     往上 135px 处，仍与页脚所在区间重叠 —— 这里给页脚下边距，
+     把文字整体抬到 FAB 顶边之上，避免窄屏上备案号与 FAB 叠在一起。 */
+  .site-info {
+    margin-bottom: 28px;
   }
   .mobile-bar {
     position: fixed;

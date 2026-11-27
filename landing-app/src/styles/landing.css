@@ -59,6 +59,15 @@ body{
 }
 
 /* ---------- 1. 舞台 ---------- */
+/* Vue 3 的多根节点组件会整体渲染进 #app，所以 .stage / .wrap / .foot 都是它的子元素。
+   这里给 #app 建 flex 列：.stage 是 fixed 背景层（绝对定位，不参与流），
+   .wrap 用 flex:1 吃掉剩余高度，.foot 作为最后一个子项落在文档流底部 ——
+   备案号因此稳定待在页脚，既不是贴视口底的悬浮层，也不会压住内容。 */
+#app{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;
+  min-height:100dvh;
+}
 .stage{
   position:fixed;inset:0;z-index:0;overflow:hidden;
   /* 与 app 的 body 背景完全一致 */
@@ -92,7 +101,10 @@ body{
 }
 
 /* ---------- 2. 内容层 ---------- */
-.wrap{position:relative;z-index:2;min-height:100dvh;display:flex;flex-direction:column}
+/* .wrap 在 #app 的 flex 列里用 flex:1 撑开剩余高度。
+   不再自己声明 min-height:100dvh —— 那样会把 .foot 挤出视口底部，
+   备案号就跑到首屏之外了（页脚必须在第一屏可见）。 */
+.wrap{position:relative;z-index:2;flex:1 0 auto;display:flex;flex-direction:column}
 
 .topbar{
   display:flex;align-items:center;justify-content:space-between;gap:16px;
@@ -131,9 +143,11 @@ body{
 .toplink:hover{color:var(--deep);border-bottom-color:var(--line2)}
 .toplink:focus-visible{outline:2px solid var(--deep);outline-offset:3px;border-radius:2px}
 
+/* .stage-main 的底部内边距：页脚已在文档流里占位，这里只需留一点呼吸空间，
+   不再需要为旧的 fixed 页脚留出整块空白（那会让主视觉整体偏上）。 */
 .stage-main{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;padding:0 20px clamp(56px,8vh,84px);
+  text-align:center;padding:0 20px clamp(20px,3vh,36px);
 }
 
 /* ---------- 3. 手写标题（SVG 描边逐字浮现） ---------- */
@@ -216,24 +230,35 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 .motion-toggle[aria-pressed="false"]{color:var(--faint)}
 
 /* ---------- 6. 备案信息页脚 ---------- */
+/* 页脚：网站合规信息（ICP / 公安备案号）。
+   原来是 position:fixed 贴视口底 —— 那属于「悬浮」，内容一长就会被压住。
+   改成文档流内的固定高度区域：#app 是 flex 列（见 #app 规则），
+   .foot 作为最后一个 flex 子项排在 .wrap 之后，.wrap 用 flex:1 吃掉剩余空间，
+   于是页脚稳定落在页面底部，且内容变长时跟着文档流下移，不会盖住任何内容。 */
 .foot{
-  position:fixed;left:0;right:0;bottom:0;z-index:4;
+  position:relative;z-index:2;
+  flex:0 0 auto;
   padding:0 16px calc(10px + env(safe-area-inset-bottom,0px));
   text-align:center;font-size:11px;line-height:1.8;letter-spacing:.05em;
-  color:var(--faint);pointer-events:none;
+  color:var(--faint);
 }
-.foot a{
+/* 网站合规信息（ICP / 公安备案号）。三端（落地页 / 介绍首页 / React 端）
+   统一同一套视觉：11px 字号、0.05em 字距、下划线、hover 加深。
+   备案号未下发时不渲染任何内容（不显示占位、不编造）。 */
+.site-info{display:inline-block}
+.site-info a{
   color:var(--muted);pointer-events:auto;text-decoration:none;
   border-bottom:1px solid var(--line2);padding-bottom:1px;
   transition:color .2s ease,border-color .2s ease;
 }
-.foot a:hover{color:var(--deep);border-bottom-color:var(--green)}
+.site-info a:hover{color:var(--deep);border-bottom-color:var(--green)}
 .site-info-sep{margin:0 8px;color:var(--line2)}
 .site-info-pending{color:var(--faint)}
+.site-info-links{display:inline-block}
 
 /* ---------- 7. 响应式 ---------- */
 @media (max-width:900px){
-  .stage-main{padding-bottom:clamp(64px,12vh,96px)}
+  .stage-main{padding-bottom:clamp(16px,2.5vh,28px)}
   .glow{width:min(130vw,1000px)}
 }
 @media (max-width:560px){
@@ -250,7 +275,7 @@ html.no-js .wordmark .wm-path{stroke-dasharray:none;stroke-dashoffset:0}
 @media (prefers-reduced-motion:reduce){
   .wordmark .wm-path{transition:none}
   .eyemark{animation:none}
-  .btn,.toplink,.foot a,.motion-toggle{transition:none}
+  .btn,.toplink,.site-info a,.motion-toggle{transition:none}
 }
 
 /* ============================================================

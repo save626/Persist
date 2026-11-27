@@ -533,6 +533,17 @@
     display:flex;flex-wrap:wrap;gap:10px 20px;justify-content:space-between;
   }
   .foot-compliance{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.9}
+  /* 网站合规信息（ICP / 公安备案号）。三端（落地页 / 介绍首页 / React 端）
+     统一同一套视觉：下划线、hover 加深、11–12px 字号。
+     备案号未下发时不渲染任何内容（不显示占位、不编造）。 */
+  .site-info{display:inline-block}
+  .site-info-links{display:inline-block}
+  .site-info a{
+    color:var(--muted);text-decoration:none;
+    border-bottom:1px solid var(--line2);padding-bottom:1px;
+    transition:color .2s,border-color .2s;
+  }
+  .site-info a:hover{color:var(--accent-ink);border-bottom-color:var(--accent-ink)}
   .site-info-sep{margin:0 8px;color:var(--line2)}
   .site-info-pending{color:var(--faint)}
 
