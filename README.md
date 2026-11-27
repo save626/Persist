@@ -18,7 +18,7 @@
 **站点已正式上线**（2026-11-27）：域名 `wpersist.top` + Let's Encrypt HTTPS + 页脚 ICP 备案号
 三件套齐备，线上 5 个 URL 全 200、HTTP→HTTPS 301。可称「已上线」；
 但**不得宣称「正式发布 / 开放注册」**——网页端仍只有 `demo` / `guest`，
-真实 AI 与同步只在作者自有移动端 debug 包（Android 仍是 debug 签名）。
+真实 AI 与同步只在作者自有移动端 debug 包（Android 仍是 debug 签名，正式签名 P3 已暂缓）。
 **公安联网备案审核中，备案号未下发前页脚不出现任何编号或占位。**
 
 > 当前进度、待办、风险与开工流程以 [`HANDOFF.md`](HANDOFF.md) 为准（每次开工实测刷新）。
