@@ -12,6 +12,7 @@
 // 只读：不写任何文件，不改任何线上内容，不申请证书。
 
 import { createRequire } from 'node:module'
+import https from 'node:https'
 
 const require = createRequire(import.meta.url)
 const dns = require('node:dns')
@@ -34,7 +35,45 @@ const fail = (name, detail) => add(name, 'fail', detail)
 
 // ---------------------------------------------------------------- DNS
 
+/**
+ * 用 DoH（DNS-over-HTTPS）查 A 记录。
+ *
+ * 为什么必须走 DoH：递归解析器（223.5.5.5 等）在权威记录写入后仍可能返回
+ * 负缓存结论（NOERROR 无 Answer / NXDOMAIN），会把「已生效」误报成「没加记录」。
+ * 2026-11-27 实测：腾讯 DoH 已返回新记录，阿里递归仍报 ENODATA。
+ */
+function dohResolve(host, type = 'A') {
+  return new Promise((resolve) => {
+    const url = `https://doh.pub/dns-query?name=${encodeURIComponent(host)}&type=${type}`
+    const req = https.get(url, { timeout: 8000 }, (r) => {
+      let body = ''
+      r.on('data', (c) => (body += c))
+      r.on('end', () => {
+        try {
+          const data = JSON.parse(body)
+          const addrs = (data.Answer || []).filter((a) => a.type === 1).map((a) => a.data)
+          resolve(
+            addrs.length
+              ? { addresses: addrs }
+              : { error: data.Status === 3 ? 'ENOTFOUND' : 'ENODATA' },
+          )
+        } catch {
+          resolve({ error: 'BADJSON' })
+        }
+      })
+    })
+    req.on('error', (e) => resolve({ error: e.code || e.message }))
+    req.on('timeout', () => {
+      req.destroy()
+      resolve({ error: 'TIMEOUT' })
+    })
+  })
+}
+
 async function resolveA(host) {
+  // DoH 优先；DoH 不可用时退回递归解析器。
+  const doh = await dohResolve(host)
+  if (doh.addresses) return doh
   try {
     const res = await dnsPromises.resolve4(host)
     return { addresses: res }
@@ -90,23 +129,37 @@ async function httpProbe(url, method = 'GET') {
   const http = require('node:http')
   const lib = url.startsWith('https:') ? https : http
   return new Promise((resolve) => {
+    let body = ''
+    let settled = false
+    const finish = (r) => {
+      if (settled) return
+      settled = true
+      resolve(r)
+    }
     const req = lib.request(
       url,
       { method, timeout: 8000, rejectUnauthorized: false },
       (res) => {
-        let body = ''
         res.on('data', (c) => {
           body += c
-          if (body.length > 200000) req.destroy()
+          // 超长响应（落地页近 1 MB）提前收尾。
+          // 注意：req.destroy() 不带 error 时不会触发 'end' 也不触发 'error'，
+          // 只靠 'close' 收口，否则 Promise 永远不 resolve（2026-11-27 实测卡死）。
+          if (body.length > 200000) {
+            finish({ status: res.statusCode, headers: res.headers, body })
+            req.destroy()
+          }
         })
-        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }))
+        res.on('end', () => finish({ status: res.statusCode, headers: res.headers, body }))
+        res.on('close', () => finish({ status: res.statusCode, headers: res.headers, body }))
       },
     )
     req.on('timeout', () => {
       req.destroy()
-      resolve({ status: 0, error: 'timeout' })
+      finish({ status: 0, error: 'timeout' })
     })
-    req.on('error', (err) => resolve({ status: 0, error: err.code || err.message }))
+    req.on('error', (err) => finish({ status: 0, error: err.code || err.message }))
+    req.on('close', () => finish({ status: 0, error: 'closed' }))
     req.end()
   })
 }

@@ -13,6 +13,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import https from 'node:https'
 
 const require = createRequire(import.meta.url)
 const dns = require('node:dns')
@@ -35,7 +36,43 @@ const DEADLINE = Date.now() + TIMEOUT_MIN * 60_000
 
 const log = (msg) => console.log(`[${new Date().toLocaleTimeString('zh-CN')}] ${msg}`)
 
+/**
+ * 用 DoH（DNS-over-HTTPS）查 A 记录。
+ *
+ * 为什么不用系统/递归解析器：权威 DNS 已经写好记录时，递归节点仍可能因为
+ * 负缓存（NOERROR + 无 Answer / NXDOMAIN）返回旧结论，会把「已生效」误判成
+ * 「还没加记录」。DoH 走的是另一条缓存路径，实测能立刻看到新记录。
+ */
+function dohResolve(host, type = 'A') {
+  return new Promise((resolve) => {
+    const url = `https://doh.pub/dns-query?name=${encodeURIComponent(host)}&type=${type}`
+    const req = https.get(url, { timeout: 8000 }, (r) => {
+      let body = ''
+      r.on('data', (c) => (body += c))
+      r.on('end', () => {
+        try {
+          const data = JSON.parse(body)
+          const addrs = (data.Answer || [])
+            .filter((a) => a.type === 1)
+            .map((a) => a.data)
+          resolve(addrs.length ? { addresses: addrs } : { error: data.Status === 3 ? 'ENOTFOUND' : 'ENODATA' })
+        } catch {
+          resolve({ error: 'BADJSON' })
+        }
+      })
+    })
+    req.on('error', (e) => resolve({ error: e.code || e.message }))
+    req.on('timeout', () => {
+      req.destroy()
+      resolve({ error: 'TIMEOUT' })
+    })
+  })
+}
+
 async function resolveA(host) {
+  // DoH 优先；失败再退回递归解析器。
+  const doh = await dohResolve(host)
+  if (doh.addresses) return doh
   try {
     return { addresses: await dns.promises.resolve4(host) }
   } catch (err) {
@@ -43,6 +80,15 @@ async function resolveA(host) {
   }
 }
 
+/**
+ * 探测 TCP 端口，并区分「安全组是否放通」。
+ *
+ * 关键：安全组放通但服务器没人监听 → 连接被 RST（ECONNREFUSED）；
+ * 安全组拦截 → 丢包，连接超时（ETIMEDOUT）。
+ * 所以放通判定不能只看「连得上」——nginx 装 TLS 配置前 443 必然连不上，
+ * 但那时安全组其实已经放通了。用「连得上 OR 被拒绝」判定放通，
+ * 用「超时」判定被拦截。
+ */
 function tcpProbe(host, port, timeoutMs = 5000) {
   const net = require('node:net')
   return new Promise((resolve) => {
@@ -62,6 +108,18 @@ function tcpProbe(host, port, timeoutMs = 5000) {
   })
 }
 
+/**
+ * 判断安全组是否已放通某个端口。
+ * ECONNREFUSED = 包到达了服务器（放通，只是没人监听）→ 已放通。
+ * timeout / 其他网络错误 = 包被丢弃（未放通）。
+ */
+async function isPortAllowed(host, port) {
+  const r = await tcpProbe(host, port)
+  if (r.open) return { allowed: true, detail: '可连接（已有监听）' }
+  if (r.reason === 'ECONNREFUSED') return { allowed: true, detail: '被拒绝响应（安全组已放通，端口尚无监听）' }
+  return { allowed: false, detail: r.reason || '不可达' }
+}
+
 function serverIp() {
   try {
     return execFileSync(
@@ -79,7 +137,9 @@ async function probe() {
   const apex = await resolveA(DOMAIN)
   const alt = await resolveA(ALT_DOMAIN)
   const ip = serverIp()
-  const p443 = ip ? await tcpProbe(ip, 443) : { open: false, reason: 'no-ip' }
+  const p443 = ip
+    ? await isPortAllowed(ip, 443)
+    : { allowed: false, detail: 'no-ip' }
   return {
     apex: apex.addresses ?? [],
     alt: alt.addresses ?? [],
@@ -93,7 +153,7 @@ async function probe() {
 function describe(s) {
   const a = s.apex.length ? s.apex.join(',') : `✗(${s.apexErr})`
   const w = s.alt.length ? s.alt.join(',') : `✗(${s.altErr})`
-  const p = s.p443.open ? '✓开放' : `✗${s.p443.reason}`
+  const p = s.p443.allowed ? `✓${s.p443.detail}` : `✗${s.p443.detail}`
   return `${DOMAIN}=${a}  ${ALT_DOMAIN}=${w}  443=${p}`
 }
 
@@ -105,13 +165,13 @@ async function main() {
   log(`当前：${describe(s)}`)
 
   if (ONCE) {
-    process.exit(s.apex.length && s.alt.length && s.p443.open ? 0 : 1)
+    process.exit(s.apex.length && s.alt.length && s.p443.allowed ? 0 : 1)
   }
 
   let announced = false
   while (Date.now() < DEADLINE) {
     s = await probe()
-    const ready = s.apex.length > 0 && s.alt.length > 0 && s.p443.open
+    const ready = s.apex.length > 0 && s.alt.length > 0 && s.p443.allowed
 
     if (ready) {
       log('✓ 前置条件全部满足 —— 执行一键 HTTPS 启用脚本')
@@ -139,7 +199,7 @@ async function main() {
       const missing = []
       if (!s.apex.length) missing.push(`${DOMAIN} 的 A 记录`)
       if (!s.alt.length) missing.push(`${ALT_DOMAIN} 的 A 记录`)
-      if (!s.p443.open) missing.push('安全组 443 放行')
+      if (!s.p443.allowed) missing.push('安全组 443 放行')
       log(`等待中，还差：${missing.join(' / ')}`)
       announced = true
     }

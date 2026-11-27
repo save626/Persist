@@ -131,9 +131,14 @@ install -m 644 "${SRC_DIR}/persist-tls.conf"      "${CONF_DIR}/persist-tls.conf"
 install -m 644 "${SRC_DIR}/persist-redirect.conf" "${CONF_DIR}/persist-redirect.conf"
 ok "已安装 persist-tls.conf / persist-redirect.conf"
 
-# 续期 deploy hook：certbot 换证书后必须 reload，否则 nginx 还拿着旧证书
-HOOK="${CONF_DIR}/../letsencrypt/renewal-hooks/deploy/reload-nginx.sh"
-mkdir -p "$(dirname "$HOOK")"
+# 续期 deploy hook：certbot 换证书后必须 reload，否则 nginx 还拿着旧证书。
+# 路径必须是 /etc/letsencrypt/renewal-hooks/deploy/ —— 注意不能用
+# "${CONF_DIR}/../letsencrypt/..."（CONF_DIR 是 /etc/nginx/conf.d，
+# 那样会展开成 /etc/nginx/letsencrypt/...，certbot 根本不会执行它，
+# 续期后 nginx 会一直用旧证书直到手动重启 —— 2026-11-27 实测踩到）。
+HOOK_DIR="/etc/letsencrypt/renewal-hooks/deploy"
+HOOK="${HOOK_DIR}/reload-nginx.sh"
+mkdir -p "$HOOK_DIR"
 cat > "$HOOK" <<'HOOKEOF'
 #!/usr/bin/env bash
 # certbot 续期成功后 reload nginx，让新证书立即生效。
@@ -141,7 +146,7 @@ set -e
 systemctl reload nginx
 HOOKEOF
 chmod +x "$HOOK"
-ok "已安装续期 deploy hook（reload nginx）"
+ok "已安装续期 deploy hook（reload nginx）：$HOOK"
 
 nginx -t 2>&1 | sed 's/^/  /' || {
   warn "nginx -t 失败，回滚到备份配置"
