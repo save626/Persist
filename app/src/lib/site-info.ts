@@ -31,14 +31,26 @@ export interface SiteInfoLink {
 /**
  * 读取构建期注入的合规信息。
  *
- * 单测环境没有 `__SITE_INFO__`（Vite 的 define 不作用于 vitest 的源码转换），
- * 这里用 typeof 做安全降级，避免测试环境直接抛 ReferenceError。
+ * `__SITE_INFO__` 由 Vite 的 define 注入，**vitest 用的是同一份 vite.config**，
+ * 所以单测里它同样存在（早期注释写「不作用于 vitest」是错的——那时的测试
+ * 之所以绿，只是因为 site-info.json 的编号恰好为空，并不是真的走到了降级分支）。
+ * 降级路径因此单独由 normalizeSiteInfo 覆盖，见同文件下方。
  */
 export function readSiteInfo(): SiteInfo {
-  if (typeof __SITE_INFO__ === 'undefined') {
+  return normalizeSiteInfo(typeof __SITE_INFO__ === 'undefined' ? undefined : __SITE_INFO__)
+}
+
+/**
+ * 把「可能不存在的注入值」归一化成完整的 SiteInfo。
+ *
+ * 没有注入值时返回全空——调用方据此完全不渲染（不显示编号也不显示占位文案），
+ * 既不会抛 ReferenceError，也不会把半成品挂到页面上。
+ */
+export function normalizeSiteInfo(injected: SiteInfo | undefined): SiteInfo {
+  if (!injected) {
     return { icpNumber: '', policeNumber: '' }
   }
-  return __SITE_INFO__
+  return injected
 }
 
 /**

@@ -21,7 +21,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { parseSiteInfo, siteInfoLinks } from './site-info-core.mjs'
+import { parseSiteInfo, siteInfoRender } from './site-info-core.mjs'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const siteInfoPath = resolve(repoRoot, 'deploy', 'site-info.json')
@@ -37,17 +37,10 @@ const ANCHOR = /<!--site-info-->([\s\S]*?)<!--\/site-info-->/
 const siteInfo = parseSiteInfo(JSON.parse(readFileSync(siteInfoPath, 'utf8')))
 
 function renderLinks() {
-  const parts = siteInfoLinks(siteInfo).map(
-    (link) =>
-      `<a href="${link.href}" target="_blank" rel="noreferrer noopener">${link.label}</a>`,
-  )
-
-  if (parts.length === 0) {
-    // 备案号未下发：留一句说明，不显示任何编号，也不编造。
-    return '<span class="site-info-pending">备案信息待下发</span>'
-  }
-
-  return `<span class="site-info-links">${parts.join('<span class="site-info-sep">·</span>')}</span>`
+  // 渲染逻辑与落地页的 Vue 组件共用 siteInfoRender —— 两边必须逐字节相同，
+  // 否则 Vue hydrate 会报内容不匹配（见 site-info-core.mjs 的说明）。
+  const rendered = siteInfoRender(siteInfo)
+  return `<span class="${rendered.className}">${rendered.html}</span>`
 }
 
 const rendered = renderLinks()

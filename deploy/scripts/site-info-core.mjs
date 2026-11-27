@@ -70,3 +70,36 @@ export function siteInfoLinks(info) {
   }
   return links
 }
+
+/**
+ * 把合规信息渲染成可直接放进 HTML 的片段。
+ *
+ * 为什么要有这个函数：静态页（deploy/scripts/render-site-info.mjs）与落地页的
+ * Vue 组件（构建期 define 注入）必须渲染出**逐字节相同**的 HTML——
+ * 只要两边不一致，Vue 的 hydrate 就会报「内容不匹配」，静态页的 SSR 结果
+ * 也会被客户端改写，验收（check-landing）会直接红。
+ *
+ * 形态约定：
+ *   - 有编号 → class=site-info-links，内部是若干 <a>，中间用 site-info-sep 分隔
+ *   - 无编号 → class=site-info-pending，内部是「备案信息待下发」（绝不编造编号）
+ *
+ * @param {SiteInfo} info
+ * @returns {{ className: string, html: string }}
+ */
+export function siteInfoRender(info) {
+  const links = siteInfoLinks(info)
+
+  if (links.length === 0) {
+    return { className: 'site-info-pending', html: '备案信息待下发' }
+  }
+
+  return {
+    className: 'site-info-links',
+    html: links
+      .map(
+        (link) =>
+          `<a href="${link.href}" target="_blank" rel="noreferrer noopener">${link.label}</a>`,
+      )
+      .join('<span class="site-info-sep">·</span>'),
+  }
+}

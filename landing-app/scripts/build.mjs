@@ -20,6 +20,7 @@ import vue from '@vitejs/plugin-vue'
 import { readFileSync, writeFileSync, existsSync, statSync, cpSync, readdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseSiteInfo, siteInfoRender } from '../../deploy/scripts/site-info-core.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const REPO = resolve(ROOT, '..')
@@ -27,6 +28,19 @@ const OUT = resolve(REPO, 'landing', 'index.html')
 const ENGINE = resolve(REPO, 'third_party', 'eyetutorial-replica', 'engine.js')
 const HEAD_TPL = resolve(ROOT, 'scripts', 'head.html')
 const CHECK = process.argv.includes('--check')
+
+// 网站合规信息（ICP / 公安备案号）。唯一来源 deploy/site-info.json，
+// 与 React 端（app/vite.config.ts）共用同一份数据、同一套渲染函数。
+//
+// 为什么要构建期内联而不是「构建完再改 HTML」：
+// 事后改静态 HTML 会让 SSR 产物与客户端渲染不一致——Vue hydrate 直接报
+// 「Hydration completed but contains mismatches」，check-landing 必红。
+// 所以这里把渲染结果 define 进两端（SSR 与 client 用同一份字符串），
+// 保证逐字节一致；deploy/scripts/render-site-info.mjs 退化为校验器。
+const siteInfo = parseSiteInfo(
+  JSON.parse(readFileSync(resolve(REPO, 'deploy', 'site-info.json'), 'utf8')),
+)
+const siteInfoDefine = { __SITE_INFO_RENDER__: JSON.stringify(siteInfoRender(siteInfo)) }
 
 if (CHECK) {
   if (!existsSync(OUT)) {
@@ -49,6 +63,7 @@ const ssrServer = await createServer({
   logLevel: 'warn',
   plugins: [vue()],
   resolve: { alias },
+  define: siteInfoDefine,
   server: { middlewareMode: true, hmr: false },
   appType: 'custom',
 })
@@ -67,6 +82,7 @@ await build({
   logLevel: 'warn',
   plugins: [vue()],
   resolve: { alias },
+  define: siteInfoDefine,
   build: {
     outDir: resolve(ROOT, 'dist'),
     emptyOutDir: true,

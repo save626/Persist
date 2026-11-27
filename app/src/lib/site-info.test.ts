@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readSiteInfo, siteInfoLinks } from './site-info'
+import { ICP_PATTERN } from '../../../deploy/scripts/site-info-core.mjs'
+import { normalizeSiteInfo, readSiteInfo, siteInfoLinks } from './site-info'
 
 /**
  * 备案号展示逻辑的单测。
@@ -37,11 +38,31 @@ describe('siteInfoLinks', () => {
 })
 
 describe('readSiteInfo', () => {
-  it('未注入构建期常量时安全降级为全空（不抛 ReferenceError）', () => {
-    // 测试环境没有 Vite define 注入 __SITE_INFO__，这里验证降级路径。
+  it('注入值要么为空、要么是合法备案号（格式与唯一事实源共用同一套校验）', () => {
+    // vite.config.ts 的 define 对 vitest 同样生效，所以这里读到的是真实注入值。
+    // 合法性直接复用 deploy/scripts/site-info-core.mjs 的 ICP_PATTERN——
+    // app 是浏览器包，不能读 node fs，只能借同一套校验。
     const info = readSiteInfo()
+    if (info.icpNumber) {
+      expect(info.icpNumber).toMatch(ICP_PATTERN)
+    }
+    if (info.policeNumber) {
+      expect(info.policeNumber).toMatch(/^[一-龥]+公网安备\d{6,}号(-\d+)?$/)
+    }
+  })
+})
+
+describe('normalizeSiteInfo', () => {
+  it('未注入构建期常量时安全降级为全空（不抛 ReferenceError）', () => {
+    // 降级路径单独覆盖：不是靠「编号恰好为空」蒙混过关。
+    const info = normalizeSiteInfo(undefined)
     expect(info.icpNumber).toBe('')
     expect(info.policeNumber).toBe('')
     expect(siteInfoLinks(info)).toEqual([])
+  })
+
+  it('有注入值时原样返回，不做二次加工', () => {
+    const injected = { icpNumber: '豫ICP备2026060824号', policeNumber: '' }
+    expect(normalizeSiteInfo(injected)).toEqual(injected)
   })
 })

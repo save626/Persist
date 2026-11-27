@@ -2,6 +2,14 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import IntroOverlay from './components/IntroOverlay.vue'
 
+// 构建期注入的合规信息片段（ICP / 公安备案号）。
+// 唯一来源 deploy/site-info.json，渲染函数与静态页共用
+// deploy/scripts/site-info-core.mjs 的 siteInfoRender —— 两端必须逐字节相同，
+// 否则 Vue hydrate 会报内容不匹配（check-landing 会红）。
+const SITE_INFO = typeof __SITE_INFO_RENDER__ === 'undefined'
+  ? { className: 'site-info-pending', html: '备案信息待下发' }
+  : __SITE_INFO_RENDER__
+
 const reduce = typeof window !== 'undefined'
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const STILL = typeof window !== 'undefined'
@@ -203,6 +211,6 @@ onBeforeUnmount(() => {
   </div>
 
   <footer class="foot">
-    <span class="site-info"><!--site-info--><span class="site-info-pending">备案信息待下发</span><!--/site-info--></span>
+    <span class="site-info"><!--site-info--><span :class="SITE_INFO.className" v-html="SITE_INFO.html"></span><!--/site-info--></span>
   </footer>
 </template>

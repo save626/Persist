@@ -12,12 +12,23 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { parseSiteInfo, siteInfoRender } from '../deploy/scripts/site-info-core.mjs'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
 const FUSION_ROOT = resolve(ROOT, '..', 'gesture-particle-fusion-20261121')
 
+// dev server 也要注入同一份合规信息，否则 dev 下页脚会退化成占位文案、
+// 与构建产物不一致。与 scripts/build.mjs 共用同一个渲染函数。
+const siteInfo = parseSiteInfo(
+  JSON.parse(readFileSync(resolve(ROOT, '..', 'deploy', 'site-info.json'), 'utf8')),
+)
+
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    __SITE_INFO_RENDER__: JSON.stringify(siteInfoRender(siteInfo)),
+  },
   resolve: {
     alias: { '@fusion': resolve(FUSION_ROOT, 'src') },
   },

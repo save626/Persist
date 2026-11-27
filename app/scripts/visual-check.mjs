@@ -236,9 +236,13 @@ const pages = [
   { slug: 'reports', path: '/reports' },
   { slug: 'settings', path: '/settings' },
   // A3（同步已开启后的说明）默认态不可见，需要先把同步置为已开启。
+  // surface: 'mobile' —— web 产物只允许 demo / guest（见 src/lib/runtime-mode.ts），
+  // 两者的 sync 都是 false，web 上**永远渲染不出**「同步已开启 / 恢复码」；
+  // 这两个状态属于 mobile 产物（owner 模式才有同步），跑法见文件头的说明。
   {
     slug: 'settings-sync-on',
     path: '/settings',
+    surface: 'mobile',
     ready: '.settings-sync-card',
     setup: enableSyncForScreenshot,
     expect: '.settings-sync-code',
@@ -247,6 +251,7 @@ const pages = [
   {
     slug: 'settings-sync-limit',
     path: '/settings',
+    surface: 'mobile',
     ready: '.settings-sync-card',
     syncFailure: 'rate-limited',
     setup: enableSyncForScreenshot,
@@ -336,11 +341,36 @@ const onlyStates = (process.env.PERSIST_VISUAL_ONLY ?? '')
   .split(',')
   .map((slug) => slug.trim())
   .filter(Boolean)
+
+// 运行面：'web'（默认，app/dist）或 'mobile'（app/dist-mobile）。
+//
+// 为什么按运行面分流：web 产物只允许 demo / guest 模式（src/lib/runtime-mode.ts），
+// 这两种模式的 sync 都是 false —— web 上同步引擎**根本不会初始化**，
+// 「同步已开启 / 恢复码」这类状态物理上不可达（2026-11-26 实测确认，
+// 新旧构建表现一致，不是回归）。它们属于 mobile 产物（owner 模式才有同步）。
+//
+// mobile 面的跑法：
+//   npm run build:mobile
+//   npx vite preview --outDir dist-mobile --base=/app/ --port 4174
+//   PERSIST_VISUAL_SURFACE=mobile PERSIST_URL=http://127.0.0.1:4174/app npm run visual:check
+const surface = process.env.PERSIST_VISUAL_SURFACE ?? 'web'
+const surfacePages = pages.filter((pageDef) => (pageDef.surface ?? 'web') === surface)
+const skippedBySurface = pages.filter((pageDef) => (pageDef.surface ?? 'web') !== surface)
+if (skippedBySurface.length > 0) {
+  console.error(
+    `[visual] 当前运行面 ${surface}，跳过 ${skippedBySurface.length} 个属于其它运行面的状态：` +
+      skippedBySurface.map((pageDef) => pageDef.slug).join(', '),
+  )
+}
+
 const activePages = onlyStates.length
-  ? pages.filter((pageDef) => onlyStates.includes(pageDef.slug))
-  : pages
+  ? surfacePages.filter((pageDef) => onlyStates.includes(pageDef.slug))
+  : surfacePages
 if (onlyStates.length && activePages.length === 0) {
-  console.error(`[visual] 没有匹配的状态：${onlyStates.join(', ')}`)
+  console.error(
+    `[visual] 没有匹配的状态：${onlyStates.join(', ')}` +
+      `（当前运行面 ${surface}；可用：${surfacePages.map((p) => p.slug).join(', ')}）`,
+  )
   process.exit(1)
 }
 
@@ -455,7 +485,7 @@ for (const pageDef of activePages) {
 async function probeQuickRecord() {
 const interactionPage = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
 await installAiOfflineMock(interactionPage)
-await interactionPage.goto(baseUrl, { waitUntil: 'networkidle' })
+await interactionPage.goto(`${baseUrl}/`, { waitUntil: 'networkidle' })
 await interactionPage.locator('.head-actions .btn.primary').click()
 const waterButton = interactionPage.locator('.quick.water')
 const box = await waterButton.boundingBox()
