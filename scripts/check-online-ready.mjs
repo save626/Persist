@@ -124,7 +124,15 @@ async function tcpProbe(host, port, timeoutMs = 6000) {
 
 // ---------------------------------------------------------------- HTTP
 
-async function httpProbe(url, method = 'GET') {
+/**
+ * HTTP(S) 探测。
+ *
+ * `lookup` 传进来是为了绕开系统解析器：这台机器的系统 DNS 偶发
+ * ECONNREFUSED / ENOTFOUND（2026-11-27 实测），而 DoH 查得到记录。
+ * 用已解析出的 IP 直连，并保留原 Host/SNI —— 对 HTTPS 来说 SNI 仍是域名，
+ * 证书校验不受影响。
+ */
+async function httpProbe(url, method = 'GET', lookup = null) {
   const https = require('node:https')
   const http = require('node:http')
   const lib = url.startsWith('https:') ? https : http
@@ -136,24 +144,22 @@ async function httpProbe(url, method = 'GET') {
       settled = true
       resolve(r)
     }
-    const req = lib.request(
-      url,
-      { method, timeout: 8000, rejectUnauthorized: false },
-      (res) => {
-        res.on('data', (c) => {
-          body += c
-          // 超长响应（落地页近 1 MB）提前收尾。
-          // 注意：req.destroy() 不带 error 时不会触发 'end' 也不触发 'error'，
-          // 只靠 'close' 收口，否则 Promise 永远不 resolve（2026-11-27 实测卡死）。
-          if (body.length > 200000) {
-            finish({ status: res.statusCode, headers: res.headers, body })
-            req.destroy()
-          }
-        })
-        res.on('end', () => finish({ status: res.statusCode, headers: res.headers, body }))
-        res.on('close', () => finish({ status: res.statusCode, headers: res.headers, body }))
-      },
-    )
+    const options = { method, timeout: 8000, rejectUnauthorized: false }
+    if (lookup) options.lookup = lookup
+    const req = lib.request(url, options, (res) => {
+      res.on('data', (c) => {
+        body += c
+        // 超长响应（落地页近 1 MB）提前收尾。
+        // 注意：req.destroy() 不带 error 时不会触发 'end' 也不触发 'error'，
+        // 只靠 'close' 收口，否则 Promise 永远不 resolve（2026-11-27 实测卡死）。
+        if (body.length > 200000) {
+          finish({ status: res.statusCode, headers: res.headers, body })
+          req.destroy()
+        }
+      })
+      res.on('end', () => finish({ status: res.statusCode, headers: res.headers, body }))
+      res.on('close', () => finish({ status: res.statusCode, headers: res.headers, body }))
+    })
     req.on('timeout', () => {
       req.destroy()
       finish({ status: 0, error: 'timeout' })
@@ -162,6 +168,25 @@ async function httpProbe(url, method = 'GET') {
     req.on('close', () => finish({ status: 0, error: 'closed' }))
     req.end()
   })
+}
+
+/**
+ * 构造一个固定返回指定 IP 的 lookup（绕过系统 DNS）。
+ *
+ * 必须兼容两种回调签名：Node 20+ 的 autoSelectFamily 默认开启，
+ * 会以 `{ all: true }` 调用 lookup 并期望拿到**数组**；
+ * 老路径则期望 `{ address, family }` 形式。返回错的形状会报
+ * ERR_INVALID_IP_ADDRESS（2026-11-27 实测）。
+ */
+function fixedLookup(ip) {
+  return (hostname, opts, cb) => {
+    if (typeof opts === 'function') {
+      cb = opts
+      opts = {}
+    }
+    if (opts && opts.all) cb(null, [{ address: ip, family: 4 }])
+    else cb(null, ip, 4)
+  }
 }
 
 // ---------------------------------------------------------------- 主流程
@@ -213,7 +238,9 @@ async function main() {
     warn('HTTPS · 首页', '跳过 —— 域名还没解析，无法访问')
     warn('HTTP · 首页', '跳过 —— 域名还没解析，无法访问')
   } else {
-    const httpsRes = await httpProbe(`https://${DOMAIN}/`)
+    // 用已解析出的 IP 直连，绕开本机不稳定的系统 DNS。
+    const lookup = fixedLookup(apex.addresses[0])
+    const httpsRes = await httpProbe(`https://${DOMAIN}/`, 'GET', lookup)
     if (httpsRes.status === 200) {
       ok('HTTPS · 首页', '200')
       const icp = httpsRes.body.match(/豫ICP备[0-9]+号/)?.[0]
@@ -225,7 +252,7 @@ async function main() {
       fail('HTTPS · 首页', `返回 ${httpsRes.status}`)
     }
 
-    const httpRes = await httpProbe(`http://${DOMAIN}/`)
+    const httpRes = await httpProbe(`http://${DOMAIN}/`, 'GET', lookup)
     if (httpRes.status === 0) {
       warn('HTTP · 首页', `未通（${httpRes.error}）`)
     } else if (httpRes.headers?.location?.startsWith('https://')) {
